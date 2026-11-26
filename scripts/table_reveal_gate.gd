@@ -37,7 +37,8 @@ func _watch(main: Node, mode: String) -> void:
 	_main = main
 	_mode = mode
 	_table = main.get("table")
-	get_tree().create_timer(CAP_S).timeout.connect(_reveal.bind(true))
+	if mode != "new":  # a new table counts from its size (the direct chooser may stand open for long)
+		_start_cap()
 	_table.battlemap_settled.connect(
 		func(biome: String, _applied: bool) -> void:
 			if biome == _table.biome:
@@ -67,7 +68,16 @@ func _watch(main: Node, mode: String) -> void:
 			save_manager.connect("_restore_unlocked", _arrived, CONNECT_ONE_SHOT)
 			_show(WAITING_FOR_HOST)
 		_:  # a new table: it stands once the setup's size is applied (deferred from main's _ready)
-			_table.table_resized.connect(func(_feet: Vector2) -> void: _arrived(), CONNECT_ONE_SHOT)
+			_table.table_resized.connect(
+				func(_feet: Vector2) -> void:
+					_start_cap()
+					_arrived(),
+				CONNECT_ONE_SHOT
+			)
+
+
+func _start_cap() -> void:
+	get_tree().create_timer(CAP_S).timeout.connect(_reveal.bind(true))
 
 
 ## The table stands (built, loaded or synced): its pieces came with it; models are done unless they still cache.
