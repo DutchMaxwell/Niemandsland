@@ -55,3 +55,66 @@ fn command_picks_read_off_the_header_profile() {
         "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}"#).expect("profile");
     assert!(without.command_picks.is_empty());
 }
+
+/// `att_def`'s Def (unit 2, player 1, Quality 4, five models) tests morale once on one die; `own` gives Def its own
+/// Banner (stamped +1) with the bearer alive or killed, `pick` lets unit 3 "Ban" (Def's side, or the enemy's) carry a
+/// Banner that picked Def with its bearer alive or killed. `None` = not there. The lines said before the die.
+fn banner_test(epoch: u32, own: Option<bool>, pick: Option<(bool, bool)>, cause: Option<&str>) -> Vec<String> {
+    let seams = Seams { rules_epoch: epoch, tray_exact: true, ..Seams::default() };
+    let (mut st, mut statics) = super::save_lines::att_def(5, 1);
+    (statics[2].model_count, statics[2].ctx.quality, statics[2].quality, statics[3].name) = (10, 4, 4, "Ban".into());
+    let keys = st.roster.keys.clone();
+    st.roster = Rc::new(Roster { index: keys.iter().cloned().zip(0..).collect(), keys: keys.clone(), profile: vec![0, 1, 2, 3] });
+    let mut list = Vec::new();
+    for _ in 0..4 {
+        let mut p = st.profiles.list[0].clone();
+        p.game_system = "aofs".into();
+        p.special_rules = Vec::new();
+        list.push(p);
+    }
+    st.cmd_bearer = vec![None; 4];
+    if let Some(alive) = own {
+        list[2].special_rules = vec!["Banner".into()];
+        st.morale_bonus[2] = 1;
+        st.cmd_bearer[2] = alive.then_some(4);
+    }
+    if let Some((friend, alive)) = pick {
+        list[3].special_rules = vec!["Banner".into()];
+        list[3].command_picks = vec![keys[2].clone()];
+        st.player[3] = if friend { 1 } else { 0 };
+        (st.alive[3], st.cmd_bearer[3]) = (1, Some(0));
+        if !alive {
+            st.kit_remove(3, 0); // the bearer's slot leaves the table, as the attack that kills him removes it
+        }
+    }
+    st.profiles = Rc::new(Profiles { list, index: HashMap::new() });
+    let mut tray = Tray::supplied(vec![vec![6]]);
+    tray_morale_for(&mut st, &statics, 2, false, true, cause, seams, &mut tray, &mut ShootResult::default(), None, None);
+    tray.lines_upto(0).into_iter().map(|l| l.text).collect()
+}
+
+const S4A: u32 = crate::acts::PENDING_EPOCH_COMMAND_BANNER;
+
+/// Ruling D17, the own half (E15-04): a command group's own Banner counts while its bearer lives; once he is killed the unit
+/// loses the +1 and says so. Below the placeholder the stamped +1 stays, as every record before it.
+#[test]
+fn the_own_banner_goes_with_its_bearer() {
+    assert_eq!(banner_test(S4A, Some(true), None, None), ["Banner: Def gets +1 to morale test rolls (passes on 3+)"]);
+    assert_eq!(banner_test(S4A, Some(false), None, None),
+        ["Banner: Def's bearer (the last model carries it - no per-model data) is dead - no +1"]);
+    assert_eq!(banner_test(S4A - 1, Some(false), None, None), ["Banner: Def gets +1 to morale test rolls (passes on 3+)"], "old leg");
+}
+
+/// Ruling D17, the picked half (E15-02, E15-04): a friendly Banner unit's pick gets +1 on a shooting or melee test while the
+/// bearer lives and loses it with him; never on a test another rule forced, never from the enemy's Banner, never below the
+/// placeholder.
+#[test]
+fn a_picked_unit_gets_the_banner_while_its_bearer_lives() {
+    assert_eq!(banner_test(S4A, None, Some((true, true)), None),
+        ["Banner (from Ban, the last model carries it - no per-model data): Def gets +1 to its morale test roll (passes on 3+)"]);
+    assert_eq!(banner_test(S4A, None, Some((true, false)), None),
+        ["Banner (from Ban): its bearer is dead - Def's morale test gets no +1"]);
+    assert!(banner_test(S4A, None, Some((true, true)), Some("Dangerous terrain")).is_empty(), "only shooting or melee");
+    assert!(banner_test(S4A, None, Some((false, true)), None).is_empty(), "the enemy's Banner lends nothing");
+    assert!(banner_test(S4A - 1, None, Some((true, true)), None).is_empty(), "old leg: no picks");
+}
