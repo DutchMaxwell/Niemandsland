@@ -524,3 +524,70 @@ func test_the_modal_sheet_has_a_footer_and_pill_switches() -> void:
 	_panel.set_modal(false)
 	assert_bool(close.visible).is_false()
 	assert_bool(note.visible).is_false()
+
+
+## In the menu the Graphics page is one row per setting in the order of sheet 05 - the name and its help at the left, the
+## control at the right, a hairline under each; no setting leaves the page and every help line stays exactly once
+## (red on main: the controls stand in a list with their help under them).
+func test_the_menus_graphics_page_is_one_row_per_setting() -> void:
+	_panel.set_modal(true)
+	var page: Node = _panel._page("Graphics")
+	var rows: Array = page.get_children().filter(func(n: Node) -> bool: return String(n.name).begins_with("Row"))
+	assert_int(rows.size()).override_failure_message("rows: %d" % rows.size()).is_equal(6)
+	if rows.size() != 6:
+		return
+	var names: Array = rows.map(func(r: Node) -> String: return String(r.name))
+	assert_array(names).is_equal(["RowQuality", "RowTilt-Shift(DepthofField)", "RowBoardMistandSteam", "RowCombatEffects",
+		"RowMiniatureIdleMotion", "RowTableframe"])
+	for row: Control in rows:
+		assert_float((row.get_child(0) as Control).custom_minimum_size.y).is_equal(78.0)
+		assert_float(row.get_child(1).custom_minimum_size.y).is_equal(1.0)
+	var tilt := _toggle("Tilt-Shift (Depth of Field)")
+	assert_object(tilt).override_failure_message("the switch is not found by its name").is_null()   # its text moved to the row
+	var found: Array = []
+	for n: Node in page.find_children("*", "CheckButton", true, false):
+		found.append(str(n.get_meta("row_name", "")))
+	assert_array(found).contains_exactly(["Tilt-Shift (Depth of Field)", "Board Mist and Steam", "Combat Effects",
+		"Miniature Idle Motion"])
+	var help: Dictionary = _panel.get_script().get_script_constant_map().get("HELP", {})
+	for key: String in ["Quality", "Tilt-Shift (Depth of Field)", "Board Mist and Steam", "Combat Effects",
+			"Miniature Idle Motion", "TableFrameOption"]:
+		var lines := page.find_children("*", "Label", true, false).filter(
+			func(l: Node) -> bool: return (l as Label).text == help[key])
+		assert_int(lines.size()).override_failure_message("%s has %d help lines" % [key, lines.size()]).is_equal(1)
+	var frame: OptionButton = page.find_child("TableFrameOption", true, false)
+	assert_str(frame.get_item_text(0)).is_equal("Today's look")
+	assert_float(frame.custom_minimum_size.x).is_equal(300.0)
+	assert_bool(page.find_child("QualityRow", true, false) != null).is_true()
+	# Reset this page still reaches the switches whose text moved into their rows.
+	var tilt_switch: CheckButton = null
+	for n: Node in page.find_children("*", "CheckButton", true, false):
+		if n.get_meta("row_name", "") == "Tilt-Shift (Depth of Field)":
+			tilt_switch = n as CheckButton
+	var tilt_before: bool = GraphicsSettings.tilt_shift
+	var fresh: Object = (GraphicsSettings.get_script() as Script).new()
+	var shipped: bool = fresh.get("tilt_shift")
+	fresh.free()
+	tilt_switch.button_pressed = not shipped
+	_panel.reset_page("Graphics")
+	assert_bool(GraphicsSettings.tilt_shift).override_failure_message("reset did not reach a switch in a row").is_equal(shipped)
+	GraphicsSettings.tilt_shift = tilt_before
+	GraphicsSettings.save_settings()
+	_panel.hide()
+	_panel.show()   # the restyle adds no second help line under a control that is in a row
+	for key: String in ["Combat Effects"]:
+		var again := page.find_children("*", "Label", true, false).filter(
+			func(l: Node) -> bool: return (l as Label).text == help[key])
+		assert_int(again.size()).is_equal(1)
+
+
+## The Accessibility page, which holds two switches, stands as rows too (Calm Mode, Reduce Motion) with its name as an eyebrow.
+func test_the_menus_accessibility_page_is_two_rows() -> void:
+	_panel.set_modal(true)
+	var page: Node = _panel._page("Accessibility")
+	var rows: Array = page.get_children().filter(func(n: Node) -> bool: return String(n.name).begins_with("Row"))
+	assert_array(rows.map(func(r: Node) -> String: return String(r.name))).is_equal(["RowCalmMode", "RowReduceMotion"])
+	var names: Array = []
+	for n: Node in page.find_children("*", "CheckButton", true, false):
+		names.append(str(n.get_meta("row_name", "")))
+	assert_array(names).contains_exactly(["Calm Mode", "Reduce Motion"])

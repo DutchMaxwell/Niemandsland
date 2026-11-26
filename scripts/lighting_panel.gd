@@ -10,6 +10,11 @@ const PAGE_RAIL_W := 200   # the column of page buttons left of the content (she
 const SHEET_MENU_W := 1340
 const SHEET_MENU_H := 840
 const PAGE_RAIL_MENU_W := 290
+## One setting per row in the menu (sheet 05): at least this high, the control in a column of this width at the right.
+const ROW_H := 78
+const ROW_CONTROL_W := 470
+const ROW_NAME_PX := 19
+const ROW_FRAME_W := 300   # the table frame's dropdown
 ## The rail's page icons: own drawings in the menu rows' style (24 x 24 view box, white strokes, tinted by the button).
 const PAGE_ICON_SVG := "<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='#fff' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'>%s</svg>"
 const PAGE_ICONS := {
@@ -56,6 +61,7 @@ var _rail: VBoxContainer
 var _rail_head: VBoxContainer
 var _lab_sep: VBoxContainer
 var _footer: HBoxContainer
+var _graphics_rows := false
 var _footer_note: Label
 var _footer_close: Button
 var _scroll: ScrollContainer
@@ -662,9 +668,110 @@ func _apply_menu_layout() -> void:
 	_lab_sep.visible = on
 	_footer_note.visible = on
 	_footer_close.visible = on
+	if on and not _graphics_rows:
+		_build_graphics_rows()
+		_build_switch_rows("Accessibility", ["Calm Mode", "Reduce Motion"])
 	for page_name: String in PAGES:
 		_style_page_button(_page_buttons[page_name] as Button, page_name)
 	_sync_page_ticks()
+
+
+## The Graphics page as rows, in the order of sheet 05: Quality, Tilt-Shift, Board Mist and Steam, Combat Effects, Miniature
+## Idle Motion, Table frame. The controls move into their rows (a switch gives its name to the row and keeps it as meta
+## "row_name"); no setting leaves the page. Built once, the first time the sheet is modal.
+func _build_graphics_rows() -> void:
+	_graphics_rows = true
+	var page := _page("Graphics")
+	var by_name := {}
+	for n: Node in page.find_children("*", "CheckButton", true, false):
+		by_name[(n as Button).text] = n
+	var frame := page.find_child("TableFrameOption", true, false) as OptionButton
+	var items: Array = ["Today's look", "Walnut", "Oak", "Ivory"]
+	for i in frame.item_count:
+		frame.set_item_text(i, items[i])
+	frame.custom_minimum_size.x = ROW_FRAME_W
+	var first := page.get_child(0)
+	if first is Label and (first as Label).text == "Quality":   # the row names it now
+		_drop_help_line(first)
+		page.remove_child(first)   # out of the tree at once: the deferred restyle must not hang a line under it
+		first.queue_free()
+	var eyebrow := HouseStyle.label("GRAPHICS", HouseStyle.EYEBROW)
+	page.add_child(eyebrow)
+	page.move_child(eyebrow, 0)
+	for row_name: String in ["Quality", "Tilt-Shift (Depth of Field)", "Board Mist and Steam", "Combat Effects",
+			"Miniature Idle Motion", "Table frame"]:
+		var control: Control = _quality_row if row_name == "Quality" else frame if row_name == "Table frame" \
+				else by_name[row_name]
+		var help_key := "TableFrameOption" if row_name == "Table frame" else row_name
+		page.add_child(_as_row(control, row_name,
+				str(HELP.get(help_key, ""))))
+
+
+## A page that holds only switches (Accessibility) as rows, in `names` order, under the page's name as an eyebrow.
+func _build_switch_rows(page_name: String, names: Array) -> void:
+	var page := _page(page_name)
+	var by_name := {}
+	for n: Node in page.find_children("*", "CheckButton", true, false):
+		by_name[(n as Button).text] = n
+	var eyebrow := HouseStyle.label(page_name.to_upper(), HouseStyle.EYEBROW)
+	page.add_child(eyebrow)
+	page.move_child(eyebrow, 0)
+	for row_name: String in names:
+		if by_name.has(row_name):
+			page.add_child(_as_row(by_name[row_name], row_name, str(HELP.get(row_name, ""))))
+
+
+## Takes away the help line that was hung under `control` (the row carries its own).
+func _drop_help_line(control: Node) -> void:
+	var old: Variant = control.get_meta("help_line", null)
+	if old is Node and is_instance_valid(old):
+		(old as Node).get_parent().remove_child(old)
+		(old as Node).queue_free()
+
+
+## One setting as a row: the name (19 px, weight 500) with its help line below at the left, the control at the right in a
+## 470 px column, a hairline under the row. The control's own help line is the row's, so none is hung under it later.
+func _as_row(control: Control, row_name: String, help: String) -> Control:
+	var wrapper := VBoxContainer.new()
+	wrapper.name = "Row" + row_name.replace(" ", "")
+	wrapper.add_theme_constant_override(&"separation", 0)
+	var row := HBoxContainer.new()
+	row.custom_minimum_size.y = ROW_H
+	row.add_theme_constant_override(&"separation", HouseStyle.GAP_SECTION)
+	wrapper.add_child(row)
+	var words := VBoxContainer.new()
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words.alignment = BoxContainer.ALIGNMENT_CENTER
+	words.add_theme_constant_override(&"separation", 2)
+	row.add_child(words)
+	var name_label := HouseStyle.label(row_name, HouseStyle.BODY)
+	name_label.add_theme_font_override(&"font", HouseStyle.font(500))
+	name_label.add_theme_font_size_override(&"font_size", ROW_NAME_PX)
+	name_label.set_meta("help_line", true)   # the row's own line is under it already
+	words.add_child(name_label)
+	if not help.is_empty():
+		var line := HouseStyle.label(help, HouseStyle.CAPTION)
+		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		words.add_child(line)
+	var holder := HBoxContainer.new()
+	holder.custom_minimum_size.x = ROW_CONTROL_W
+	holder.alignment = BoxContainer.ALIGNMENT_END
+	row.add_child(holder)
+	if control.get_parent() != null:
+		control.get_parent().remove_child(control)
+	if control is CheckButton:   # the row's name says what the switch is
+		control.set_meta("row_name", (control as Button).text)
+		(control as Button).text = ""
+	_drop_help_line(control)
+	control.set_meta("help_line", true)
+	control.size_flags_horizontal = Control.SIZE_FILL if control is HBoxContainer else Control.SIZE_SHRINK_END
+	control.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	holder.add_child(control)
+	var rule := ColorRect.new()
+	rule.color = Color(HouseStyle.LINE, 0.6)
+	rule.custom_minimum_size.y = 1
+	wrapper.add_child(rule)
+	return wrapper
 
 
 ## A page button as a segment (the table's sheet) or, in the menu, a flat 56 px row: icon, 19 px text, a soft fill
@@ -774,7 +881,8 @@ func reset_page(page_name: String) -> void:
 	if page_name == "Graphics" and GraphicsSettings.current_preset != fresh.get("current_preset"):
 		GraphicsSettings.apply_preset(fresh.get("current_preset"))   # first: a preset also sets Idle Motion
 	for n: Node in _page(page_name).find_children("*", "Control", true, false):
-		var field := str(SWITCH_FIELDS.get((n as Button).text, "")) if n is CheckButton else str(n.get_meta("setting", ""))
+		var switch_name := str(n.get_meta("row_name", (n as Button).text)) if n is CheckButton else ""   # a row took the text
+		var field := str(SWITCH_FIELDS.get(switch_name, "")) if n is CheckButton else str(n.get_meta("setting", ""))
 		if field.is_empty():
 			continue
 		var value: Variant = fresh.get(field)
@@ -1009,7 +1117,6 @@ func _add_help_lines() -> void:
 			key = str(n.get("text"))
 		if not HELP.has(key) or n.has_meta("help_line") or n is ColorPickerButton:
 			continue
-		n.set_meta("help_line", true)
 		var anchor := n as Control
 		if n is Label and n.get_parent() is HBoxContainer:   # a name in a row: the line goes under the row,
 			anchor = n.get_parent()   # and under the whole block when the row heads a slider block
@@ -1018,6 +1125,7 @@ func _add_help_lines() -> void:
 		var line := HouseStyle.label(HELP[key], HouseStyle.CAPTION)
 		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		anchor.add_sibling(line)
+		n.set_meta("help_line", line)
 
 
 func _unhandled_input(event: InputEvent) -> void:
