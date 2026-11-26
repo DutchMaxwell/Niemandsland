@@ -18,6 +18,14 @@ const SKYBOX_MATERIAL_PATH := "res://materials/space_skybox.tres"
 ## A still of each finished backdrop (tools/menu_backdrop_render.gd), shown until the live scene is complete.
 const POSTER_PATH := "res://assets/ui/menu_backdrop/%s.res"
 const REVEAL_FADE_S := 0.6
+## The hero shot: the camera stands low on the near-left flank and looks across the Battle Brothers at the
+## advancing Warriors, so the faces of both forces are lit and the forces fill the frame beside the menu column.
+const CAMERA_REST := Vector3(-0.12,0.045,0.27)
+const CAMERA_LOOK := Vector3(0.17,0.030,0.09)
+## A narrow lens flattens depth and keeps the miniatures large.
+const CAMERA_FOV := 30.0
+## Shifts the picture left so the forces sit clear of the menu column.
+const CAMERA_H_OFFSET := -0.045
 ## Cover tone for a biome without a still: the night sky's own.
 const COVER_COLOR := Color(0.02,0.03,0.05)
 var _poster: Texture2D
@@ -110,8 +118,8 @@ func _setup() -> void:
 	_lighting.apply_preset("Night")
 	lighting_changed.emit(_lighting)
 	_camera = Camera3D.new()
-	_camera.fov = 35
-	_camera.h_offset = -0.075
+	_camera.fov = CAMERA_FOV
+	_camera.h_offset = CAMERA_H_OFFSET
 	_viewport.add_child(_camera)
 	_place_camera()
 	# Cover the live scene until it is complete: the player sees the finished backdrop at once and never
@@ -184,9 +192,9 @@ func _draw() -> void:
 func _place_camera() -> void:
 	# Small drift preserves both five-model units in frame throughout the cycle.
 	var drift := 0.0 if GraphicsSettings.reduce_motion else sin(_drift_t*TAU/40.0)
-	_camera.position = Vector3(0.34+drift*0.007,0.12,0.45-drift*0.004)
-	_camera.look_at(Vector3(0,0.024,-0.01))
-	_camera.fov = 35.0 if GraphicsSettings.reduce_motion else 35.0+_fov_bias
+	_camera.position = CAMERA_REST+Vector3(drift*0.007,0,-drift*0.004)
+	_camera.look_at(CAMERA_LOOK)
+	_camera.fov = CAMERA_FOV if GraphicsSettings.reduce_motion else CAMERA_FOV+_fov_bias
 
 
 func _rebuild() -> void:
