@@ -52,6 +52,8 @@ class Action extends Button:
 	var row_icon: Texture2D  # not "icon": a Button already draws that one itself
 	var primary := false
 	var outlined := false
+	var highlighted := false  # drawn lit while at rest (the Learn row of a first launch)
+	var tag := ""  # a small mono tag after the title ("NEW HERE?")
 	var key_hint := ""  # the key that takes this row while it is the main action ("Enter")
 	var key_cap: Label
 
@@ -90,7 +92,7 @@ class Action extends Button:
 			key_cap.visible = primary
 		for state in ["normal","hover","pressed","focus"]:
 			var box := StyleBoxFlat.new()
-			var lit: bool = state != "normal"
+			var lit: bool = state != "normal" or highlighted
 			box.bg_color = HouseStyle.GOLD if primary else Color("1823296b") if outlined else Color.TRANSPARENT
 			if lit and not primary:
 				box.bg_color = HouseStyle.ROW_PRESS if state == "pressed" else HouseStyle.ROW_HOVER
@@ -102,6 +104,18 @@ class Action extends Button:
 			add_theme_stylebox_override(state,box)
 		queue_redraw()
 
+	## The tag: mono 12 px in gold with a 60 % gold rim, 22 px high, radius 3.
+	func _draw_tag(origin: Vector2) -> void:
+		var font := HouseStyle.mono()
+		var box := StyleBoxFlat.new()
+		box.bg_color = Color.TRANSPARENT
+		box.border_color = Color(HouseStyle.GOLD,0.6)
+		box.set_border_width_all(1)
+		box.set_corner_radius_all(3)
+		var width := font.get_string_size(tag,HORIZONTAL_ALIGNMENT_LEFT,-1,12).x+16
+		draw_style_box(box,Rect2(origin,Vector2(width,22)))
+		draw_string(font,origin+Vector2(8,15),tag,HORIZONTAL_ALIGNMENT_LEFT,-1,12,HouseStyle.GOLD)
+
 	func _draw() -> void:
 		var color := Color("192125") if primary else HouseStyle.INK
 		var left := 18.0 if row_icon == null else 52.0
@@ -112,7 +126,9 @@ class Action extends Button:
 			draw_string(FONT,Vector2(left,size.y*0.5+17),description,HORIZONTAL_ALIGNMENT_LEFT,size.x-left-25,15,Color("344c54") if primary else HouseStyle.MUTED)
 		if row_icon != null:
 			draw_texture_rect(row_icon,Rect2(16,size.y*0.5-ICON_PX*0.5,ICON_PX,ICON_PX),false,color if primary else HouseStyle.ACCENT)
-		var lit := not primary and (is_hovered() or has_focus())
+		var lit := not primary and (is_hovered() or has_focus() or highlighted)
+		if not tag.is_empty():
+			_draw_tag(Vector2(left+title_font().get_string_size(text,HORIZONTAL_ALIGNMENT_LEFT,-1,22).x+12,baseline-19))
 		if lit:
 			draw_rect(Rect2(0,12,3,size.y-24),HouseStyle.GOLD)
 		draw_string(FONT,Vector2(size.x-31,size.y*0.5+6),HouseStyle.GLYPH_GO,HORIZONTAL_ALIGNMENT_LEFT,24,28,HouseStyle.GOLD if lit else color)
@@ -188,7 +204,7 @@ func _ready() -> void:
 	actions.name = "MenuButtons"
 	actions.add_theme_constant_override("separation",5)
 	_main.add_child(actions)
-	var start := _action("StartBattleBtn","Prepare a new table","Choose a size and biome",_icon(&"table"),false,true)
+	var start := _action("StartBattleBtn","Prepare a new table","Choose a game system, a biome and a size",_icon(&"table"),false,true)
 	start.key_hint = "Enter"
 	actions.add_child(start)
 	actions.add_child(_action("OnlineBtn","Play online","Create a room or join a table",_icon(&"globe")))
@@ -369,6 +385,12 @@ func set_save(info: Dictionary) -> void:
 	start.primary = not resume.visible
 	# Rebuild only the state styles, once after the save lookup.
 	start.refresh_style()
+	# A first launch points at Learn: second in the list, lit and tagged; with a save it is back in fourth place.
+	var learn: Action = buttons.LearnBtn
+	learn.highlighted = not resume.visible
+	learn.tag = "" if resume.visible else "NEW HERE?"
+	learn.refresh_style()
+	learn.get_parent().move_child(learn,3 if resume.visible else 1)
 	set_focus_chain(main_buttons())
 
 
@@ -395,7 +417,11 @@ static func facts_lines(info: Dictionary) -> Array[String]:
 
 func main_buttons() -> Array[Control]:
 	var result: Array[Control] = []
-	for key in ["ContinueBtn","StartBattleBtn","OnlineBtn","LoadBattleBtn","LearnBtn","SettingsBtn","HelpBtn","CreditsBtn","ExitGameBtn"]:
+	var keys: Array = ["ContinueBtn"]   # the shown order: the card's button, the list as it stands, the footer
+	for row in buttons.StartBattleBtn.get_parent().get_children():
+		keys.append(String(row.name))
+	keys.append_array(["HelpBtn","CreditsBtn","ExitGameBtn"])
+	for key in keys:
 		if buttons[key].is_visible_in_tree():
 			result.append(buttons[key])
 	return result
