@@ -96,3 +96,27 @@ func test_an_animated_card_is_instant_with_reduce_motion() -> void:
 	assert_float((card.find_child("Card", true, false) as Control).modulate.a).is_equal(1.0)
 	GraphicsSettings.reduce_motion = before_motion
 
+
+
+## The menu's cards show the way out's key and step the second paragraph back; a plain card does neither (sheet 08; red on
+## main: no cap, one label with the blank line).
+func test_a_menu_card_shows_esc_and_mutes_its_second_paragraph() -> void:
+	var menu: PromptCard = auto_free(PromptCard.new("Title", "First line.\n\nSecond line.", "Yes", "Back"))
+	menu.menu_scale = true
+	add_child(menu)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var caps := menu.cancel_button.find_children("*", "Label", false, false)
+	assert_int(caps.size()).override_failure_message("no Esc cap on the way out").is_equal(1)
+	if caps.size() == 1:
+		assert_str((caps[0] as Label).text).is_equal("Esc")
+		var text_w := menu.cancel_button.get_theme_font(&"font").get_string_size("Back").x
+		assert_float((caps[0] as Label).position.x).is_greater(menu.cancel_button.size.x * 0.5 + text_w * 0.5)
+	var variants := {}
+	for l: Node in menu.find_children("*", "Label", true, false):
+		variants[(l as Label).text] = (l as Label).theme_type_variation
+	assert_str(String(variants.get("First line.", ""))).is_equal(String(HouseStyle.BODY))
+	assert_str(String(variants.get("Second line.", ""))).is_equal(String(HouseStyle.CAPTION))
+	var plain := _card()
+	await get_tree().process_frame
+	assert_int(plain.cancel_button.get_child_count()).is_equal(0)
