@@ -106,7 +106,7 @@ const RULE_H := 2            # the signature rule: 2 px high ...
 const RULE_TICK_W := 28      # ... its gold tick 28 px wide, then the accent fading out
 const FONT_RAIL := 11        # a rail button's label
 const FONT_EYEBROW_LARGE := 14   # the eyebrow of a full screen (the loading screen)
-const FONT_DISPLAY := 44         # the one big title of a full screen (the table being prepared)
+const FONT_DISPLAY := 56         # the one big title of a full screen (the table being prepared)
 const FONT_WORDMARK_SMALL := 28  # the wordmark in a screen's corner
 const PAD_SCREEN := 96           # a full screen's text column from the left edge (the menu's masthead)
 

@@ -22,15 +22,19 @@ const SMOOTH_RATE := 2.6
 const CREEP_TARGET := 0.9
 const CREEP_RATE := 0.18  # ratio per second
 const FADE_S := 0.4
-const FULL_TRACK_W := 560.0   # full mode (sheet 06): a wider, thicker bar under the title block
+const FULL_TRACK_W := 760.0   # full mode (sheet 06): a wider, thicker bar under the title block
 const FULL_BAR_H := 5.0
+const FULL_BOTTOM := 280      # full mode: the bar stands at y = 800 of 1080, as on the sheet
+const FULL_SUBTITLE_PX := 20
+const FULL_RULE_W := 250      # the signature rule under the small wordmark
+const LEGAL_ABOVE_BOTTOM := 50
 const BACKDROP_LIGHT := 0.62   # full mode: the table's picture behind the text, at 62 % brightness (sheet 06)
 
 # === Private variables ===
 
 var _content: Control = null
 var _label: Label = null
-var _fill: ColorRect = null
+var _fill: Control = null   # a ColorRect in compact mode, a gradient in full mode
 var _target := 0.0
 var _current := 0.0
 var _indeterminate := false
@@ -92,7 +96,7 @@ func _ready() -> void:
 		_label.add_theme_font_size_override("font_size", HouseStyle.FONT_EYEBROW_LARGE)
 		_title = _text(box, "", HouseStyle.INK, HouseStyle.FONT_DISPLAY)
 		_title.visible = false
-		_subtitle = _text(box, "", HouseStyle.MUTED, HouseStyle.FONT_VALUE)
+		_subtitle = _text(box, "", HouseStyle.MUTED, FULL_SUBTITLE_PX)
 		_subtitle.visible = false
 
 	var track := Control.new()
@@ -105,8 +109,7 @@ func _ready() -> void:
 	track_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	track_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	track.add_child(track_bg)
-	_fill = ColorRect.new()
-	_fill.color = HouseStyle.ACCENT
+	_fill = _make_fill()
 	_fill.size = Vector2(0.0, track.custom_minimum_size.y)
 	_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	track.add_child(_fill)
@@ -116,9 +119,9 @@ func _ready() -> void:
 	line.custom_minimum_size.x = FULL_TRACK_W
 	line.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	box.add_child(line)
-	_stage = _text(line, "", HouseStyle.MUTED, HouseStyle.FONT_CAPTION)
+	_stage = _text(line, "", HouseStyle.MUTED, HouseStyle.FONT_EYEBROW_LARGE)
 	_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_percent = _text(line, "0 %", HouseStyle.GOLD, HouseStyle.FONT_CAPTION)
+	_percent = _text(line, "0 %", HouseStyle.GOLD, HouseStyle.FONT_EYEBROW_LARGE)
 	for mono: Label in [_stage, _percent]:
 		mono.add_theme_font_override("font", HouseStyle.mono())
 	if not UiMotion.reduced():
@@ -135,9 +138,10 @@ func _place_full(box: VBoxContainer) -> void:
 	margin.theme = HouseStyle.theme()
 	margin.add_theme_constant_override("margin_left", HouseStyle.PAD_SCREEN)
 	margin.add_theme_constant_override("margin_top", HouseStyle.PAD_SCREEN / 2)
-	margin.add_theme_constant_override("margin_bottom", HouseStyle.PAD_SCREEN * 2)
+	margin.add_theme_constant_override("margin_bottom", FULL_BOTTOM)
 	_content.add_child(margin)
 	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 12)
 	margin.add_child(column)
 	var brand := HBoxContainer.new()
 	brand.name = "Wordmark"
@@ -146,8 +150,46 @@ func _place_full(box: VBoxContainer) -> void:
 	for part: String in ["NIEMANDS", "LAND"]:
 		_text(brand, part, HouseStyle.ACCENT if part == "LAND" else HouseStyle.INK, HouseStyle.FONT_WORDMARK_SMALL) \
 			.add_theme_font_override("font", load(HouseStyle.FONT_WORDMARK_PATH) as Font)
+	column.add_child(HouseStyle.signature_rule(FULL_RULE_W))
 	box.size_flags_vertical = Control.SIZE_EXPAND | Control.SIZE_SHRINK_END
 	column.add_child(box)
+	_content.add_child(_legal_line())
+
+
+## The bar's fill: the accent in the compact panel; in full mode a gradient from the accent to the gold.
+func _make_fill() -> Control:
+	if compact:
+		var solid := ColorRect.new()
+		solid.color = HouseStyle.ACCENT
+		return solid
+	var gradient := Gradient.new()
+	gradient.set_color(0, HouseStyle.ACCENT)
+	gradient.set_color(1, HouseStyle.GOLD)
+	var texture := GradientTexture1D.new()
+	texture.gradient = gradient
+	var bar := TextureRect.new()
+	bar.texture = texture
+	bar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bar.stretch_mode = TextureRect.STRETCH_SCALE
+	return bar
+
+
+## Full mode: the line at the foot of the sheet, the menu's own (fan project, version, rules).
+func _legal_line() -> Label:
+	var menu := load("res://scripts/startup_menu.gd") as GDScript
+	var line := Label.new()
+	line.name = "LegalLine"
+	line.text = "Fan project for OnePageRules     " + str(menu.call("version_string"))
+	line.uppercase = true
+	line.add_theme_font_override("font", HouseStyle.mono())
+	line.add_theme_font_size_override("font_size", HouseStyle.FONT_EYEBROW_LARGE)
+	line.add_theme_color_override("font_color", Color(HouseStyle.MUTED, 0.78))
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	line.offset_left = HouseStyle.PAD_SCREEN
+	line.offset_top = -LEGAL_ABOVE_BOTTOM - 22
+	line.offset_bottom = -LEGAL_ABOVE_BOTTOM
+	return line
 
 
 func _text(parent: Control, text: String, colour: Color, font_size: int) -> Label:
