@@ -64,3 +64,24 @@ static func _core_version() -> int:
 		return -1
 	var t: Dictionary = (ClassDB.instantiate("NmlCore") as Object).call("boardgen_tiers", 0, "deepworks")
 	return int(t.get("version", -1))
+
+
+## GEN-11: "" when `record` is this build's board of its seed (the same `version` and `digest`), else the reason,
+## naming both board codes. A record without a digest (the dev door's board) is not checked. `core` is for tests.
+static func verify(record: Dictionary, core: Object = null) -> String:
+	if not record.has("digest"):
+		return ""
+	if core == null:
+		if not ClassDB.class_exists("NmlCore"):
+			return "This build has no rules core to check the board %s." % code(record)
+		core = ClassDB.instantiate("NmlCore") as Object
+	var t: Dictionary = core.call("boardgen_tiers", int(record["seed"]), str(record["theme"]))
+	var mine := record.duplicate()
+	mine["version"] = int(t.get("version", -1))
+	if int(record.get("version", -1)) != int(mine["version"]):
+		return "This table was made with board version %d (%s); this build makes version %d (%s)." % [
+			int(record.get("version", -1)), code(record), mine["version"], code(mine)]
+	if str(t.get("digest", "")) != str(record["digest"]):
+		return "The board %s does not match this build's board of the same code (digest %s, here %s)." % [
+			code(record), str(record["digest"]), str(t.get("digest", ""))]
+	return ""

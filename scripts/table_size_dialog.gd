@@ -11,6 +11,7 @@ const CM_TO_FEET := 1.0/30.48
 const PAGE_ASPECT := 1768.0/1080.0
 ## Spare window height grows the preview and the biome cards only down to these proportions.
 const HERO_MIN_ASPECT := 2.2
+const RAIL_MIN_H := 900.0   # from this window height the right column is the rail card (sheet 03)
 const CARD_MIN_ASPECT := 2.0
 const CARD_MAX_ASPECT := 2.8
 const FONT = preload("res://assets/ui_glassmorphism/fonts/Inter.ttf")
@@ -65,6 +66,12 @@ var _page: VBoxContainer
 var _left: VBoxContainer
 var _left_air: Array[Control] = []
 var _right: VBoxContainer
+var _rail_card: PanelContainer   # the right column; from 900 px of window height the framed rail card of sheet 03
+var _rail_body: VBoxContainer    # the card's last part: the summary rows and Create table (rail form only)
+var _foot_margin: MarginContainer
+var _summary_column: VBoxContainer
+var _summary_rows: BoxContainer
+var _right_note: Array[Control] = []   # the example line and its rule under the picture (not in the rail form)
 var _columns: BoxContainer
 var _grid: GridContainer
 var _hero: Control
@@ -313,12 +320,16 @@ func _build_ui() -> void:
 	else:
 		left.add_child(_label("+   Your terrain. Your layout.",14,HouseStyle.ACCENT))
 		left.add_child(_label("Place and rearrange terrain freely after creating your table. The biome defines its visual style.",12,HouseStyle.MUTED,true))
+	_rail_card = PanelContainer.new()
+	_rail_card.name = "RailCard"
+	_rail_card.clip_contents = true
+	_rail_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_rail_card.size_flags_stretch_ratio = 1.2
+	_columns.add_child(_rail_card)
 	var right := VBoxContainer.new()
 	_right = right
-	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right.size_flags_stretch_ratio = 1.2
 	right.add_theme_constant_override("separation",12)
-	_columns.add_child(right)
+	_rail_card.add_child(right)
 	_hero = Control.new()
 	_hero.custom_minimum_size.y = 370
 	right.add_child(_hero)
@@ -351,11 +362,14 @@ func _build_ui() -> void:
 	caption.add_child(_preview_title)
 	_preview_description = _label("",12,HouseStyle.MUTED,true)
 	caption.add_child(_preview_description)
-	right.add_child(_label("Example terrain arrangement. Your layout is up to you.",11,HouseStyle.MUTED,true))
-	right.add_child(HSeparator.new())
+	_right_note = [_label("Example terrain arrangement. Your layout is up to you.",11,HouseStyle.MUTED,true),HSeparator.new()]
+	for note in _right_note:
+		right.add_child(note)
+	_foot_margin = MarginContainer.new()
+	_foot_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL   # takes the right column's slack
+	right.add_child(_foot_margin)
 	var footprint_row := HBoxContainer.new()
-	footprint_row.size_flags_vertical = Control.SIZE_EXPAND_FILL   # takes the right column's slack
-	right.add_child(footprint_row)
+	_foot_margin.add_child(footprint_row)
 	var details := VBoxContainer.new()
 	details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	footprint_row.add_child(details)
@@ -369,22 +383,38 @@ func _build_ui() -> void:
 	_footprint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_footprint.resized.connect(_footprint.queue_redraw)
 	footprint_row.add_child(_footprint)
+	_rail_body = VBoxContainer.new()
+	_rail_body.add_theme_constant_override("separation",18)
+	right.add_child(_rail_body)
+	var slot := MarginContainer.new()   # Create table in the card, 24 px from its edges
+	slot.name = "CreateSlot"
+	for side in ["left","right","bottom"]:
+		slot.add_theme_constant_override("margin_"+side,24)
+	_rail_body.add_child(slot)
 	_page.add_child(HSeparator.new())
 	_footer = BoxContainer.new()
 	_page.add_child(_footer)
 	var summary_column := VBoxContainer.new()
+	_summary_column = summary_column
 	summary_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_footer.add_child(summary_column)
 	summary_column.add_child(_label("YOUR TABLE",10,HouseStyle.MUTED))
-	var rows := HBoxContainer.new()   # System / Biome / Size on one line, so the 720 page keeps its height
+	var rows := BoxContainer.new()   # System / Biome / Size on one line, so the 720 page keeps its height; rows in the rail
+	_summary_rows = rows
 	rows.add_theme_constant_override("separation",10)
 	summary_column.add_child(rows)
 	for row: String in ["System","Biome","Size"] + (["Opponent"] if opponent != null else []):
+		var pair := PanelContainer.new()   # a hairline under it in the rail card
+		var line := HBoxContainer.new()
+		line.add_theme_constant_override("separation",10)
+		pair.add_child(line)
+		rows.add_child(pair)
 		var row_name := _label(row,12,HouseStyle.MUTED)
 		row_name.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		rows.add_child(row_name)
+		row_name.set_meta("caption",row)
+		line.add_child(row_name)
 		_summary[row] = _label("",16)
-		rows.add_child(_summary[row])
+		line.add_child(_summary[row])
 		if row == "Opponent":
 			_opponent_key = row_name
 	var keys := HBoxContainer.new()   # the key legend: what the keyboard does on this page
@@ -436,10 +466,12 @@ func _add_opponent_row(column: VBoxContainer) -> void:
 	var line := HBoxContainer.new()
 	line.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 14)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var heading := _label("04   Who is at the table?",17)
-	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	line.add_child(heading)
-	_opponent_name = _label("",16)
+	line.add_child(_label("04   Who is at the table?",17))
+	_opponent_name = _label("",16)   # takes the room the heading and Change leave, cut with an ellipsis (720p)
+	_opponent_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_opponent_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_opponent_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_opponent_name.clip_text = true
 	line.add_child(_opponent_name)
 	line.add_child(_label("   Change",15,HouseStyle.ACCENT))
 	row.add_child(line)
@@ -720,7 +752,11 @@ func _layout(refill := true) -> void:
 		_opponent_key.visible = not compact
 		_summary.Opponent.visible = not compact
 	_hero.custom_minimum_size.y = 250 if compact else 370
+	if area.y >= RAIL_MIN_H and not narrow:   # the rail card is narrower: the picture starts at its flattest shape
+		_hero.custom_minimum_size.y = floorf(_hero.size.x/2.9) if _hero.size.x > 0 else 200.0
 	_footprint.custom_minimum_size.y = 110
+	_set_rail(area.y >= RAIL_MIN_H and not narrow)
+	_columns.custom_minimum_size.y = 0
 	for air in _left_air:
 		air.visible = false
 	if not narrow:
@@ -729,6 +765,51 @@ func _layout(refill := true) -> void:
 	# pass (a 1 px wide label reports ~1500 px): fill once more on the next frame, with every width final.
 	if refill and not get_tree().process_frame.is_connected(_layout.bind(false)):
 		get_tree().process_frame.connect(_layout.bind(false),CONNECT_ONE_SHOT)
+
+
+## From 900 px of window height (step 82, sheet 03): the columns stand 1.9 : 1 and the right one is the framed rail
+## card - the picture edge to edge, the footprint, the summary as rows (caption in mono upper case left, value right, a
+## hairline under each) and Create table full width as its last row; the page footer keeps the key legend only. Below,
+## the right column and the footer are as before (the 720 tests decide).
+func _set_rail(on: bool) -> void:
+	var card := StyleBoxFlat.new()
+	card.bg_color = HouseStyle.PANEL
+	card.border_color = HouseStyle.LINE_SOFT
+	card.set_border_width_all(1)
+	card.set_corner_radius_all(HouseStyle.RADIUS_PANEL)
+	_rail_card.add_theme_stylebox_override("panel",card if on else StyleBoxEmpty.new())
+	_left.size_flags_stretch_ratio = 1.9 if on else 1.0
+	_rail_card.size_flags_stretch_ratio = 1.0 if on else 1.2
+	for note in _right_note:
+		note.visible = not on
+	for side in ["left","right"]:
+		_foot_margin.add_theme_constant_override("margin_"+side,24 if on else 0)
+	_rail_body.visible = on
+	var slot := _rail_body.get_node("CreateSlot") as Control
+	for pair: Array in [[_summary_column,_rail_body if on else _footer],[_create,slot if on else _footer]]:
+		if pair[0].get_parent() != pair[1]:
+			pair[0].reparent(pair[1],false)
+	(_summary_column.get_parent() as Node).move_child(_summary_column,0)
+	_summary_column.get_child(0).visible = not on   # "YOUR TABLE": the card says it
+	_summary_rows.vertical = on
+	_summary_rows.add_theme_constant_override("separation",0 if on else 10)
+	for pair: Node in _summary_rows.get_children():
+		var line := StyleBoxFlat.new()
+		line.bg_color = Color.TRANSPARENT
+		line.border_color = Color(HouseStyle.LINE,0.6)
+		line.border_width_bottom = 1
+		line.content_margin_left = 24
+		line.content_margin_right = 24
+		line.content_margin_top = 9
+		line.content_margin_bottom = 9
+		(pair as PanelContainer).add_theme_stylebox_override("panel",line if on else StyleBoxEmpty.new())
+		var caption := pair.get_child(0).get_child(0) as Label
+		caption.text = str(caption.get_meta("caption")).to_upper() if on else str(caption.get_meta("caption"))
+		caption.add_theme_font_override("font",HouseStyle.mono() if on else FONT)
+		var value := pair.get_child(0).get_child(1) as Label
+		value.size_flags_horizontal = Control.SIZE_EXPAND_FILL if on else Control.SIZE_FILL
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if on else HORIZONTAL_ALIGNMENT_LEFT
+	_create.custom_minimum_size = Vector2(0,56) if on else Vector2(230,50)
 
 
 ## The page fills the window height at every aspect: spare height grows the biome cards and the preview
@@ -752,6 +833,8 @@ func _fill_height(usable: float, separation: int) -> void:
 	_grow([_hero],_hero.size.x/HERO_MIN_ASPECT,usable)
 	# Until the 6 x 4 ft drawing (72 x 48 in plus 90 x 38 px of labels) is bound by the footprint's width.
 	_grow([_footprint],(_footprint.size.x-90)/72*48+38,usable)
+	if _rail_body.visible:   # the rail card reaches down to the legend: the spare height goes into the columns
+		_columns.custom_minimum_size.y = _columns.get_combined_minimum_size().y+maxf(0.0,usable-_page.get_combined_minimum_size().y)
 	var slack := _right.get_combined_minimum_size().y-_left.get_combined_minimum_size().y
 	for air in _left_air:
 		air.visible = slack > 48   # each shown gap also costs one column separation (at most 14)
