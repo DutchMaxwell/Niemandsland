@@ -85,6 +85,20 @@ static func boot(suite: Node, seat: String) -> SkirmishTable:
 	return t
 
 
+## A clean table in the same seat for the next case (a seed scan, a twin): no units, no turn state, round 1, no lines.
+func reset() -> void:
+	CoreActivation.reset_all(main)
+	for u in main.opr_army_manager.game_units.values():
+		for m in (u as GameUnit).models:
+			(m as ModelInstance).node.queue_free()
+	main.opr_army_manager.game_units.clear()
+	main._hotseat_turn = null
+	main._solo_game_finished = false
+	main.opr_army_manager.current_round = 1
+	main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
+	lines.clear()
+
+
 ## A unit of `sys` ("gff" | "aofs") for `player`: `models` in a row 1.2 in apart along z from (x_in, z_in), Quality 4,
 ## Defense 4, `tough` per model, `weapon` (ParityTable shape; {} = a 24 in rifle, one attack per model), `rules`.
 func unit(sys: String, player: int, name: String, models: int, tough: int, x_in: float, z_in: float,
@@ -185,6 +199,34 @@ func walk(gu: GameUnit, dx_in: float, dz_in: float, cap: int, only: Array = []) 
 ## A player's shot of `att` at `target` through the table's human attack door.
 func shoot(att: GameUnit, target: GameUnit) -> void:
 	await main._run_human_attack(att, target, false)
+	await E2EBoot.settle(_tree)
+
+
+## A player's Shoot (`melee` false) or Fight through the radial's targeting door and a left click on `target`'s first live
+## model: the click handler picks it with a ray (each target model gets a pick body, as spawned models carry), validates
+## it and logs the refusal or resolves the attack.
+func aim(att: GameUnit, target: GameUnit, melee := false) -> void:
+	await main.solo_begin_targeting(att, melee)
+	for m in target.get_alive_models():
+		var n: Node3D = (m as ModelInstance).node
+		if n.get_node_or_null("FtPick") == null:
+			var body := StaticBody3D.new()
+			body.name = "FtPick"
+			body.set_meta("game_unit", target)
+			var shape := CollisionShape3D.new()
+			var ball := SphereShape3D.new()
+			ball.radius = 0.016
+			shape.shape = ball
+			body.add_child(shape)
+			n.add_child(body)
+			body.position = Vector3(0, 0.03, 0)
+	await runner.simulate_frames(3)
+	var at: Vector3 = (target.get_alive_models()[0] as ModelInstance).node.global_position + Vector3(0, 0.03, 0)
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = main.get_viewport().get_camera_3d().unproject_position(at)
+	await main._solo_targeting_input(click)
 	await E2EBoot.settle(_tree)
 
 
