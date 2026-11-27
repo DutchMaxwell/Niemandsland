@@ -2026,6 +2026,11 @@ static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionar
 
 ## Ruling D16: the twin of the core's `rules::carries_command` - the AoF: Skirmish book limits command groups
 ## (`Book::one_command_upgrade_each`) and the unit has a Banner or a Musician.
+## Public for the owner's pick door (CommandPicks): the same test the capture and CR3 read.
+static func carries_command(u: GameUnit) -> bool:
+	return _carries_command(u)
+
+
 static func _carries_command(u: GameUnit) -> bool:
 	if str(u.unit_properties.get("game_system", "")) != "aofs" or u.models.is_empty():
 		return false
@@ -2047,7 +2052,8 @@ static func default_command_picks(army: OPRArmyManager, core: Object = null) -> 
 	for uid in army.game_units:
 		var u := army.game_units[uid] as GameUnit
 		var at: Variant = _living_centre(u)
-		if not _carries_command(u) or at == null or not (u.unit_properties.get("command_picks", []) as Array).is_empty():
+		var chosen: Array = u.unit_properties.get("command_picks", [])   # D-PICK-2: the owner's single pick stands, CR3 adds one
+		if not _carries_command(u) or at == null or chosen.size() >= 2:
 			continue
 		var kit := " and ".join(PackedStringArray(["Banner", "Musician"].filter(func(r: String) -> bool: return u.get_special_rules().has(r))))
 		if core == null and ClassDB.class_exists("NmlCore"):
@@ -2055,11 +2061,14 @@ static func default_command_picks(army: OPRArmyManager, core: Object = null) -> 
 		if core == null:
 			lines.append("Command group: %s's %s reaches no other unit - the rules core is not loaded" % [u.get_name(), kit])
 			continue
-		var rest := others.filter(func(o: Array) -> bool: return o[0] != str(uid))
-		var picks := Array(core.default_command_picks("aofs", PackedStringArray(u.get_special_rules()),
-			int(u.unit_properties.get("player_id", 0)), at, rest))
+		var rest := others.filter(func(o: Array) -> bool: return o[0] != str(uid) and not chosen.has(o[0]))
+		var picks := chosen + Array(core.default_command_picks("aofs", PackedStringArray(u.get_special_rules()),
+			int(u.unit_properties.get("player_id", 0)), at, rest)).slice(0, 2 - chosen.size())
 		u.unit_properties["command_picks"] = picks
-		var names := PackedStringArray(picks.map(func(k: String) -> String: return (army.game_units[k] as GameUnit).get_name()))
+		var names := PackedStringArray()
+		for k in picks:
+			var tag := "" if chosen.is_empty() else (" (chosen)" if chosen.has(k) else " (nearest)")
+			names.append((army.game_units[k] as GameUnit).get_name() + tag)
 		lines.append("Command group: %s's %s reaches %s" % [u.get_name(), kit, " and ".join(names)] if not names.is_empty()
 			else "Command group: %s's %s reaches no other unit - no living friendly unit" % [u.get_name(), kit])
 	return lines
