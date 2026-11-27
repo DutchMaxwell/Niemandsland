@@ -61,6 +61,7 @@ func _watch(main: Node, mode: String) -> void:
 	var save_manager: Node = main.get("save_manager")
 	match mode:
 		"load":
+			PendingOpponent.store({})
 			save_manager.load_completed.connect(
 				func(_count: int) -> void: _arrived(), CONNECT_ONE_SHOT
 			)
@@ -68,6 +69,7 @@ func _watch(main: Node, mode: String) -> void:
 				func(_error: String) -> void: _arrived(), CONNECT_ONE_SHOT
 			)
 		"join":  # the host's state is applied inside a restore; its unlock is the first moment it stands
+			PendingOpponent.store({})
 			save_manager.connect("_restore_unlocked", _arrived, CONNECT_ONE_SHOT)
 			_show(WAITING_FOR_HOST)
 		_:  # a new table: it stands once the setup's size is applied (deferred from main's _ready)
@@ -77,6 +79,7 @@ func _watch(main: Node, mode: String) -> void:
 					if PendingLayout.has_pending():
 						_lay_out()
 					else:
+						PendingOpponent.apply(_main)
 						_arrived(),
 				CONNECT_ONE_SHOT
 			)
@@ -86,6 +89,7 @@ func _watch(main: Node, mode: String) -> void:
 func _lay_out() -> void:
 	await get_tree().process_frame
 	PendingLayout.apply(_main)
+	PendingOpponent.apply(_main)
 	_arrived()
 
 
