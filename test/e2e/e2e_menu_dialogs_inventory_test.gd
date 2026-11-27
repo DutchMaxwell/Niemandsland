@@ -199,7 +199,7 @@ func test_dialog_buttons_stand_at_action_height() -> void:
 	assert_float(ok.x).override_failure_message("OK button is %s px wide" % ok.x).is_greater_equal(120.0)
 
 
-## The menu's windows are drawn at the menu's type scale (sheet 08): 18 px text, 16 px actions 44 px high; the table's
+## The menu's windows are drawn at the menu's type scale (sheet 08): 18 px text, 17 px actions 44 px high; the table's
 ## windows keep 14 / 15 / 40 (red on main: one scale for both).
 func test_menu_windows_stand_at_the_menus_type_scale() -> void:
 	_menu._on_credits_pressed()
