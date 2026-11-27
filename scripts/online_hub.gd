@@ -18,6 +18,9 @@ var join_button: Button
 var join_error: Label
 var relay_line: Button
 var relay_field: LineEdit
+var count_label: Label
+var status_label: Label
+var _rows: VBoxContainer
 
 
 func _init() -> void:
@@ -30,7 +33,7 @@ func _init() -> void:
 	left.add_child(caption)
 	name_field = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Player name")
 	name_field.max_length = PlayerIdentity.MAX_NAME_LEN
-	name_field.text_submitted.connect(func(_text: String) -> void: _on_prepare())
+	name_field.text_submitted.connect(func(_typed: String) -> void: _on_prepare())
 	left.add_child(name_field)
 	var create := _block(MenuView._icon(&"table"), "Create a room", "Prepare a table for your group")
 	create.draw.connect(_draw_corners.bind(create))
@@ -63,6 +66,91 @@ func _init() -> void:
 	relay_field = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, InternetLobby.DEFAULT_RELAY_URL)
 	relay_field.visible = false
 	left.add_child(relay_field)
+
+
+## The right panel "Public tables": the count in its head, one row per room.
+func _ready() -> void:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override(&"separation", 12)
+	right.add_child(box)
+	var head := HBoxContainer.new()
+	var names := VBoxContainer.new()
+	names.size_flags_horizontal = SIZE_EXPAND_FILL
+	var kicker := _text("PUBLIC TABLES", HouseStyle.MENU_FONT_EYEBROW, HouseStyle.eyebrow_font())
+	kicker.add_theme_color_override(&"font_color", HouseStyle.ACCENT)
+	names.add_child(kicker)
+	names.add_child(_text("Find an open game", 22, HouseStyle.font(500)))
+	head.add_child(names)
+	count_label = _text("", HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
+	count_label.add_theme_color_override(&"font_color", HouseStyle.MUTED)
+	head.add_child(count_label)
+	box.add_child(head)
+	box.add_child(HSeparator.new())
+	_rows = VBoxContainer.new()
+	_rows.name = "RoomRows"
+	box.add_child(_rows)
+	status_label = _text("", HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
+	_rows.add_child(status_label)
+
+
+## The relay's answer: one row per room and the count, or the zero line.
+func _on_rooms(rooms: Array) -> void:
+	_show_status("0 games online right now." if rooms.is_empty() else "")
+	count_label.text = "%d game%s online" % [rooms.size(), "" if rooms.size() == 1 else "s"]
+	for room: Dictionary in rooms:
+		_rows.add_child(_room_row(str(room.get("code", "")), int(room.get("players", 0))))
+
+
+func _show_status(text: String) -> void:
+	for row: Node in _rows.get_children():
+		if row != status_label:
+			_rows.remove_child(row)
+			row.queue_free()
+	status_label.text = text
+	status_label.visible = not text.is_empty()
+
+
+## A room: its code in mono, eight pips (as many filled as players are in), "<n> / 8 players" and Join.
+func _room_row(code: String, players: int) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "Room" + code
+	row.custom_minimum_size.y = 64
+	row.add_theme_constant_override(&"separation", 18)
+	row.add_child(_text(NetDialog.code_as_typed(code), 24, HouseStyle.mono()))
+	var pips := HBoxContainer.new()
+	pips.add_theme_constant_override(&"separation", 4)
+	for i in InternetLobby.MAX_ROOM_PLAYERS:
+		var pip := Panel.new()
+		pip.name = "Pip%d" % i
+		pip.set_meta("filled", i < players)
+		pip.custom_minimum_size = Vector2(10, 10)
+		pip.size_flags_vertical = SIZE_SHRINK_CENTER
+		var dot := StyleBoxFlat.new()
+		dot.set_corner_radius_all(5)
+		dot.bg_color = HouseStyle.ACCENT if i < players else Color.TRANSPARENT
+		dot.border_color = HouseStyle.ACCENT if i < players else HouseStyle.LINE
+		dot.set_border_width_all(1)
+		pip.add_theme_stylebox_override(&"panel", dot)
+		pips.add_child(pip)
+	row.add_child(pips)
+	var count := _text("%d / %d players" % [players, InternetLobby.MAX_ROOM_PLAYERS], 18, HouseStyle.font(400))
+	count.add_theme_color_override(&"font_color", HouseStyle.MUTED)
+	count.size_flags_horizontal = SIZE_EXPAND_FILL
+	row.add_child(count)
+	var join := HouseStyle.button("Join", HouseStyle.BUTTON, HouseStyle.MENU_H_ACTION)
+	join.custom_minimum_size.x = 110
+	join.size_flags_horizontal = SIZE_SHRINK_END
+	join.size_flags_vertical = SIZE_SHRINK_CENTER
+	join.focus_mode = FOCUS_ALL
+	join.pressed.connect(func() -> void:
+		join_requested.emit(code, _relay(), PlayerIdentity.sanitize(name_field.text), join))
+	row.add_child(join)
+	return row
+
+
+func _relay() -> String:
+	var url := relay_field.text.strip_edges()
+	return url if not url.is_empty() else InternetLobby.DEFAULT_RELAY_URL
 
 
 ## The list panel stands right of the column as drawn: from x = 720, y = 196, 760 px wide.
