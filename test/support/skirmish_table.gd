@@ -159,6 +159,15 @@ func card_shows(gu: GameUnit, needle: String) -> bool:
 	return false
 
 
+## The game-over summary's text as the player reads it, or "" while none stands.
+func summary_text() -> String:
+	for c in main.get_children():
+		if c is CanvasLayer and c.name == "GameOverLayer" and not c.is_queued_for_deletion():
+			var label := c.find_child("Summary", true, false) as Label
+			return label.text if label != null else ""
+	return ""
+
+
 ## The card's Activate (the committed start). True when the activation is open afterwards.
 func start(gu: GameUnit) -> bool:
 	return await E2EBoot.start_activation(main, gu)
