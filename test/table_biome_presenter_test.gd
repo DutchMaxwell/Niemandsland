@@ -40,3 +40,13 @@ func test_density_follows_preset_and_caps_large_tables() -> void:
 	# 240 x 240 in (20 x 20 ft): 16.7x the 6x4 area -> density falls so the instance count stays at 6x4's.
 	var big := TableBiomePresenter.density_for(2, Vector2(20, 20))
 	assert_float(big * 20.0 * 20.0).is_equal_approx(medium * 6.0 * 4.0, 0.001)
+
+
+## A generated board leaving the table at teardown, after the presenter has left the tree, asks no timer of a tree it
+## no longer has (red before: SCRIPT ERROR "Cannot call method 'create_timer' on a null value", the rebuild stayed queued).
+func test_a_board_leaving_at_teardown_asks_no_rebuild() -> void:
+	var presenter: TableBiomePresenter = auto_free(TableBiomePresenter.new())   # never in the tree: as after teardown
+	var board: Node3D = auto_free(Node3D.new())
+	board.add_to_group(TableBiomePresenter.HIDES_LANDSCAPE_GROUP)
+	presenter.call("_on_table_child", board)
+	assert_bool(bool(presenter.get("_rebuild_queued"))).override_failure_message("a rebuild was queued outside the tree").is_false()
