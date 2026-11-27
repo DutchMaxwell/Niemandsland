@@ -8,7 +8,7 @@ shader_type spatial;
 #include "res://shaders/ruintown_green.gdshaderinc"
 #include "res://shaders/ruintown_soil.gdshaderinc"   // (LOOK5 S1) the ground as a material - inert until S4 calls soil_blend
 uniform sampler2D green_map : filter_linear, repeat_disable;   // (LOOK5 S6) BoardgenTownGreen.map: R cover, G wear, B verge
-uniform float soil_debug = 0.0;   // (LOOK5 S6) 1: the soil branch writes its blend weights as flat colours (the grit debug exit)
+uniform float soil_debug = 0.0;   // (LOOK5 S6) the grit debug exit for the soil: 1 the heaviest layer's class colour, 2 the blend-band share (grey)
 
 uniform vec4 palette[19];   // display colours by kind index (BoardgenTheme.TOWN_KINDS)
 uniform vec3 board_origin;   // world position of the board centre
@@ -493,8 +493,10 @@ void fragment() {
 				ao = sm.ao;
 				rough = sm.rough;
 				depth_in = 0.06;
-				if (soil_debug > 0.5) {
-					soil_dbg = w.x * vec3(1.0, 0.0, 0.0) + w.y * vec3(0.0, 0.0, 1.0) + w.z * vec3(0.0, 1.0, 0.0) + w.w * vec3(1.0, 1.0, 0.0);   // bare red, mud blue, grass green, verge yellow
+				if (soil_debug > 1.5) {   // how much of the pixel sits in the blend band (0 = one layer, 1 = an even mix)
+					soil_dbg = vec3(4.0 * sm.k.x * sm.k.y);
+				} else if (soil_debug > 0.5) {   // the HEAVIEST weight only, one pure colour per class (a summed colour let a bare + grass mix read as verge)
+					soil_dbg = w.x >= max(max(w.y, w.z), w.w) ? vec3(1.0, 0.0, 0.0) : (w.y >= max(w.z, w.w) ? vec3(0.0, 0.0, 1.0) : (w.z >= w.w ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 1.0, 0.0)));   // bare red, mud blue, grass green, verge yellow
 				}
 			}
 			grit_earth(gw, alb, rough);
