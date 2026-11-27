@@ -12,12 +12,6 @@ const MUSIC_SHEET_DB := -18.0
 const MUSIC_BOW_OUT_S := 0.6
 const MUSIC_RAMP_DB_PER_S := 30.0
 
-## Fail the room-list request if neither rooms nor an error arrive in this time
-## (safety net for a relay that accepts the socket but never replies).
-const BROWSE_TIMEOUT_S := 8.0
-## Room-code length the relay hands out (CODE_LENGTH in relay_server.py). Only used to
-## reject input the relay could never accept before the dialog closes on it.
-const JOIN_CODE_LEN := 6
 ## Trial by Fire: the width (px) every wrapping label of the list is given, and the least size (px) of the
 ## scrolling list. Without a width floor the labels wrap at one letter and the window grows past the screen.
 
@@ -32,8 +26,6 @@ var _transitioning := false
 var continue_btn: Button
 var start_battle_btn: Button
 var online_hub_lists := true   # false: the online hub asks the relay only on refresh (tests)
-var join_online_btn: Button
-var browse_online_btn: Button
 var load_battle_btn: Button
 var report_problem_btn: Button
 var credits_btn: Button
@@ -42,18 +34,7 @@ var exit_game_btn: Button
 # === Private variables ===
 
 var _save_browser: SaveBrowser
-var _join_popup: AcceptDialog
-var _browse_popup: AcceptDialog
 var _exit_card: PromptCard
-var _join_code_input: LineEdit
-var _join_relay_url_input: LineEdit
-var _join_name_input: LineEdit
-var _join_error_label: Label
-var _browse_name_input: LineEdit
-var _browse_url_input: LineEdit
-var _browse_rooms_vbox: VBoxContainer
-var _browse_lobby: InternetLobby
-var _browse_request_gen: int = 0  # invalidates a stale request's timeout/reply
 var _continue_path := ""
 var _music_player: AudioStreamPlayer = null
 var _music_tween: Tween
@@ -77,8 +58,6 @@ func _ready() -> void:
 	_add_boot_cover()
 	continue_btn = view.buttons.ContinueBtn
 	start_battle_btn = view.buttons.StartBattleBtn
-	join_online_btn = view.buttons.JoinOnlineBtn
-	browse_online_btn = view.buttons.BrowseOnlineBtn
 	load_battle_btn = view.buttons.LoadBattleBtn
 	report_problem_btn = view.buttons.ReportProblemBtn
 	credits_btn = view.buttons.CreditsBtn
@@ -91,8 +70,6 @@ func _ready() -> void:
 	start_battle_btn.pressed.connect(_on_start_battle_pressed)
 	view.buttons.LearnBtn.pressed.connect(_open_learn_page.bind(false))
 	view.buttons.OnlineBtn.pressed.connect(_open_online_hub)
-	join_online_btn.pressed.connect(_on_join_online_pressed)
-	browse_online_btn.pressed.connect(_on_browse_online_pressed)
 	load_battle_btn.pressed.connect(_on_load_battle_pressed)
 	report_problem_btn.pressed.connect(_on_report_problem_pressed)
 	credits_btn.pressed.connect(_on_credits_pressed)
@@ -599,10 +576,6 @@ func _on_update_failed(reason: String, dialog: AcceptDialog, updater: SelfUpdate
 
 # ===== Online Multiplayer =====
 
-func _on_join_online_pressed() -> void:
-	_show_join_popup()
-
-
 ## "Play online": the online hub in place of the menu's list. Create hands its settings to the table setup (the
 ## hub stays open under it); a join plays the commit beat on its button, then joins.
 func _open_online_hub() -> void:
@@ -618,83 +591,6 @@ func _on_hub_join(code: String, url: String, player_name: String, button: Button
 	_join_room_and_transition(code, url, player_name)
 
 
-func _show_join_popup() -> void:
-	if _join_popup:
-		_join_popup.queue_free()
-	_join_popup = NetDialog.build("Join with a code", "NET-02", "Join")
-
-	var content := NetDialog.content(_join_popup)
-	content.add_child(NetDialog.label("Your name:"))
-	_join_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Player name")
-	_join_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
-	content.add_child(_join_name_input)
-	content.add_child(NetDialog.label("Invitation code:"))
-	_join_code_input = NetDialog.line_edit("", "ABC-123")
-	_join_code_input.max_length = 7  # 6 chars + optional hyphen
-	_join_code_input.add_theme_font_override("font", HouseStyle.mono())
-	_join_code_input.add_theme_font_size_override("font_size", 30)
-	_join_code_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	content.add_child(_join_code_input)
-	_join_popup.register_text_enter(_join_code_input)  # Enter in the code field = Join
-	# Validation feedback right under the field it belongs to; hidden until Join is
-	# pressed with an unusable code (see _on_join_confirmed).
-	_join_error_label = NetDialog.label("")
-	_join_error_label.add_theme_color_override("font_color", HouseStyle.tone_ink(HouseStyle.TONE_DANGER))
-	_join_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_join_error_label.visible = false
-	content.add_child(_join_error_label)
-	# Editing the code is the fix for the message, so the message must not outlive the edit.
-	_join_code_input.text_changed.connect(func(new_text: String) -> void:
-		var typed := NetDialog.code_as_typed(new_text)
-		if typed != new_text:
-			_join_code_input.text = typed
-			_join_code_input.caret_column = typed.length()
-		_join_error_label.visible = false)
-	_join_relay_url_input = NetDialog.advanced_relay(content, InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
-
-	# The dialog must NOT close itself on OK: an unusable room code has to leave the mask
-	# open with its reason on screen (a window that just vanishes and does nothing reads
-	# like a crash). _on_join_confirmed hides it once the input is good.
-	_join_popup.dialog_hide_on_ok = false
-	_join_popup.confirmed.connect(_on_join_confirmed)
-	add_child(_join_popup)
-	MenuDialog.attach_scrim(_join_popup)
-	_join_popup.popup_centered()
-	UiPolish.keep_window_reachable(_join_popup, Vector2i(460, 340))
-	_join_code_input.grab_focus()
-
-
-## Join pressed. Anything the relay cannot possibly accept (relay: 6 characters) is
-## rejected HERE, with the mask staying open and the caret back in the code field —
-## previously this returned silently while the dialog closed anyway, so a typo looked
-## exactly like the game crashing on Join.
-func _on_join_confirmed() -> void:
-	var code = _join_code_input.text.strip_edges().replace("-", "").to_upper()
-	if code.is_empty():
-		_show_join_error("Enter your game’s invitation code.")
-		return
-	if code.length() != JOIN_CODE_LEN:
-		_show_join_error("An invitation code has %d characters, for example ABC-123." % JOIN_CODE_LEN)
-		return
-	var url = _join_relay_url_input.text.strip_edges()
-	if url.is_empty():
-		url = InternetLobby.DEFAULT_RELAY_URL
-	# We took the close over from the dialog (dialog_hide_on_ok), so hide it before the
-	# scene swap — an embedded dialog would otherwise sit on top of the loading overlay.
-	await _commit_beat(_join_popup.get_ok_button())
-	_join_popup.hide()
-	_join_room_and_transition(code, url, PlayerIdentity.sanitize(_join_name_input.text))
-
-
-## Shows a rejection under the room-code field and returns the caret to it.
-func _show_join_error(message: String) -> void:
-	if not is_instance_valid(_join_error_label):
-		return
-	_join_error_label.text = message
-	_join_error_label.visible = true
-	_join_code_input.grab_focus()
-
-
 ## Persists the name, hands the join settings to the main scene and transitions.
 ## Shared by the Join dialog and the room browser (the connection happens in main).
 func _join_room_and_transition(code: String, url: String, player_name: String) -> void:
@@ -705,141 +601,6 @@ func _join_room_and_transition(code: String, url: String, player_name: String) -
 	ProjectSettings.set_setting("niemandsland/internet_room_code", code)
 	ProjectSettings.set_setting("niemandsland/player_name", player_name)
 	_transition_to_game()
-
-
-# ===== Room browser (NET-03) =====
-
-func _on_browse_online_pressed() -> void:
-	_show_browse_popup()
-
-
-func _show_browse_popup() -> void:
-	if _browse_popup:
-		_browse_popup.queue_free()
-	_browse_popup = NetDialog.build("Public tables", "NET-03", "Close")
-
-	var content := NetDialog.content(_browse_popup)
-	content.add_child(NetDialog.label("Your name:"))
-	_browse_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Player name")
-	_browse_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
-	content.add_child(_browse_name_input)
-	_browse_url_input = NetDialog.advanced_relay(content, InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
-
-	var refresh_btn := Button.new()
-	refresh_btn.text = "Refresh list"
-	refresh_btn.focus_mode = Control.FOCUS_ALL
-	refresh_btn.pressed.connect(_refresh_browse_list)
-	content.add_child(refresh_btn)
-
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 220)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	content.add_child(scroll)
-	_browse_rooms_vbox = VBoxContainer.new()
-	_browse_rooms_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_browse_rooms_vbox.add_theme_constant_override("separation", HouseStyle.GAP_CONTROL)
-	scroll.add_child(_browse_rooms_vbox)
-
-	# A reusable lobby just for listing (its _process polls the relay socket).
-	_browse_lobby = InternetLobby.new()
-	add_child(_browse_lobby)
-	_browse_lobby.rooms_list_received.connect(_on_browse_rooms_received)
-	_browse_lobby.rooms_list_failed.connect(_on_browse_failed)
-
-	_browse_popup.confirmed.connect(_on_browse_closed)
-	_browse_popup.canceled.connect(_on_browse_closed)
-	add_child(_browse_popup)
-	MenuDialog.attach_scrim(_browse_popup)
-	_browse_popup.popup_centered()
-	UiPolish.keep_window_reachable(_browse_popup, Vector2i(460, 460))
-	_refresh_browse_list()
-
-
-func _refresh_browse_list() -> void:
-	if not _browse_lobby:
-		return
-	_set_browse_status("Loading rooms…")
-	var url := _browse_url_input.text.strip_edges()
-	if url.is_empty():
-		url = InternetLobby.DEFAULT_RELAY_URL
-	_browse_request_gen += 1
-	var gen := _browse_request_gen
-	_browse_lobby.list_rooms(url)
-	# Safety net: a relay that never replies leaves the list spinning forever.
-	get_tree().create_timer(BROWSE_TIMEOUT_S).timeout.connect(
-		func() -> void:
-			if gen == _browse_request_gen and _browse_rooms_vbox:
-				_set_browse_status("Could not reach the relay (timed out)."))
-
-
-func _on_browse_rooms_received(rooms: Array) -> void:
-	_browse_request_gen += 1  # a reply arrived; void the pending timeout
-	for child in _browse_rooms_vbox.get_children():
-		child.queue_free()
-	if rooms.is_empty():
-		_set_browse_status("0 games online right now.")
-		return
-	# Count line above the rows, mirroring the explicit 0-state.
-	var count_label := Label.new()
-	count_label.text = "%d game%s online:" % [rooms.size(), "" if rooms.size() == 1 else "s"]
-	count_label.theme_type_variation = HouseStyle.CAPTION
-	_browse_rooms_vbox.add_child(count_label)
-	for room: Variant in rooms:
-		var code := str(room.get("code", ""))
-		var players := int(room.get("players", 0))
-		if code.is_empty():
-			continue
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
-		var label := Label.new()
-		label.text = "%s   %d/%d" % [InternetLobby._format_code(code), players, InternetLobby.MAX_ROOM_PLAYERS]
-		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(label)
-		var join_btn := Button.new()
-		join_btn.text = "Join"
-		join_btn.focus_mode = Control.FOCUS_NONE
-		join_btn.pressed.connect(_on_browse_join.bind(code))
-		row.add_child(join_btn)
-		_browse_rooms_vbox.add_child(row)
-
-
-## The relay was unreachable or rejected list_rooms (e.g. not yet redeployed).
-func _on_browse_failed(reason: String) -> void:
-	_browse_request_gen += 1  # an error arrived; void the pending timeout
-	_set_browse_status(reason)
-
-
-func _on_browse_join(code: String) -> void:
-	var url := _browse_url_input.text.strip_edges()
-	if url.is_empty():
-		url = InternetLobby.DEFAULT_RELAY_URL
-	_cleanup_browse_lobby()
-	_join_room_and_transition(code, url, PlayerIdentity.sanitize(_browse_name_input.text))
-
-
-func _on_browse_closed() -> void:
-	_cleanup_browse_lobby()
-
-
-## Frees the listing lobby (and any open socket) when the browser closes/joins.
-func _cleanup_browse_lobby() -> void:
-	if _browse_lobby:
-		_browse_lobby.disconnect_internet_game()
-		_browse_lobby.queue_free()
-		_browse_lobby = null
-
-
-## Shows a single status line in the room list (loading / empty / error).
-func _set_browse_status(text: String) -> void:
-	if not _browse_rooms_vbox:
-		return
-	for child in _browse_rooms_vbox.get_children():
-		child.queue_free()
-	var label := Label.new()
-	label.text = text
-	label.theme_type_variation = HouseStyle.CAPTION
-	_browse_rooms_vbox.add_child(label)
-
 
 
 # ===== Shared =====

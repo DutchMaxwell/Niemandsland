@@ -58,33 +58,15 @@ func test_escape_closes_group_without_quit_dialog() -> void:
 	assert_bool(_menu.view.buttons.LearnBtn.has_focus()).is_true()
 
 func test_group_focus_cycles_inside_group() -> void:
-	_menu.view.show_route("online")
-	assert_object(_menu.browse_online_btn.get_node(_menu.browse_online_btn.focus_next)).is_same(_menu.view.route_back)
-	assert_object(_menu.view.route_back.get_node(_menu.view.route_back.focus_next)).is_same(_menu.view.buttons.HostOnlineBtn)
+	_menu.view.show_route("help")
+	var report: Button = _menu.view.buttons.ReportProblemBtn
+	assert_object(report.get_node(report.focus_next)).is_same(_menu.view.route_back)
+	assert_object(_menu.view.route_back.get_node(_menu.view.route_back.focus_next)).is_same(_menu.view.buttons.HelpTutorialBtn)
 
 func test_existing_routes_keep_their_own_handlers() -> void:
 	for pair in [[_menu.start_battle_btn,_menu._on_start_battle_pressed],[_menu.continue_btn,_menu._on_continue_pressed],
 		[_menu.load_battle_btn,_menu._on_load_battle_pressed],[_menu.credits_btn,_menu._on_credits_pressed]]:
 		assert_bool(pair[0].pressed.is_connected(pair[1])).is_true()
-
-func test_join_invalid_code_keeps_dialog_open_and_does_not_transition() -> void:
-	_menu._on_join_online_pressed()
-	_menu._join_code_input.text = "AB"
-	_menu._on_join_confirmed()
-	assert_bool(_menu._join_popup.visible).is_true()
-	assert_bool(_menu._join_error_label.visible).is_true()
-	assert_bool(_menu._transitioning).is_false()
-
-## Enter in the code field is Join: a short code is refused with the inline line, like the Join button
-## (red on main: Enter was not connected to anything).
-func test_enter_in_the_join_code_field_joins_like_the_button() -> void:
-	_menu._on_join_online_pressed()
-	_menu._join_code_input.text = "AB1"
-	_menu._join_code_input.text_submitted.emit("AB1")
-	assert_bool(_menu._join_error_label.visible).is_true()
-	assert_bool(_menu._join_popup.visible).is_true()
-	assert_bool(_menu._transitioning).is_false()
-
 
 ## Enter in the host's name field is "Prepare table" (red on main: nothing happened).
 func test_enter_in_the_host_name_field_prepares_the_table() -> void:

@@ -24,9 +24,6 @@ class MenuTransitionProbe extends "res://scripts/startup_menu.gd":
 		set("online_hub_lists", false)   # the hub must not ask the production relay from a test
 	func _transition_to_game() -> void:
 		entered_game = true
-	# The room browser opens with a relay request; a test must not reach the production relay.
-	func _refresh_browse_list() -> void:
-		_set_browse_status("Loading rooms…")
 
 ## The runtime-only flags the menu arms for main.gd (never persisted). On a machine without tutorial progress the
 ## "Learn the controls" click launches the tutorial and arms tutorial_mode; left armed, the next suite that boots
