@@ -12939,6 +12939,10 @@ fn resolve_with(
                                 combined_alive(sc, g.ti, seams)
                             };
                             let spread: Vec<(usize, i64)> = blast_spread_units(&next, g.ti, seams);
+                            if !spread.is_empty() {   // step 29b: the defender's Blast split choice names these units
+                                tray.blast_units(format!("blast_split:{}:{}", next.key(si), next.key(g.ti)),
+                                    std::iter::once(g.ti).chain(spread.iter().map(|n| n.0)).map(|u| next.key(u).to_string()).collect());
+                            }
                             let mut r = crate::dice::resolve_volley_with_pick_label(
                                 &shooters_of(&parts, statics, &next),
                                 &def, &ut_g.name, g.d, g.mod_d,

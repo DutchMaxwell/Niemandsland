@@ -128,7 +128,7 @@ impl Tray {
     /// instead of drawing. Past the last group it serves 1s and records where it
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
-        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), interference_choices: Vec::new(), strike_back_choices: Vec::new(), choice_seq: 0, casts: Vec::new(), cast_refused: None, paid: (false, false), no_step: false };
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), interference_choices: Vec::new(), strike_back_choices: Vec::new(), blast_choices: Vec::new(), blast_at: None, choice_seq: 0, casts: Vec::new(), cast_refused: None, paid: (false, false), no_step: false };
         Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None, consolidate: Vec::new(), push: None }
     }
 
@@ -297,6 +297,48 @@ impl Tray {
     pub fn versatile_mode(&mut self) -> Option<bool> {
         let owner = self.feed.as_ref()?.strike_back_choices.iter().find(|c| c.id.starts_with("versatile_mode:"))?.id["versatile_mode:".len()..].to_string();
         self.reach_two_way(|c| c.id.starts_with("versatile_mode:"), &owner)
+    }
+
+    /// Step 29b: the transcript names the Blast split choice `id` (`blast_split:<shooter>:<target>`; `Some(keys)` = the units
+    /// that take the remainder hits, `None` = only asked). A supplied tray keeps it; a seeded tray ignores the call.
+    pub fn offer_blast_split(&mut self, id: String, answer: Option<Vec<String>>) {
+        if let Some(feed) = self.feed.as_mut() {
+            feed.blast_choices.push(BlastChoice { id, answer, reached: None, bad: false, lines: Vec::new(), landings: Vec::new(), order: 0 });
+        }
+    }
+
+    /// Step 29b: the shooting leg names its Blast choice id and the spread's units (target first) before the volley.
+    pub fn blast_units(&mut self, id: String, keys: Vec<String>) {
+        if let Some(feed) = self.feed.as_mut() {
+            feed.blast_at = Some((id, keys));
+        }
+    }
+
+    /// Step 29b: the volley reaches the even split's remainder: `left` extra hits for `left` of the `open` units (indices into
+    /// the spread's units). The options are every such set, named by roster keys; the owner's answer as indices, or `None`
+    /// (nothing offered, only asked, or no option: the core's own, target first).
+    pub fn blast_split_pick(&mut self, open: &[usize], left: usize) -> Option<Vec<usize>> {
+        let feed = self.feed.as_mut()?;
+        let (id, keys) = feed.blast_at.clone()?;
+        let c = feed.blast_choices.iter_mut().find(|c| c.id == id && c.reached.is_none())?;
+        let mut sets: Vec<Vec<usize>> = vec![Vec::new()];
+        for &i in open.iter().rev() {
+            sets = sets.into_iter().flat_map(|s| [s.clone(), [vec![i], s].concat()]).filter(|s| s.len() <= left).collect();
+        }
+        sets.retain(|s| s.len() == left);
+        sets.sort();
+        let label = |s: &Vec<usize>| s.iter().map(|&i| keys.get(i).cloned().unwrap_or_default()).collect::<Vec<_>>().join(",");
+        c.reached = Some((feed.next, sets.iter().map(label).collect(), keys.first().cloned().unwrap_or_default()));
+        c.order = feed.choice_seq;
+        feed.choice_seq += 1;
+        let pick = c.answer.as_ref().map(|a| a.join(","));
+        let hit = pick.as_ref().and_then(|p| sets.iter().find(|s| label(s) == *p).cloned());
+        c.bad = pick.is_some() && hit.is_none();
+        if c.answer.is_none() {
+            c.lines = self.lines.iter().map(|(_, l)| l.clone()).collect();
+            c.landings = self.landings.iter().map(|(_, l)| l.clone()).collect();
+        }
+        hit
     }
 
     /// The shared reach of a two-way choice: the first reach stamps where (draws so far) and keeps the lines and landings before it.
@@ -482,6 +524,10 @@ pub struct Feed {
     pub interference_choices: Vec<InterferenceChoice>,
     /// E-24: the transcript's strike-back choices (`Tray::offer_strike_back`).
     pub strike_back_choices: Vec<StrikeBackChoice>,
+    /// Step 29b: the transcript's Blast split choices (`Tray::offer_blast_split`).
+    pub blast_choices: Vec<BlastChoice>,
+    /// Step 29b: the shooting leg's open Blast choice id and the units its spread reaches, target first (`Tray::blast_units`).
+    blast_at: Option<(String, Vec<String>)>,
     /// Monotonic reach ordinal across both choice families (breaks ties when two choices occur at the same draw).
     choice_seq: usize,
     /// CC-5a: the transcript's planned casts (`Tray::offer_casts`).
@@ -524,6 +570,20 @@ pub struct InterferenceChoice {
 
 /// E-24: the step API's strike-back choice as the melee sees it. `reached` = (draws so far, owner key) once the melee came
 /// to the defender's strike-back; `lines` / `landings` = everything before that point (when `answer` is `None`).
+#[derive(Debug, Clone)]
+pub struct BlastChoice {
+    pub id: String,
+    pub answer: Option<Vec<String>>,
+    pub reached: Option<(usize, Vec<String>, String)>,
+    pub bad: bool,
+    pub lines: Vec<LogLine>,
+    pub landings: Vec<Landing>,
+    pub order: usize,
+}
+
+/// Step 29b (D-29-R1): the defender's Blast split choice as the shooting volley sees it. `answer` = the roster keys that take
+/// the remainder hits (`None` = only asked); `reached` = (draws so far, options, owner = the target's key); `bad` = an answer
+/// that is no option.
 #[derive(Debug, Clone)]
 pub struct StrikeBackChoice {
     pub id: String,
@@ -1038,14 +1098,26 @@ pub fn blast_split_at(hits: i64, x: i64, target_models: i64, neighbour_models: &
     if !rule_on(rules_epoch, crate::acts::PENDING_EPOCH_BLAST_EVEN) {
         return blast_split(hits, x, target_models, neighbour_models);
     }
+    let (out, caps, left) = blast_even_base(hits, x, target_models, neighbour_models);
+    blast_give(out, &caps, left, None)
+}
+
+/// The even split before its remainder: every unit's level share, its room, and the hits still to give (one each).
+fn blast_even_base(hits: i64, x: i64, target_models: i64, neighbour_models: &[i64]) -> (Vec<i64>, Vec<i64>, i64) {
     let caps: Vec<i64> = std::iter::once(target_models.max(1)).chain(neighbour_models.iter().map(|m| (*m).max(0))).map(|c| c * hits.max(0)).collect();
     let total = hits.max(0) * x.max(1).min(caps.iter().sum::<i64>() / hits.max(1));
     let level = (0..=caps.iter().copied().max().unwrap_or(0)).take_while(|&l| caps.iter().map(|c| (*c).min(l)).sum::<i64>() <= total).last().unwrap_or(0);
-    let mut out: Vec<i64> = caps.iter().map(|c| (*c).min(level)).collect();
-    let mut left = total - out.iter().sum::<i64>();
-    for (n, c) in out.iter_mut().zip(&caps) {
-        if left > 0 && *n < *c {
-            *n += 1;
+    let out: Vec<i64> = caps.iter().map(|c| (*c).min(level)).collect();
+    let left = total - out.iter().sum::<i64>();
+    (out, caps, left)
+}
+
+/// The remainder one each, to the units `to` names (the defender's pick, step 29b) or else in unit order, target first.
+fn blast_give(mut out: Vec<i64>, caps: &[i64], mut left: i64, to: Option<&[usize]>) -> Vec<i64> {
+    let order: Vec<usize> = to.map_or_else(|| (0..out.len()).collect(), <[usize]>::to_vec);
+    for i in order {
+        if left > 0 && out[i] < caps[i] {
+            out[i] += 1;
             left -= 1;
         }
     }
@@ -2420,7 +2492,15 @@ pub(crate) fn resolve_volley_with_pick_label(
         // (main.gd `_solo_hits`, TC-023) and the save reads the pick's own square.
         if hits > 0 && p.blast > 1 && !blast_spread.is_empty() && !unit_of_one {
             let cap = def.blast_models.unwrap_or(def.models).max(1);
-            let split = blast_split_at(hits, p.blast, cap, blast_spread, att.rules_epoch);
+            let split = if rule_on(att.rules_epoch, crate::acts::PENDING_EPOCH_BLAST_EVEN) {
+                // Step 29b (D-29-R1 "defender picks how"): the remainder goes where the target's owner says.
+                let (base, caps, left) = blast_even_base(hits, p.blast, cap, blast_spread);
+                let open: Vec<usize> = (0..base.len()).filter(|&i| base[i] < caps[i]).collect();
+                let pick = if left > 0 && (left as usize) < open.len() { tray.blast_split_pick(&open, left as usize) } else { None };
+                blast_give(base, &caps, left, pick.as_deref())
+            } else {
+                blast_split(hits, p.blast, cap, blast_spread)
+            };
             let shooter = shooters.iter().position(|s| std::ptr::eq(s, sh)).unwrap_or(0);
             out.blast_spill.push(BlastSpill { shooter, profile: pi, hits: split[1..].to_vec() });
             let (kept, spread) = (split[0], split[1..].iter().sum::<i64>());
