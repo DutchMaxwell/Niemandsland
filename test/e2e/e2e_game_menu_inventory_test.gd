@@ -9,7 +9,7 @@ extends GdUnitTestSuite
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 
 ## Rows 2 and 4: every button by its text ("Next Round" by prefix: its label names the round).
-const BUTTONS := ["Import OPR Army...", "AI Opponent", "Map Layout...", "Terrain Mode", "Clear Table",
+const BUTTONS := ["Import OPR Army...", "Map Layout...", "Terrain Mode", "Clear Table",
 	"Sort Table", "Next Round", "Settings", "Save Game...", "Load Game...", "End Battle - To Main Menu"]
 ## Row 3 while offline (Disconnect shows once connected).
 const MP_BUTTONS := ["Host Online Game", "Join Online Game"]
@@ -32,7 +32,7 @@ const STATES := [
 ## The graphics quality dropdown, in GraphicsSettings.QualityPreset order.
 const GRAPHICS := ["Performance", "Low", "Medium", "High", "Ultra"]
 ## Buttons that explain themselves on hover.
-const TOOLTIPS := ["Sort Table", "Next Round", "Settings", "AI Opponent"]
+const TOOLTIPS := ["Sort Table", "Next Round", "Settings"]
 ## Row 6: deployment zones and the phase gate (the host tools show only to the host of a live session).
 const DEPLOY_BUTTONS := ["Show Deployment Zones", "Flip Zone Colours", "Start Game"]
 const DEPLOY_LABELS := ["Deployment Zones:", "(Configure in Map Tool)"]
@@ -330,23 +330,6 @@ func test_table_and_army_buttons_do_what_they_do_today(timeout := 120000) -> voi
 	await _click(_button("Import OPR Army..."))
 	assert_bool(_main.opr_import_dialog.visible).override_failure_message("Import OPR Army... did not open the import window").is_true()
 	_main.opr_import_dialog.hide()
-
-	# AI Opponent fetches the list manifest from the CDN (no bundle in the repo): the click is proven to
-	# reach the button and today's handler is proven wired to it, without a network call in the suite.
-	var ai := _button("AI Opponent")
-	if ai == null:
-		fail("AI Opponent is missing from the menu")
-		return
-	var handler := Callable(_main, &"_open_ai_opponent_dialog")
-	assert_bool(ai.pressed.is_connected(handler)).override_failure_message("AI Opponent no longer opens its dialog").is_true()
-	ai.pressed.disconnect(handler)
-	var presses := [0]
-	var spy := func() -> void: presses[0] += 1
-	ai.pressed.connect(spy)
-	await _click(ai)
-	ai.pressed.disconnect(spy)
-	ai.pressed.connect(handler)
-	assert_int(presses[0]).override_failure_message("a click on AI Opponent did not press it").is_equal(1)
 
 	var om: Node = _main.object_manager
 	var terrain := _button("Terrain Mode")
@@ -688,3 +671,10 @@ func test_the_quality_dropdown_follows_a_preset_set_elsewhere(timeout := 120000)
 	var shown: int = _main.graphics_quality_option.selected
 	GraphicsSettings.apply_preset(before)
 	assert_int(shown).override_failure_message("the dropdown shows %d after preset %d" % [shown, other]).is_equal(other)
+
+
+## Spec 97: the opponent is chosen in the setup's step 04; the game menu has no AI Opponent line (red before: it had).
+func test_the_game_menu_has_no_ai_opponent_line(timeout := 120000) -> void:
+	await _open_menu()
+	assert_object(_button("AI Opponent")).is_null()
+	assert_object(_main.find_child("AiOpponentBtn", true, false)).is_null()

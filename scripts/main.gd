@@ -392,7 +392,6 @@ var _solo_game_finished: bool = false        # summary shown after SOLO_GAME_ROU
 var _solo_cargo_hint_round: int = -1         # #338: passengers-left hint printed once per round
 var _solo_ai_banner: Label = null            # non-blocking "NACHTMAHR is taking its turn…" banner during the tail
 var _solo_dream_overlay: Control = null      # centred "NACHTMAHR dreams…" + spinner while the AI computes
-var _ai_opponent_btn: Button = null          # "AI Opponent" — NACHTMAHR builds its own army
 var _ai_lists: AiLists = null               # where NACHTMAHR's lists come from (bundle, cache, CDN)
 var _solo_fast: bool = false                 # fast-forward: shrink pacing holds + skip move animation
 var _solo_auto_saves: bool = false           # A3 (NML-202): skip _solo_prompt_saves' dialog, roll straight to the tray
@@ -545,7 +544,7 @@ func _ready() -> void:
 
 	# The slide-out game menu (under the hamburger): the glassmorphism theme stays on the column for the
 	# sections not yet in the house style (solo, deployment); GameMenu.style dresses the shell and the
-	# table / multiplayer / save sections once the AI Opponent line exists (below).
+	# table / multiplayer / save sections (below).
 	if has_node("/root/ThemeManager"):
 		left_panel_scroll.theme = get_node("/root/ThemeManager").get_current_theme()
 
@@ -812,18 +811,9 @@ func _ready() -> void:
 	# Connect OPR import button
 	import_opr_btn.pressed.connect(_on_import_opr_army)
 
-	# AI-opponent setup (maintainer): next to the import button, a "let NACHTMAHR bring its own list"
-	# entry. The alternative — hand the AI YOUR imported list — is the existing per-slot AI checkbox.
+	# NACHTMAHR's own lists (bundle, cache, CDN): the setup's step 04 chooses one, the table loads it.
 	_ai_lists = AiLists.new()
 	add_child(_ai_lists)
-	_ai_opponent_btn = Button.new()
-	_ai_opponent_btn.name = "AiOpponentBtn"
-	_ai_opponent_btn.text = "AI Opponent"
-	_ai_opponent_btn.tooltip_text = "NACHTMAHR builds its own list: pick a faction and a points bracket. (To hand the AI an imported list instead, tick the AI box on import.)"
-	_ai_opponent_btn.pressed.connect(_open_ai_opponent_dialog)
-	if import_opr_btn.get_parent() != null:
-		import_opr_btn.get_parent().add_child(_ai_opponent_btn)
-		import_opr_btn.get_parent().move_child(_ai_opponent_btn, import_opr_btn.get_index() + 1)
 	GameMenu.style(left_panel_scroll, [import_opr_btn.get_parent(), host_button.get_parent(), save_game_btn.get_parent(),
 		graphics_quality_option.get_parent(), end_battle_btn.get_parent()], [end_battle_btn])
 	GameMenu.set_status(network_status_label, "Offline", HouseStyle.TONE_MUTED)
@@ -9600,10 +9590,6 @@ func _solo_ask(title: String, text: String, ok_text: String, cancel_text: String
 	var card := PromptCard.new(title, text, ok_text, cancel_text)
 	add_child(card)
 	return await card.answer(unanswered)
-
-
-## Fixed width for the dialogs that are still native windows (UI audit): data text never decides it.
-const SOLO_DIALOG_MIN_WIDTH := 420
 
 
 ## The defender's strike-back choice dialog. With `counter_first` the prompt explains that Counter weapons
@@ -20938,123 +20924,10 @@ func _on_import_opr_army() -> void:
 	opr_import_dialog.show()
 
 
-## The AI-opponent dialog (maintainer request): NACHTMAHR builds its own list — pick faction + points,
-## the game loads the matching pre-built AI list into the chosen slot as an AI army. Delivery
-## (solo rollout S6): dev/arena builds read the local bundle (assets/ai_lists — NEVER in the public
-## repo); public builds fetch index + list from the CDN at runtime with a user:// cache for offline
-## replay. No source at all → toast; the own-army import with the AI checkbox stays the fallback.
-func _open_ai_opponent_dialog() -> void:
-	if _engine_refused_without_core():
-		return
-	var manifest: Dictionary = await _ai_lists.manifest()
-	if manifest.is_empty():
-		_solo_show_toast("No AI lists available (no connection yet?) — import any list with the AI checkbox instead")
-		return
-	_show_ai_opponent_dialog(manifest)
-
-
-## The AI Opponent question over an already loaded manifest. `loader(file, slot)` runs on OK
-## (default: _load_ai_opponent_list) so the dialog can be driven without the network.
-## Only the lists of the table's game system are offered, exactly (an entry without "system" is "gf"; no gff / aofs / aofr
-## folding onto the battle-size families); with no system named yet every list is offered, suffixed " (GF)" / " (AoF)" ...
-## when the manifest mixes systems.
-func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable()) -> void:
-	var played := _table_system_or_empty()   # "" = nothing names a game system yet: every AI list is on offer
-	var system_of := {}
-	for fk in manifest:
-		system_of[fk] = GameSystem.normalize(str((manifest[fk] as Dictionary).get("system", "gf")))
-	var fac_keys: Array = GameSystem.manifest_keys(manifest, played)
-	if fac_keys.is_empty():
-		_solo_show_toast("No AI lists for this game system yet — import any list with the AI checkbox instead")
-		return
-	var distinct := {}
-	for v in system_of.values():
-		distinct[v] = true
-	var mixed: bool = played.is_empty() and distinct.size() > 1
-	var parts := HouseStyle.overlay_sheet("AI Opponent", SOLO_DIALOG_MIN_WIDTH)
-	var layer := CanvasLayer.new()
-	layer.name = "AiOpponentLayer"
-	layer.layer = 90
-	var box: VBoxContainer = parts["body"]
-	box.add_child(HouseStyle.label("NACHTMAHR builds its own list.", HouseStyle.BODY))
-	var fac_opt := OptionButton.new()
-	fac_opt.theme_type_variation = HouseStyle.BUTTON
-	fac_keys.sort()
-	for i in fac_keys.size():
-		var fk: String = fac_keys[i]
-		var fac_name := str((manifest[fk] as Dictionary).get("name", fk))
-		fac_opt.add_item(fac_name + ((" (%s)" % GameSystem.short(system_of[fk])) if mixed else ""), i)
-	box.add_child(HouseStyle.field_row("Faction:", fac_opt))
-
-	var pts_opt := OptionButton.new()
-	pts_opt.theme_type_variation = HouseStyle.BUTTON
-	box.add_child(HouseStyle.field_row("Points:", pts_opt))
-	var refresh_points := func() -> void:
-		pts_opt.clear()
-		var fk: String = fac_keys[maxi(0, fac_opt.selected)]
-		var lists: Array = (manifest[fk] as Dictionary).get("lists", [])
-		for j in lists.size():
-			pts_opt.add_item("%d points" % int((lists[j] as Dictionary).get("points", 0)), j)
-		pts_opt.select(mini(lists.size() - 1, lists.size() - 1))   # default: the largest bracket
-		var mine := _solo_army_points(solo_controller.human_slot if solo_controller != null else 1)
-		if _solo_points_factor() > 1.0 and mine > 0 and not lists.is_empty():
-			var sizes: Array = []
-			for l in lists:
-				sizes.append(int((l as Dictionary).get("points", 0)))
-			pts_opt.select(SoloController.bracket_at_or_above(sizes, int(round(mine * _solo_points_factor()))))
-	refresh_points.call()
-	fac_opt.item_selected.connect(func(_i: int) -> void: refresh_points.call())
-
-	var slot_opt := OptionButton.new()
-	slot_opt.theme_type_variation = HouseStyle.BUTTON
-	slot_opt.add_item("Player 2 (Red)", 2)
-	slot_opt.add_item("Player 1 (Blue)", 1)
-	# #196 — slots a connected human occupies are not on offer.
-	for i in slot_opt.item_count:
-		if network_manager != null and network_manager.slot_has_human_peer(slot_opt.get_item_id(i)):
-			slot_opt.set_item_disabled(i, true)
-			slot_opt.set_item_text(i, slot_opt.get_item_text(i) + " — human player")
-	for i in slot_opt.item_count:
-		if not slot_opt.is_item_disabled(i):
-			slot_opt.select(i)
-			break
-	box.add_child(HouseStyle.field_row("AI plays as:", slot_opt))
-
-	var actions := HBoxContainer.new()
-	actions.add_theme_constant_override(&"separation", HouseStyle.GAP_CONTROL)
-	box.add_child(actions)
-	var cancel := HouseStyle.button("Cancel", HouseStyle.BUTTON, HouseStyle.H_ACTION)
-	cancel.name = "CancelButton"
-	actions.add_child(cancel)
-	var ok := HouseStyle.button("Build & deploy list", HouseStyle.PRIMARY)
-	ok.name = "OkButton"
-	ok.focus_mode = Control.FOCUS_ALL
-	actions.add_child(ok)
-	var close := func() -> void: layer.queue_free()
-	cancel.pressed.connect(close)
-	(parts["close"] as Button).pressed.connect(close)
-	ok.gui_input.connect(func(e: InputEvent) -> void:
-		if e.is_action_pressed("ui_cancel"):
-			close.call())
-	ok.pressed.connect(func() -> void:
-		var fk: String = fac_keys[maxi(0, fac_opt.selected)]
-		var lists: Array = (manifest[fk] as Dictionary).get("lists", [])
-		if pts_opt.selected < 0 or pts_opt.selected >= lists.size():
-			close.call()
-			return
-		var file: String = str((lists[pts_opt.selected] as Dictionary).get("file", ""))
-		var slot: int = slot_opt.get_item_id(slot_opt.selected)
-		(loader if loader.is_valid() else Callable(self, &"_load_ai_opponent_list")).call(file, slot)
-		close.call())
-	layer.add_child(parts["root"] as Control)
-	add_child(layer)
-	ok.grab_focus()
-
-
 ## Load + parse an AI list (bundle → user-cache → CDN, in that order) and route it through the
 ## normal import path as an AI army.
 func _load_ai_opponent_list(file: String, slot: int) -> void:
-	# #196 final gate (the dialog may have been open while the peer joined).
+	# #196 final gate (a peer may have joined since the setup chose this seat).
 	if network_manager != null and network_manager.slot_has_human_peer(slot):
 		_solo_show_toast("P%d is a connected human player — NACHTMAHR stays out" % slot)
 		return
