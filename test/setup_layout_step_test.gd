@@ -17,7 +17,7 @@ func _step(size_feet: Vector2) -> Control:
 	var step: Control = auto_free((load(SCRIPT) as GDScript).new())
 	step.size = Vector2(1920, 1080)
 	add_child(step)
-	step.call("setup", _layout, ["Grimdark Future", "Urban ruins", "72 × 48 in"])
+	step.call("setup", _layout, ["Grimdark Future", "Urban ruins", "72 × 48 in", "Two players, one screen"])
 	return step
 
 
@@ -179,6 +179,10 @@ func test_state_two_fits_a_720p_window() -> void:
 		if control.is_visible_in_tree() and control.get_global_rect().has_area():
 			assert_bool(window.encloses(control.get_global_rect())).override_failure_message(
 				"%s at %s" % [control.name, control.get_global_rect()]).is_true()
+	var keys: Control = step.get("_keys")
+	var left: Control = step.get("left")
+	assert_float(keys.get_global_rect().position.y).override_failure_message("the key legend overlaps the left column"
+		).is_greater_equal(left.get_global_rect().end.y)
 
 
 func test_the_way_cards_keep_196_px_at_1080p() -> void:
@@ -196,3 +200,19 @@ func test_a_folded_row_is_built_alone() -> void:
 	assert_array(texts).is_equal(["04", "Opponent", "Two players, one screen"])
 	(row.find_child("Change4", true, false) as Button).pressed.emit()
 	assert_array(calls).is_equal([4])
+
+
+## Spec 97 (step 97.8): "Lay out the table" is step 05 - the opponent (step 04) is the fourth folded row and has a
+## rail row (red before: heading "04", three folded rows, no OPPONENT).
+func test_lay_out_the_table_is_step_05_after_the_opponent() -> void:
+	var step := _step(Vector2(6, 4))
+	var texts: Array = step.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	assert_array(texts).contains(["05", "Opponent", "OPPONENT", "Two players, one screen"])
+	assert_int(texts.count("04")).is_equal(1)   # the folded row 04 (Opponent), no longer the heading
+	var asked: Array = []
+	step.connect("change_requested", func(index: int) -> void: asked.append(index))
+	var change := step.find_child("Change4", true, false) as Button
+	assert_object(change).override_failure_message("no folded row 04").is_not_null()
+	if change != null:
+		change.pressed.emit()
+		assert_array(asked).is_equal([4])

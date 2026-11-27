@@ -47,3 +47,10 @@ func test_the_row_opens_the_four_ways_and_create_hands_the_layout_over() -> void
 	assert_int(chosen.size()).is_equal(1)
 	dialog.get("layout").call("commit")   # what the menu does on size_chosen
 	assert_str(str((ProjectSettings.get_setting(KEY, {}) as Dictionary).get("path", ""))).is_not_empty()
+
+
+## Spec 97 (step 97.8): the row of state one reads "05   Lay out the table" (red before: "04").
+func test_the_layout_row_is_step_05() -> void:
+	var row := _dialog(true).find_child("LayoutRow", true, false) as Button
+	var texts: Array = row.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	assert_array(texts).contains(["05   Lay out the table"])

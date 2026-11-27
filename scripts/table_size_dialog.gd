@@ -405,7 +405,7 @@ func _add_layout_row(column: VBoxContainer) -> void:
 	var line := HBoxContainer.new()
 	line.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 14)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var heading := _label("04   Lay out the table",17)
+	var heading := _label("05   Lay out the table",17)
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	line.add_child(heading)
 	_layout_name = _label("",16)
@@ -425,7 +425,7 @@ func _show_state(two: bool) -> void:
 		_step04 = SetupLayoutStep.new()
 		_step04.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		get_child(0).add_child(_step04)
-		_step04.setup(layout, [_summary.System.text, _summary.Biome.text, _summary.Size.text])
+		_step04.setup(layout, [_summary.System.text, _summary.Biome.text, _summary.Size.text, "Two players, one screen"])
 		_step04.change_requested.connect(func(_step: int) -> void: _show_state(false))
 		_step04.create_requested.connect(_confirm)
 

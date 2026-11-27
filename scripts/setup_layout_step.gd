@@ -1,6 +1,6 @@
 class_name SetupLayoutStep
 extends Control
-## Step 04 of the table setup, "Lay out the table" (the setup's second state): steps 01-03 folded into rows with
+## Step 05 of the table setup, "Lay out the table" (the setup's second state): steps 01-04 folded into rows with
 ## their values and "Change", the heading, and the four ways as cards bound to a SetupLayout.
 
 signal change_requested(step: int)
@@ -11,7 +11,7 @@ const WAYS := [
 	["generated", "Auto-Generate Layout", "A balanced layout for this table size. Generate again until you like it.", &"table"],
 	["theme", "Ruined Borderland", "", &"table"],
 	["file", "Load a layout", "Open a layout file you saved in the layout editor.", &"folder"]]
-const STEPS := ["Game system", "Biome", "Table size"]
+const STEPS := ["Game system", "Biome", "Table size", "Opponent"]
 const REFRESH := "<path d='M20 12a8 8 0 1 1-2.3-5.6M20 4v4.5h-4.5'/>"
 const CROSS := "<path d='M7 7l10 10M17 7L7 17'/>"
 const DEPLOYMENT := ["", " · Front Line (12\")", " · Custom Zones"]
@@ -51,7 +51,7 @@ func setup(layout: SetupLayout, values: Array) -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override(&"separation", 12)
 	_head = head
-	head.add_child(_text("04", 16, HouseStyle.mono(), HouseStyle.GOLD))
+	head.add_child(_text("05", 16, HouseStyle.mono(), HouseStyle.GOLD))
 	var heading := _text("Lay out the table", 22, HouseStyle.font(500), HouseStyle.INK)
 	heading.size_flags_horizontal = SIZE_EXPAND_FILL
 	head.add_child(heading)
@@ -103,8 +103,14 @@ func _place() -> void:
 	_picture.custom_minimum_size.y = maxf(200.0, size.y - 460.0) if compact else 456.0   # the rest of the rail ~340
 	left.position = Vector2(pad, 120.0 if compact else 232.0)   # under the setup's own title
 	left.custom_minimum_size.x = size.x - 2 * pad - rail_w - (24.0 if compact else 44.0)
-	for row in _folded:
+	for row in _folded:   # four folded rows: below 800 px they lose their padding to stay 38 px (the Change button's 36)
 		row.custom_minimum_size.y = 38 if compact else 52
+		row.remove_theme_stylebox_override(&"panel")
+		if compact:
+			var tight := row.get_theme_stylebox(&"panel").duplicate() as StyleBox
+			tight.content_margin_top = 1
+			tight.content_margin_bottom = 1
+			row.add_theme_stylebox_override(&"panel", tight)
 	_head.custom_minimum_size.y = 40 if compact else 72
 	for card: Button in _cards.values():
 		card.custom_minimum_size.y = 128 if compact else 196
@@ -216,7 +222,8 @@ func _build_rail(values: Array) -> void:
 	box.add_child(_facts)
 	_lines = VBoxContainer.new()
 	box.add_child(_lines)
-	for row: Array in [["SYSTEM", values[0]], ["BIOME · SIZE", "%s · %s" % [values[1], values[2]]], ["LAYOUT", ""]]:
+	for row: Array in [["SYSTEM", values[0]], ["BIOME · SIZE", "%s · %s" % [values[1], values[2]]],
+			["OPPONENT", values[3]], ["LAYOUT", ""]]:
 		var line := HBoxContainer.new()
 		var key := _text(row[0], 14, HouseStyle.eyebrow_font(), HouseStyle.MUTED)
 		key.size_flags_horizontal = SIZE_EXPAND_FILL
