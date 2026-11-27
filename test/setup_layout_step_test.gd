@@ -102,3 +102,33 @@ func test_the_rail_tells_the_layout() -> void:
 	step.connect("create_requested", func() -> void: asked.append(true))
 	(step.find_child("CreateTable", true, false) as Button).pressed.emit()
 	assert_array(asked).is_equal([true])
+
+
+## Step 65.8: Generate again (only on the generated way), the mirror switch and the layout editor from the setup
+## (red before: no tools).
+func test_generate_again_mirror_and_the_editor() -> void:
+	var step := _step(Vector2(6, 4))
+	if step == null:
+		return
+	var again := step.find_child("GenerateAgain", true, false) as Button
+	assert_object(again).override_failure_message("no tools").is_not_null()
+	if again == null:
+		return
+	assert_bool(again.disabled).is_true()
+	_layout.choose("generated")
+	assert_bool(again.disabled).is_false()
+	var first := JSON.stringify(_layout.editor.placed_pieces)
+	var changed := false
+	for _i in 10:
+		again.pressed.emit()
+		changed = changed or JSON.stringify(_layout.editor.placed_pieces) != first
+	assert_bool(changed).override_failure_message("ten presses gave the same layout").is_true()
+	(step.find_child("Mirror", true, false) as BaseButton).toggled.emit(true)
+	assert_bool(_layout.editor.point_symmetry_enabled).is_true()
+	var pieces: int = _layout.facts().pieces
+	(step.find_child("EditInEditor", true, false) as Button).pressed.emit()
+	assert_bool(_layout.editor.visible).is_true()
+	_layout.editor._on_close_pressed()
+	assert_bool(_layout.editor.visible).is_false()
+	assert_str(_layout.label()).is_equal("Edited layout")
+	assert_int(_layout.facts().pieces).is_equal(pieces)
