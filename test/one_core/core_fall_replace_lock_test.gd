@@ -198,3 +198,50 @@ func test_a_1_in_ring_marks_the_fallen_model_while_locked(
 	await _press_end(att)
 	assert_bool(s.has("fall_ring")).override_failure_message("lifted: the ring goes").is_false()
 	assert_bool(not is_instance_valid(ring) or (ring as Node).is_queued_for_deletion()).override_failure_message("freed").is_true()
+
+
+## The presented card's button with `text`, or null.
+func _card_button(att: GameUnit, text: String) -> Button:
+	_main.unit_dock.present_unit(att)
+	for b in _main.unit_dock.find_children("*", "Button", true, false):
+		if (b as Button).text == text and (b as Button).is_visible_in_tree():
+			return b
+	return null
+
+
+@warning_ignore('unused_parameter')
+func test_place_for_me_on_the_card_lands_the_core_placer_and_lifts_the_lock(
+		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "NmlCore extension not loaded") -> void:
+	var att: GameUnit = (await _fallen_leaper())[0]
+	var activated := [0]
+	var on_act := func(_gu) -> void: activated[0] += 1
+	_main.radial_menu_controller.unit_activated.connect(on_act)
+	await _press_end(att)
+	assert_int(_count(LOCK)).is_equal(1)
+	var button: Button = _card_button(att, "Place for me")
+	assert_object(button).override_failure_message("(Q2) the card offers Place for me while locked").is_not_null()
+	if button == null:
+		return
+	button.pressed.emit()
+	assert_int(_count("Leaper: Fall: model 1 fell; model 2, model 3 placed within 1 in of it")) \
+		.override_failure_message("the core's line: %s" % [_lines]).is_equal(1)
+	assert_bool(CoreActivation.fall_replace_needed(_main, att, att.models[0])).override_failure_message("all within 1 in").is_false()
+	await _press_end(att)
+	assert_int(activated[0]).override_failure_message("the End ends it after the placer").is_equal(1)
+	assert_int(_count("Jump: Leaper model 1 jumps")).override_failure_message("one jump roll").is_equal(1)
+	assert_bool(CoreActivation.fall_pending(att.unit_id)).override_failure_message("no button once ended (the card reads fall_pending)").is_false()
+	_main.radial_menu_controller.unit_activated.disconnect(on_act)
+
+
+@warning_ignore('unused_parameter')
+func test_an_ai_unit_takes_the_core_placer_at_once(
+		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "NmlCore extension not loaded") -> void:
+	var att: GameUnit = (await _fallen_leaper())[0]
+	var s: Dictionary = CoreActivation._sessions[att.unit_id]
+	var t: Array = (s["transcript"] as Array).duplicate()
+	t.append({"t": "intent", "kind": CoreActivation.declared_mode(_main), "shoot": ""})
+	await CoreActivation.drive(_main, int(s["handle"]), att, t, true)
+	assert_int(_count("Leaper: Fall: model 1 fell; model 2, model 3 placed within 1 in of it")) \
+		.override_failure_message("(Q3) the core placer, logged: %s" % [_lines]).is_equal(1)
+	assert_bool(CoreActivation.fall_replace_needed(_main, att, att.models[0])).override_failure_message("all within 1 in").is_false()
+	assert_bool(s.has("fall_replace")).override_failure_message("never the lock").is_false()

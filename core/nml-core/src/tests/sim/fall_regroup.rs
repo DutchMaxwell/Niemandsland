@@ -44,3 +44,17 @@ fn all_within_1_in_needs_no_move() {
     assert!(!fall_replace_needed(&st, 0, 3), "an unknown slot needs nothing");
     assert!(!fall_replace_needed(&st, 9, 0), "an unknown unit needs nothing");
 }
+
+/// The placer's spot after the f32 round trip of the table still counts as within 1 in; a millimetre beyond does not.
+#[test]
+fn the_placer_spot_read_back_through_f32_is_within_1_in() {
+    let mut st = three(0.5, 3.0);
+    for p in st.positions[0].iter_mut() {
+        *p = [p[0] - 0.3657, p[1] + 0.1524, p[2] - 0.2667];   // where the table's ledge test stands (world metres)
+    }
+    let (pos, _) = regroup_around(&st, 0, 0, &Terrain::absent());
+    let mut back = st.clone();
+    back.positions[0] = pos.iter().map(|p| p.map(|v| f64::from(v as f32))).collect();
+    assert!(!fall_replace_needed(&back, 0, 0), "f32 read-back: {}", gap_in(&back.positions[0], 0, 2));
+    assert!(fall_replace_needed(&three(0.5, 1.0 + 0.001 / IN2M), 0, 0), "1 mm beyond 1 in still needs a re-place");
+}
