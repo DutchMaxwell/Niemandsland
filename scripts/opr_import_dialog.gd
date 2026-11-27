@@ -6,6 +6,8 @@ signal army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_controlled: 
 
 const LAYER := 108
 const SHEET_W := 620
+const SHEET_W_MAX := 1320   # sheet 04: up to 1320 px wide, inputs left and the preview right
+const TWO_COLUMNS_MIN_W := 1100.0   # a narrower window stacks the two columns as before
 
 ## UI Elements
 var player_option: OptionButton
@@ -18,6 +20,9 @@ var cancel_btn: Button
 var fetch_btn: Button
 var share_link_input: LineEdit
 var link_status_label: Label
+var _sheet: Control
+var _columns: BoxContainer
+var _preview_panel: Control
 
 ## Parsed army (preview)
 var _preview_army: OPRApiClient.OPRArmy = null
@@ -40,7 +45,25 @@ func _setup_ui() -> void:
 	var parts := HouseStyle.overlay_sheet("Army import", SHEET_W)
 	(parts["close"] as Button).pressed.connect(_on_cancel)
 	add_child(parts["root"] as Control)
-	var vbox: VBoxContainer = parts["body"]
+	(parts["root"] as Control).theme = HouseStyle.menu_theme()   # sheet 04 stands at the menu's scale, as the arrival card
+	_sheet = parts["sheet"]
+	var body: VBoxContainer = parts["body"]
+	var title := HouseStyle.label("Bring your army.", HouseStyle.BODY)
+	title.add_theme_font_override("font", HouseStyle.font(500))
+	title.add_theme_font_size_override("font_size", HouseStyle.FONT_PAGE_TITLE)
+	body.add_child(title)
+	_columns = BoxContainer.new()
+	_columns.add_theme_constant_override("separation", 30)
+	body.add_child(_columns)
+	var vbox := VBoxContainer.new()   # left: the link, its buttons and the player
+	vbox.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_columns.add_child(vbox)
+	var right := VBoxContainer.new()   # right: the preview with Cancel and Import army under it
+	right.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.size_flags_stretch_ratio = 1.15
+	_columns.add_child(right)
 
 	var link_section := VBoxContainer.new()
 	link_section.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
@@ -98,7 +121,7 @@ func _setup_ui() -> void:
 	ai_check.focus_mode = Control.FOCUS_NONE
 	player_row.add_child(ai_check)
 
-	vbox.add_child(HouseStyle.label("Preview", HouseStyle.CAPTION))
+	right.add_child(HouseStyle.label("Preview", HouseStyle.CAPTION))
 	army_preview = ScrollContainer.new()
 	army_preview.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	# Small minimum so a long army list never pushes the buttons off: the rows fill the well and scroll.
@@ -110,7 +133,8 @@ func _setup_ui() -> void:
 	army_preview.add_child(_preview_rows)
 	var preview_panel := HouseStyle.card(army_preview)
 	preview_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(preview_panel)
+	_preview_panel = preview_panel
+	right.add_child(preview_panel)
 	# Empty / loading / error state over the same well, so a wait never reads as blank.
 	state_panel = StatePanel.new()
 	state_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -122,7 +146,7 @@ func _setup_ui() -> void:
 	var btn_row := HBoxContainer.new()
 	btn_row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 	btn_row.alignment = BoxContainer.ALIGNMENT_END
-	vbox.add_child(btn_row)
+	right.add_child(btn_row)
 	cancel_btn = HouseStyle.button("Cancel", HouseStyle.BUTTON, HouseStyle.H_ACTION)
 	cancel_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
 	cancel_btn.pressed.connect(_on_cancel)
@@ -135,6 +159,21 @@ func _setup_ui() -> void:
 
 	api_client = OPRApiClient.new()
 	add_child(api_client)
+	get_viewport().size_changed.connect(_fit)
+	_fit()
+
+
+## Sheet 04's measures: up to 1320 px wide with the two columns side by side and a tall preview; below 1100 px of window
+## width the columns stack in today's 620 px sheet.
+func _fit() -> void:
+	_fit_to(get_viewport().get_visible_rect().size)
+
+
+func _fit_to(window: Vector2) -> void:
+	var wide := window.x >= TWO_COLUMNS_MIN_W
+	_sheet.custom_minimum_size.x = minf(SHEET_W_MAX, window.x - 160.0) if wide else float(SHEET_W)
+	_columns.vertical = not wide
+	_preview_panel.custom_minimum_size.y = minf(520.0, window.y - 400.0) if wide else 0.0
 
 
 ## No native window to close: give the keyboard escape ourselves.
