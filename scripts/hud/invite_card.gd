@@ -1,7 +1,8 @@
 class_name InviteCard
 extends Control
 ## The host's invite card at the table: over the dimmed table, the room's invitation code large enough to read
-## out, "Copy code", and "Keep setting up"; Esc closes it as well. A local view: it sends nothing.
+## out, "Copy code", and "Keep setting up". Esc and a click on the dimmed table close it as well. A local view: it
+## sends nothing.
 
 signal closed
 
@@ -12,6 +13,7 @@ const MenuView = preload("res://scripts/startup_menu_view.gd")
 
 var _code := ""
 var _code_label: Label
+var _caption: Label
 var _copy: Button
 
 
@@ -21,6 +23,7 @@ func _init() -> void:
 	var scrim := ColorRect.new()
 	scrim.color = Color(HouseStyle.SCRIM, 0.58)
 	scrim.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	scrim.gui_input.connect(func(e: InputEvent) -> void: if e is InputEventMouseButton and e.pressed: close())
 	add_child(scrim)
 	var centre := CenterContainer.new()
 	centre.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
@@ -29,6 +32,7 @@ func _init() -> void:
 	var card := PanelContainer.new()
 	card.theme_type_variation = HouseStyle.PANEL_VARIANT
 	card.custom_minimum_size.x = WIDTH
+	card.draw.connect(_draw_corners.bind(card))
 	centre.add_child(card)
 	var body := VBoxContainer.new()
 	body.add_theme_constant_override(&"separation", 16)
@@ -57,14 +61,20 @@ func _init() -> void:
 	keep.focus_mode = FOCUS_ALL
 	keep.pressed.connect(close)
 	body.add_child(keep)
+	_caption = _text("", HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400), HouseStyle.MUTED)
+	_caption.autowrap_mode = TextServer.AUTOWRAP_WORD
+	body.add_child(_caption)
 	visible = false
 
 
-## Shows the card for `code` ("ABC123" reads "ABC-123").
-func open(code: String, _caption_text := "") -> void:
+## Shows the card for `code` ("ABC123" reads "ABC-123"); `caption` is the session's own line.
+func open(code: String, caption := "") -> void:
 	_code = code
 	_code_label.text = NetDialog.code_as_typed(code)
+	_caption.text = caption
+	_caption.visible = not caption.is_empty()
 	show()
+	_copy.grab_focus.call_deferred()
 
 
 func close() -> void:
@@ -92,3 +102,9 @@ func _text(text: String, font_size: int, font: Font, colour: Color) -> Label:
 	label.add_theme_font_override(&"font", font)
 	label.add_theme_color_override(&"font_color", colour)
 	return label
+
+
+func _draw_corners(card: Control) -> void:
+	for corner: Array in [[Vector2.ONE, Vector2.ONE], [card.size - Vector2.ONE, -Vector2.ONE]]:
+		card.draw_line(corner[0], corner[0] + Vector2(14 * corner[1].x, 0), HouseStyle.GOLD, 1.5, true)
+		card.draw_line(corner[0], corner[0] + Vector2(0, 14 * corner[1].y), HouseStyle.GOLD, 1.5, true)
