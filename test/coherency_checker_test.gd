@@ -74,15 +74,26 @@ func test_is_skirmish_system_detects_gff_and_aofs() -> void:
 		assert_bool(CoherencyChecker.is_skirmish_system(u)).is_false()
 
 
-func test_skirmish_uses_six_inch_max_spread() -> void:
+@warning_ignore('unused_parameter')
+func test_skirmish_spread_is_the_rules_book_chain(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
 	# 9 models in a 0.9"-spaced connected line span 7.2" total.
 	var unit := _make_unit(_line(9, 0.9))
+	var epoch_before := AiActRecorder.rules_epoch
 	# Base game allows up to 9" -> valid.
 	assert_bool(CoherencyChecker.check_unit_coherency(unit, false).valid).is_true()
-	# Skirmish caps at 6" -> chain too long.
+	# AoF: Skirmish's book caps at 6" -> chain too long.
+	unit.unit_properties["game_system"] = "aofs"
 	var skirmish_res = CoherencyChecker.check_unit_coherency(unit, true)
-	assert_bool(skirmish_res.valid).is_false()
+	assert_bool(skirmish_res.valid).override_failure_message("aofs: 6 in").is_false()
 	assert_int(_chain(skirmish_res).size()).is_greater(0)
+	# Firefight's book (ruling D8): 9" from its chain epoch on, 6" in a record below it.
+	unit.unit_properties["game_system"] = "gff"
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_98_FIREFIGHT_CHAIN
+	assert_bool(CoherencyChecker.check_unit_coherency(unit, true).valid).override_failure_message("gff: 9 in").is_true()
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_98_FIREFIGHT_CHAIN - 1
+	assert_bool(CoherencyChecker.check_unit_coherency(unit, true).valid).override_failure_message("gff below 98: 6 in").is_false()
+	AiActRecorder.rules_epoch = epoch_before
 
 
 # ===== Joined Hero coherency =====
