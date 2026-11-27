@@ -173,3 +173,25 @@ func test_tick_finale_and_reset() -> void:
 	assert_str((_card(page, "ClassicTrack").button as Button).text).is_equal("Start")
 	page.call("select", "TrialTrack")
 	assert_bool((page.find_child("ResetTutorial", true, false) as Control).visible).is_false()
+
+
+## Step 48.10: Tab walks the page in reading order - the way back, the two track buttons, every lesson card, the
+## reset link - and wraps (red before: the engine's own order jumps between the columns).
+func test_tab_walks_the_page_in_reading_order() -> void:
+	var page := await _page(2, 1)
+	if page == null:
+		return
+	page.call("select", "ClassicTrack")
+	await get_tree().process_frame
+	var order: Array[String] = []
+	var at := page.get("back") as Control
+	for _i in 16:
+		order.append(String(at.name))
+		at = at.get_node(at.focus_next) if not at.focus_next.is_empty() else null
+		if at == null:
+			break
+	var expected: Array[String] = ["WayBack", "ClassicTrackButton", "TrialTrackButton"]
+	for i in 11:
+		expected.append("Lesson%02d" % (i + 1))
+	expected.append_array(["ResetTutorial", "WayBack"])
+	assert_array(order).is_equal(expected)
