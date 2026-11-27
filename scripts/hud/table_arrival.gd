@@ -7,13 +7,19 @@ extends Node
 ## The invite card: the host of an online room, once the relay has given the room its code, during deployment;
 ## once per code (a relay reconnect re-announcing the same code does not raise it again). The top bar's ONLINE chip
 ## opens it again for host and guest alike; the game leaving deployment closes it.
+##
+## The arrival card: a new or joined table with no army on it, during deployment (never a loaded game). Its three
+## lines open the army import, the AI opponent (online: the invite card) and Start / Ready; it follows the armies
+## and the players, hides under the game menu, and goes with deployment or its close box.
 
 const AUTOMATIC := "Rules automation is on — deploy, ready up, then the game applies the rules it models"
+const AFTER_HUD_S := 0.4
 const MANUAL := "Multiplayer is manual play — deploy, ready up, then take turns like at a real table (no automation)."
 
 var _main: Node
 var _invite: InviteCard
 var _code_shown := ""
+var _arrival: ArrivalCard
 
 
 static func start(main: Node, mode: String) -> TableArrival:
@@ -24,7 +30,7 @@ static func start(main: Node, mode: String) -> TableArrival:
 	return arrival
 
 
-func _watch(main: Node, _mode: String) -> void:
+func _watch(main: Node, mode: String) -> void:
 	_main = main
 	var lobby: InternetLobby = main.get("internet_lobby")
 	if lobby != null:
@@ -37,8 +43,16 @@ func _watch(main: Node, _mode: String) -> void:
 	var armies: Object = main.get("opr_army_manager")
 	if armies != null and armies.has_signal(&"game_phase_changed"):
 		armies.game_phase_changed.connect(func(_phase: int) -> void:
-			if is_instance_valid(_invite) and not _deploying():
-				_invite.close())
+			if not _deploying():
+				if is_instance_valid(_invite):
+					_invite.close()
+				if is_instance_valid(_arrival):
+					_arrival.queue_free())
+	if mode != "load" and _deploying() and armies.get("armies").is_empty():
+		if UiMotion.reduced():
+			_show_arrival()
+		else:
+			get_tree().create_timer(AFTER_HUD_S).timeout.connect(_show_arrival)
 
 
 func _on_code(code: String) -> void:
@@ -63,6 +77,52 @@ func _open(code: String) -> void:
 		_invite.setup(_main)
 	var automatic: bool = _main.has_method("_solo_engine_automatic") and _main._solo_engine_automatic()
 	_invite.open(code, AUTOMATIC if automatic else MANUAL)
+
+
+func _show_arrival() -> void:
+	if not _deploying():
+		return
+	_arrival = ArrivalCard.new()
+	_arrival.position = Vector2(40, 150)
+	_arrival.set_lines(["Bring your army", "Invite your group" if _online() else "Pick an opponent", "Deploy and start"])
+	_arrival.line_pressed.connect(_on_line)
+	_arrival.dismissed.connect(_arrival.queue_free)
+	_main.get_node("UI/HUD").add_child(_arrival)   # hidden with the HUD (the layout editor hides it)
+	var menu: Control = _main.get("left_panel_scroll")
+	if menu != null:   # the game menu stands in the same place
+		menu.visibility_changed.connect(func() -> void:
+			if is_instance_valid(_arrival):
+				_arrival.visible = not menu.visible)
+		_arrival.visible = not menu.visible
+	_main.opr_army_manager.army_spawned.connect(func(_army: Variant, _models: Variant) -> void: _progress())
+	_main.network_manager.player_connected.connect(func(_peer: int) -> void: _progress())
+	_progress()
+
+
+## Line 1 is done with one army; line 2 with two (or, online, a second player at the table).
+func _progress() -> void:
+	if not is_instance_valid(_arrival):
+		return
+	var armies: int = _main.opr_army_manager.armies.size()
+	var second: bool = armies >= 2 or (_online() and not _main.network_manager.connected_peers.is_empty())
+	_arrival.set_done(0 if armies == 0 else (2 if second else 1))
+
+
+func _on_line(index: int) -> void:
+	match index:
+		0:
+			_main._on_import_opr_army()
+		1:
+			if _online():
+				_reopen()
+			else:
+				_main._open_ai_opponent_dialog()
+		2:
+			_main._on_start_game_pressed()
+
+
+func _online() -> bool:
+	return _main.network_manager.is_multiplayer_active()
 
 
 func _deploying() -> bool:
