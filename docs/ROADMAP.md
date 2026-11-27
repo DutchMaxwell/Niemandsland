@@ -330,7 +330,7 @@ about ([#170](../../../issues/170)); draggable deployment control box ([#159](..
 **`0.3.10.0-alpha`:** the solo update — **NACHTMAHR**, the built-in
 opponent (rules-based, deterministic, fully offline; one difficulty at that release, a four-grade ladder since) with alternating
 activations, its own objective-marker scoring, round plans and look-ahead activation ordering, and a
-battle log that explains every decision; the **AI Opponent** button (NACHTMAHR brings its own list —
+battle log that explains every decision; the **AI Opponent** button (since 0.3.16 step 04 of the table setup, "Who is at the table?"; NACHTMAHR brings its own list —
 every Grimdark Future faction, 1000–3000 pts, CDN-delivered at runtime, guarded out of the public repo by a CI check,
 [#150](../../../pull/150)); the click-guided **deployment flow** (roll-off → edge → alternating placement →
 scout band) with full **Ambush / Infiltrate / Vanguard / Re-Deployment** reserve handling; **Shoot /
