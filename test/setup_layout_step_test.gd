@@ -216,3 +216,14 @@ func test_lay_out_the_table_is_step_05_after_the_opponent() -> void:
 	if change != null:
 		change.pressed.emit()
 		assert_array(asked).is_equal([4])
+
+
+## The chosen way card is as light as on sheet 03c (#253035, `.w.on`), not the never-drawn 10 % accent wash of a
+## hovered row that left it darker than its neighbours (red before; the same cause as the opponent cards).
+func test_the_chosen_way_card_has_the_sheets_fill() -> void:
+	var step := _step(Vector2(6, 4))
+	if step == null:
+		return
+	var box := _way(step, SetupLayout.DEFAULT_WAY).get_theme_stylebox(&"normal") as StyleBoxFlat
+	assert_str(box.bg_color.to_html(false)).is_equal("253035")
+	assert_bool(box.draw_center).override_failure_message("the fill is not drawn").is_true()

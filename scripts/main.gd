@@ -56,6 +56,7 @@ const FEET_TO_METERS: float = 0.3048
 var undo_manager: UndoManager = null
 @onready var table: StaticBody3D = $Table
 var _board_look: Node = null   # the dev-view board the door in _ready drew (generated_board reads its seed)
+var _board_record := {}   # GEN-4: the record of the board apply_generated_board laid ({} for the dev door's board)
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var directional_light: DirectionalLight3D = $DirectionalLight3D
 @onready var fill_light: DirectionalLight3D = $FillLight
@@ -792,6 +793,7 @@ func _ready() -> void:
 	opr_import_dialog = OPRImportDialog.new()
 	get_tree().root.add_child(opr_import_dialog)
 	opr_import_dialog.army_imported.connect(_on_opr_army_imported)
+	opr_import_dialog.army_manager = opr_army_manager
 	opr_import_dialog.hide()
 
 	# Initialize OPR Stats Tooltip
@@ -20940,6 +20942,9 @@ func _load_ai_opponent_list(file: String, slot: int) -> void:
 	if network_manager != null and network_manager.slot_has_human_peer(slot):
 		_solo_show_toast("P%d is a connected human player — NACHTMAHR stays out" % slot)
 		return
+	if opr_army_manager != null and ArmyReplaceConfirm.occupied(opr_army_manager.armies, slot) \
+			and not await ArmyReplaceConfirm.ask(opr_army_manager.armies, slot):
+		return   # Keep (maintainer 27.11.: replacing an army asks first)
 	var text: String = await _ai_lists.list_text(file)
 	if text.is_empty():
 		_solo_show_toast("AI list not found: %s (no bundle, no cache, no connection)" % file)
@@ -22608,22 +22613,66 @@ func _on_units_dropped(moves: Array) -> void:
 	await _solo_human_strafing(moves)
 
 
-## Plan step 27-pre P2: the generated board on the table as the rules see it - `{"seed", "theme"}` of the board the door
-## above drew (the theme lower-cased, as `NmlCore.boardgen_tiers` takes it), or {} when none stands. Data only, so the rules
+## Plan step 27-pre P2 / GEN-4: the generated board on the table as the rules see it - the record the release door
+## below laid (`{id, theme, seed, version, digest}`, `GeneratedBoard.resolve`), or for the dev door's board `{"seed",
+## "theme"}` (the theme lower-cased, as `NmlCore.boardgen_tiers` takes it), or {} when none stands. Data only, so the rules
 ## side never names a board-look class (tools/ci_path_classes.py).
 func generated_board() -> Dictionary:
 	if _board_look == null or not is_instance_valid(_board_look):
 		return {}
+	if not _board_record.is_empty():
+		return _board_record.duplicate()
 	return {"seed": int(_board_look.get("layout_seed")), "theme": str(_board_look.get("layout_theme")).to_lower()}
 
 
-## Plan step 27-pre P3, TEST-ONLY door (lead 26.11.; remove when the player-facing generate path D-GEN exists - the e2e then
-## uses that path): a rules e2e puts a drawn generated board of `seed_value` / `theme` on the table without the dev flag the
-## class keeps to itself. Debug builds only, like the dev-view door above.
+## GEN-4, the release door: lays the generated board `record` (`GeneratedBoard.resolve`) on the table. Refused with a
+## toast off a 4 x 4 ft table, without the core or with models on the table; a board already standing is replaced.
+func apply_generated_board(record: Dictionary) -> bool:
+	if not record.has("seed") or not record.has("theme"):
+		return false
+	if not ClassDB.class_exists("NmlCore"):
+		_show_toast("Generated boards need the game's rules core")
+		return false
+	if table.table_size != Vector2(4, 4):
+		_show_toast("A generated board needs a 4 x 4 ft table")
+		return false
+	var standing := get_tree().get_nodes_in_group("miniature").filter(func(m: Node) -> bool:
+		return m is Node3D and m.is_visible_in_tree() and not bool(m.get_meta("deleted", false)))
+	if not standing.is_empty():
+		_show_toast("Clear the models from the table first, then lay the generated board")
+		return false
+	return _lay_generated_board(record)
+
+
+## The release door's laying without its checks (the test door's too): frees a standing board, draws `record`'s, keeps it.
+func _lay_generated_board(record: Dictionary) -> bool:
+	if _board_look != null and is_instance_valid(_board_look):
+		_board_look.queue_free()
+	var layout: Dictionary = (ClassDB.instantiate("NmlCore") as Object).call("boardgen_layout_themed", int(record["seed"]), str(record["theme"]))
+	_board_look = BoardgenGreybox.attach(table, layout)
+	_board_record = record.duplicate()
+	return _board_look != null
+
+
+## GEN-10: a load or a join lays the board its table block carries, or takes a standing board away ({}). Without
+## the models check: a load's models arrive after its table.
+func restore_generated_board(record: Dictionary) -> void:
+	if not record.has("seed") or not ClassDB.class_exists("NmlCore"):
+		if _board_look != null and is_instance_valid(_board_look):
+			_board_look.queue_free()
+		_board_look = null
+		_board_record = {}
+		return
+	_lay_generated_board(record)
+
+
+## Plan step 27-pre P3, TEST-ONLY door (lead 26.11.; retires in GEN-7 when the e2e uses the player path): a rules e2e
+## puts a drawn generated board of `seed_value` / `theme` on the table through the release door's laying (without its
+## table-size and models checks: those rules tests place their models first). Debug builds only.
 func _attach_generated_board_for_test(seed_value: int, theme: String) -> void:
 	if not OS.is_debug_build() or not ClassDB.class_exists("NmlCore"):
 		return
-	_board_look = BoardgenGreybox.attach(table, (ClassDB.instantiate("NmlCore") as Object).call("boardgen_layout_themed", seed_value, theme))
+	_lay_generated_board({"seed": seed_value, "theme": theme})
 
 
 ## Check coherency for all currently selected units

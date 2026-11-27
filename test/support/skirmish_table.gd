@@ -134,6 +134,16 @@ func press(gu: GameUnit, text: String) -> bool:
 	return true
 
 
+## True when `gu`'s presented card shows a visible Label or Button whose text holds `needle`.
+func card_shows(gu: GameUnit, needle: String) -> bool:
+	main.unit_dock.present_unit(gu)
+	for c in main.unit_dock.find_children("*", "Control", true, false):
+		if (c is Label or c is Button) and str(c.text).find(needle) != -1 and (c as Control).is_visible_in_tree() \
+				and not c.is_queued_for_deletion():
+			return true
+	return false
+
+
 ## The card's Activate (the committed start). True when the activation is open afterwards.
 func start(gu: GameUnit) -> bool:
 	return await E2EBoot.start_activation(main, gu)
@@ -150,6 +160,32 @@ func drop(model: ModelInstance, to: Vector3, inches: float) -> void:
 	model.node.global_position = to
 	await SoloHarness.drop(main, [{"node": model.node, "inches": inches, "from_raw": from,
 		"path": PackedVector2Array([Vector2(from.x, from.z), Vector2(to.x, to.z)])}])
+
+
+## A player's real drag of every live model of `gu` (or only the models `only`) by (dx_in, dz_in) inches under the
+## movement selector `cap` (CoreActivation.CAP_ADVANCE / CAP_RUSH / CAP_CHARGE): grab, move, release, the drop door and
+## its tween landed.
+func walk(gu: GameUnit, dx_in: float, dz_in: float, cap: int, only: Array = []) -> void:
+	var om: Node3D = main.object_manager
+	om.set_movement_cap(cap)
+	om._deselect_all()
+	var picked: Array = only if not only.is_empty() else gu.get_alive_models()
+	for m in picked:
+		om._add_to_selection((m as ModelInstance).node)
+	var a: Vector3 = (picked[0] as ModelInstance).node.global_position
+	var cam: Camera3D = main.get_viewport().get_camera_3d()
+	om._start_dragging(cam.unproject_position(Vector3(a.x, 0.0, a.z)))
+	om._update_drag(cam.unproject_position(Vector3(a.x + dx_in * INCH, 0.0, a.z + dz_in * INCH)))
+	await runner.simulate_frames(1)
+	om._stop_dragging()
+	await runner.simulate_frames(3)
+	await _tree.create_timer(0.3).timeout   # a new drop id (a millisecond stamp) for the next drag
+
+
+## A player's shot of `att` at `target` through the table's human attack door.
+func shoot(att: GameUnit, target: GameUnit) -> void:
+	await main._run_human_attack(att, target, false)
+	await E2EBoot.settle(_tree)
 
 
 ## Pin the table to the pending rules epoch `n` and record the pin (R-FT1); teardown restores the shipped epoch.

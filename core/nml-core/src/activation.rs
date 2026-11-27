@@ -48,12 +48,11 @@ pub enum Input {
     /// not resolve it again: `start` = the activation-start triggers (Reanimation, Surprise Attack), `dangerous` = the move's
     /// Dangerous terrain test, `beats` = the pre-attack phase. Only directly after `Begin`.
     Paid { start: bool, dangerous: bool, beats: bool },
-    /// The skirmish Pushing rule (3.6 p.15): the attacker's offer to push one model of `target` to `to` (world, metres) if
-    /// this activation's attack leaves `target` Shaken. Declared with the action, before the first die, at most once.
-    Push(PushInput),
 }
 
-/// One push offer: the target unit's key, its model's slot (`state.positions` order) and where the attacker moves it.
+/// One push: the target unit's key, its model's slot (`state.positions` order) and where the attacker moves it. Step 29d
+/// (D-29-R2): the attacker decides AFTER the dice, through the choices `push:<attacker>:<target>` (push | no) and
+/// `push_to:<attacker>:<target>` (`<slot>:<x>,<y>,<z>`, world metres); a supplied `Tray::offer_push` is the same answer.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct PushInput { pub target: String, pub model: usize, pub to: [f64; 3] }
 
@@ -126,7 +125,7 @@ pub enum ActStep {
 /// The order rules, checked in their numbered order on each input; the error
 /// is the first offending input's index and its sentence. `name` is the unit's.
 pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
-    let (mut declared, mut shot, mut rolled, mut over, mut pushed) = (false, false, false, false, false);
+    let (mut declared, mut shot, mut rolled, mut over) = (false, false, false, false);
     let mut last_seq: Option<i64> = None;
     let mut consolidated: Vec<&str> = Vec::new();
     for (i, x) in t.iter().enumerate() {
@@ -146,9 +145,6 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
             Input::Consolidate(_) if rolled => Some("consolidation inputs after the first die".to_string()),
             Input::Consolidate(c) if consolidated.contains(&c.unit.as_str()) => Some(format!("consolidation inputs for {} twice", c.unit)),
             Input::Cast(c) if c.seq < last_seq.map_or(0, |p| p + 1) => Some(format!("cast seq {} is too low: seq is 0 or more and higher than the cast before", c.seq)),
-            Input::Push(_) if !declared => Some("a push before the action was declared".to_string()),
-            Input::Push(_) if rolled => Some("a push after the first die".to_string()),
-            Input::Push(_) if pushed => Some("one push per activation".to_string()),
             Input::Intent { .. } if declared => Some("one action per activation".to_string()),
             Input::Placed { .. } if shot => Some(format!("{name} has already shot this round — it cannot move now")),
             Input::Intent { kind, .. } if *kind == REPOSITION => Some("not on the step path yet".to_string()),
@@ -164,7 +160,6 @@ pub fn order_check(name: &str, t: &[Input]) -> Result<(), (usize, String)> {
             Input::Cancel => over = true,
             Input::Cast(c) => last_seq = Some(c.seq),
             Input::Consolidate(c) => consolidated.push(c.unit.as_str()),
-            Input::Push(_) => pushed = true,
             _ => {}
         }
     }
@@ -671,6 +666,9 @@ const SPOT_MARKERS: &str = "spot_markers:";
 const STRIKE_BACK: &str = "strike_back:";
 /// Step 29b: the ids of the defender's Blast split choice (`blast_split:<shooter>:<target>`) start with this.
 const BLAST_SPLIT: &str = "blast_split:";
+/// Step 29d: the attacker's push (`push:<attacker>:<target>`, push | no) and its spot (`push_to:<attacker>:<target>`).
+const PUSH: &str = "push:";
+const PUSH_TO: &str = "push_to:";
 /// Step 22a (OD-2: a player's own pick is asked of the player): the ids of the Versatile mode choice
 /// (`versatile_mode:<activating unit>`, options `ap` / `hit`) start with this. It rides the strike-back list (a two-way choice).
 const VERSATILE_MODE: &str = "versatile_mode:";
@@ -696,7 +694,6 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         _ => (false, false, false),
     };
     let casts: Vec<CastInput> = t.iter().filter_map(|x| if let Input::Cast(c) = x { Some(c.clone()) } else { None }).collect();
-    let push: Option<PushInput> = t.iter().find_map(|x| if let Input::Push(p) = x { Some(p.clone()) } else { None });
     if paid_beats && !casts.is_empty() {
         return ActStep::Refused { index: 1, reason: "the table paid the pre-attack phase, so it cast already: no cast input".to_string() };
     }
@@ -731,6 +728,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let mut interference: Vec<(usize, String, Option<i64>)> = Vec::new();
     let mut strike_back: Vec<(usize, String, Option<bool>)> = Vec::new();
     let mut blast: Vec<(usize, String, Option<Vec<String>>)> = Vec::new();
+    let mut free: Vec<(usize, String, Option<String>)> = Vec::new();
     for (i, x) in t.iter().enumerate() {
         let Input::Choice { id, option } = x else { continue };
         if id.starts_with(TAKEDOWN_MODEL) {
@@ -763,6 +761,18 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             };
             strike_back.retain(|w| w.1 != *id);
             strike_back.push((i, id.clone(), answer));
+        } else if id.starts_with(PUSH) {
+            let answer = match option.as_str() {
+                "" => None,
+                "push" => Some(true),
+                "no" => Some(false),
+                _ => return ActStep::Refused { index: i, reason: format!("{option} is not an option of {id} (options: push, no)") },
+            };
+            strike_back.retain(|w| w.1 != *id);
+            strike_back.push((i, id.clone(), answer));
+        } else if id.starts_with(PUSH_TO) {
+            free.retain(|w| w.1 != *id);
+            free.push((i, id.clone(), (!option.is_empty()).then(|| option.clone())));
         } else if id.starts_with(BLAST_SPLIT) {
             blast.retain(|w| w.1 != *id);
             blast.push((i, id.clone(), (!option.is_empty()).then(|| option.split(',').map(String::from).collect())));
@@ -781,7 +791,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         } else {
             return ActStep::Refused {
                 index: i,
-                reason: format!("unknown choice kind {id} (expected {TAKEDOWN_MODEL}, {WOUND_ALLOC}, {INTERFERENCE}, {SPOT_MARKERS}, {STRIKE_BACK}, {BLAST_SPLIT} or {VERSATILE_MODE})"),
+                reason: format!("unknown choice kind {id} (expected {TAKEDOWN_MODEL}, {WOUND_ALLOC}, {INTERFERENCE}, {SPOT_MARKERS}, {STRIKE_BACK}, {BLAST_SPLIT}, {PUSH}, {PUSH_TO} or {VERSATILE_MODE})"),
             };
         }
     }
@@ -828,6 +838,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let reached_int = std::cell::RefCell::new(Vec::new());
     let reached_back = std::cell::RefCell::new(Vec::new());
     let reached_blast = std::cell::RefCell::new(Vec::new());
+    let reached_free = std::cell::RefCell::new(Vec::new());
     let cast_refused = std::cell::RefCell::new(None);
     let run = |statics: &[UnitStatic]| {
         let resolve = |tray: &mut Tray| {
@@ -849,13 +860,16 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
                 tray.offer_blast_split(id.clone(), answer.clone());
             }
             tray.offer_casts(casts.clone());
-            tray.offer_push(push.clone());
+            for (_, id, answer) in &free {
+                tray.offer_free(id.clone(), answer.clone());
+            }
             tray.offer_consolidation(consolidate.clone());
             let out = resolve_stochastic_tray_on_board(statics, state, &action, terrain, seams, &mut GodotRng::new(0), tray);
             *reached_wound.borrow_mut() = tray.feed().map(|f| f.wound_choices.clone()).unwrap_or_default();
             *reached_int.borrow_mut() = tray.feed().map(|f| f.interference_choices.clone()).unwrap_or_default();
             *reached_back.borrow_mut() = tray.feed().map(|f| f.strike_back_choices.clone()).unwrap_or_default();
             *reached_blast.borrow_mut() = tray.feed().map(|f| f.blast_choices.clone()).unwrap_or_default();
+            *reached_free.borrow_mut() = tray.feed().map(|f| f.free_choices.clone()).unwrap_or_default();
             *cast_refused.borrow_mut() = tray.feed().and_then(|f| f.cast_refused.clone());
             out
         };
@@ -871,6 +885,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let int_choices = reached_int.take();
     let back_choices = reached_back.take();
     let blast_choices = reached_blast.take();
+    let free_choices = reached_free.take();
     enum Pending {
         Refuse(usize, String),
         Ask { id: String, options: Vec<String>, owner: String, lines: Vec<LogLine>, landings: Vec<Landing> },
@@ -906,8 +921,24 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     }
     for c in back_choices.iter().filter(|c| c.answer.is_none()) {
         let Some((at, owner)) = &c.reached else { continue };
-        let options = if c.id.starts_with(VERSATILE_MODE) { ["ap", "hit"] } else { ["strike", "hold"] }.map(String::from).to_vec();
+        let options = if c.id.starts_with(VERSATILE_MODE) {
+            ["ap", "hit"]
+        } else if c.id.starts_with(PUSH) {
+            ["push", "no"]
+        } else {
+            ["strike", "hold"]
+        }.map(String::from).to_vec();
         events.push((*at, c.order, Pending::Ask { id: c.id.clone(), options, owner: owner.clone(), lines: c.lines.clone(), landings: c.landings.clone() }));
+    }
+    // Step 29d: a free answer (`push_to:`) has no option list; a spot the core refuses is refused at its input with the reason.
+    for c in &free_choices {
+        let Some((at, owner)) = &c.reached else { continue };
+        let index = free.iter().find(|w| w.1 == c.id).map_or(0, |w| w.0);
+        if let Some(why) = &c.bad {
+            events.push((*at, c.order, Pending::Refuse(index, why.clone())));
+        } else if c.answer.is_none() {
+            events.push((*at, c.order, Pending::Ask { id: c.id.clone(), options: Vec::new(), owner: owner.clone(), lines: c.lines.clone(), landings: c.landings.clone() }));
+        }
     }
     for c in &blast_choices {
         let Some((at, options, owner)) = &c.reached else { continue };
@@ -4470,6 +4501,10 @@ mod skirmish_vertical_tests;
 #[cfg(test)]
 #[path = "tests/activation_blast_choice.rs"]
 mod blast_choice_tests;
+
+#[cfg(test)]
+#[path = "tests/activation_push_choice.rs"]
+mod push_choice_tests;
 
 #[cfg(test)]
 mod ruin_ledge_tests {

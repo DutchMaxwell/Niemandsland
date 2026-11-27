@@ -115,7 +115,10 @@ const PAD_SCREEN := 96           # a full screen's text column from the left edg
 const MENU_FONT_BODY := 18
 const MENU_FONT_CAPTION := 15
 const MENU_FONT_EYEBROW := 14
-const MENU_FONT_ACTION := 16     # every button's text
+const MENU_FONT_ACTION := 17     # a button's text: weight 500, the gold main action 600 (.btn, .btn.primary)
+const MENU_FONT_SEGMENT := 16    # one of a segmented group (.seg span)
+const MENU_PAD_BUTTON_X := 18    # a button's side padding (.btn)
+const MENU_PAD_SEGMENT_X := 16
 const MENU_H_ACTION := 44
 const MENU_PAD_PANEL := 22
 const MENU_ICON_BUTTON := 32     # the close box of a menu window
@@ -269,6 +272,17 @@ static func menu_theme() -> Theme:
 	for v: StringName in t.get_type_list():
 		if t.get_type_variation_base(v) == &"Button":
 			t.set_font_size(&"font_size", v, MENU_FONT_ACTION)
+	# The labelled buttons at the mockups' scale (.btn, .btn.primary, .seg): weight, size and side padding; icon
+	# buttons, key caps, the rail and the top bar keep theme()'s boxes.
+	var by_role := {BUTTON: [MENU_FONT_ACTION, MENU_PAD_BUTTON_X, 500], DANGER_BUTTON: [MENU_FONT_ACTION, MENU_PAD_BUTTON_X,
+		500], PRIMARY: [MENU_FONT_ACTION, MENU_PAD_BUTTON_X, 600], SEGMENT: [MENU_FONT_SEGMENT, MENU_PAD_SEGMENT_X, 400],
+		PIP: [MENU_FONT_SEGMENT, MENU_PAD_SEGMENT_X, 400]}
+	for v: StringName in [BUTTON, _on(BUTTON), DANGER_BUTTON, PRIMARY, SEGMENT, _on(SEGMENT), PIP, _on(PIP)]:
+		var size_pad_weight: Array = by_role[StringName(String(v).trim_suffix(SELECTED_SUFFIX))]
+		t.set_font_size(&"font_size", v, size_pad_weight[0])
+		t.set_font(&"font", v, font(size_pad_weight[2]))
+		for state: StringName in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled"]:
+			t.set_stylebox(state, v, _pad_x(t.get_stylebox(state, v), size_pad_weight[1]))
 	t.set_constant(&"buttons_min_height", &"AcceptDialog", MENU_H_ACTION)
 	t.set_stylebox(&"panel", PANEL_VARIANT, _box(PANEL, LINE_SOFT, RADIUS_PANEL, MENU_PAD_PANEL, MENU_PAD_PANEL))
 	# Switches (settings): the pill of the mockups - off a well with a rim and a muted knob, on a gold 25 % fill, gold rim
