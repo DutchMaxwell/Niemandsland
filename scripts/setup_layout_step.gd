@@ -327,7 +327,8 @@ func _refresh() -> void:
 		card.disabled = way == "theme" and not TableTheme.load_theme(SetupLayout.THEME_ID).fits(_layout.editor.table_size_feet)
 		if on:
 			var rim := HouseStyle.menu_theme().get_stylebox(&"normal", &"Button").duplicate() as StyleBoxFlat
-			rim.bg_color = HouseStyle.ROW_HOVER
+			rim.bg_color = HouseStyle.CARD_CHOSEN
+			rim.draw_center = true   # the theme's button box may draw its rim only
 			rim.border_color = HouseStyle.GOLD
 			rim.set_border_width_all(2)
 			card.add_theme_stylebox_override(&"normal", rim)
