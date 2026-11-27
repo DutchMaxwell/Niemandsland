@@ -2,9 +2,10 @@ extends GdUnitTestSuite
 ## Tests for InternetLobby
 ## Tests the host/join flow orchestration for internet multiplayer.
 ##
-## The relay address is an IP literal on a closed local port: a host NAME takes one of the engine's 256 resolver
-## slots until it resolves, and a long test shard that leaked them all made connect_to_url fail at once (the
-## host flow then never set is_host). An IP literal needs no resolver and never reaches a real server.
+## The relay address is an IP literal on a closed local port: a host NAME takes
+## one of the engine's 256 resolver slots until it resolves, and a long test
+## shard that leaked them all made connect_to_url fail at once (the host flow
+## then never set is_host). An IP literal needs no resolver and no server.
 const RELAY := "ws://127.0.0.1:9"
 
 
