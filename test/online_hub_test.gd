@@ -109,3 +109,34 @@ func test_join_with_a_code() -> void:
 	assert_str(String((parts.button as Button).theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
 	field.text_submitted.emit(field.text)
 	assert_array(got).is_equal([["AB1C23", InternetLobby.DEFAULT_RELAY_URL]])
+
+
+
+func _rows(hub: Control) -> Array:
+	var rows := hub.find_child("RoomRows", true, false)
+	return [] if rows == null else rows.get_children().filter(func(r: Node) -> bool: return r.name.begins_with("Room"))
+
+
+## Step 47.3a: the public list draws what the relay answers (red before: no list).
+func test_the_public_list_shows_one_row_per_room_and_the_count() -> void:
+	var hub := await _hub()
+	if hub == null:
+		return
+	assert_bool(hub.has_method("_on_rooms")).override_failure_message("no public list").is_true()
+	if not hub.has_method("_on_rooms"):
+		return
+	hub.call("_on_rooms", [{"code": "ABC123", "players": 1}, {"code": "KLM456", "players": 2}])
+	var rows := _rows(hub)
+	assert_int(rows.size()).is_equal(2)
+	assert_str((hub.get("count_label") as Label).text).is_equal("2 games online")
+	var pips: Array = (rows[0] as Node).find_children("Pip*", "Panel", true, false)
+	assert_int(pips.size()).is_equal(8)
+	assert_int(pips.filter(func(p: Panel) -> bool: return bool(p.get_meta("filled", false))).size()).is_equal(1)
+	assert_array(_texts_of(rows[0])).contains(["ABC-123", "1 / 8 players"])
+	hub.call("_on_rooms", [])
+	assert_int(_rows(hub).size()).is_equal(0)
+	assert_str((hub.get("status_label") as Label).text).is_equal("0 games online right now.")
+
+
+func _texts_of(node: Node) -> Array:
+	return node.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
