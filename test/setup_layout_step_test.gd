@@ -66,3 +66,39 @@ func test_the_ready_made_table_is_off_on_4_by_4_and_a_press_chooses_a_way() -> v
 	assert_str(_layout.label()).is_equal("Auto-generated")
 	assert_bool(bool(_way(step, "generated").get_meta("chosen", false))).is_true()
 	assert_bool(bool(_way(step, "empty").get_meta("chosen", false))).is_false()
+
+
+func _rail_texts(step: Control) -> Array:
+	var rail := step.find_child("Rail", true, false)
+	return [] if rail == null else rail.find_children("*", "Label", true, false).filter(
+		func(l: Label) -> bool: return l.is_visible_in_tree())
+
+
+## Step 65.6: the rail - the legend's counts add up to the facts line, a failing guideline line is shown in the warn
+## colour, the empty table shows none, Create table asks to create (red before: no rail).
+func test_the_rail_tells_the_layout() -> void:
+	var step := _step(Vector2(6, 4))
+	if step == null:
+		return
+	assert_object(step.find_child("Rail", true, false)).override_failure_message("no rail").is_not_null()
+	if step.find_child("Rail", true, false) == null:
+		return
+	assert_bool(_rail_texts(step).any(func(l: Label) -> bool: return l.text.contains("terrain pieces"))).is_false()
+	_layout.choose("generated")
+	var labels := _rail_texts(step)
+	var legend := 0
+	for l: Label in labels:
+		var m := RegEx.create_from_string("^(Ruins|Forest|Container|Dangerous) (\\d+)$").search(l.text)
+		if m != null:
+			legend += int(m.get_string(2))
+	var facts := labels.filter(func(l: Label) -> bool: return l.text.contains(" PIECES · COVERAGE "))
+	assert_int(facts.size()).is_equal(1)
+	assert_int(int((facts[0] as Label).text.get_slice(" ", 0))).is_equal(legend)
+	var guide := labels.filter(func(l: Label) -> bool: return l.text.contains("table coverage"))
+	assert_int(guide.size()).is_equal(1)
+	var ok: bool = (_layout.facts().lines as Array)[1].ok
+	assert_object((guide[0] as Label).get_theme_color(&"font_color")).is_equal(HouseStyle.OK if ok else HouseStyle.WARN)
+	var asked: Array = []
+	step.connect("create_requested", func() -> void: asked.append(true))
+	(step.find_child("CreateTable", true, false) as Button).pressed.emit()
+	assert_array(asked).is_equal([true])

@@ -4,6 +4,7 @@ extends Control
 ## their values and "Change", the heading, and the four ways as cards bound to a SetupLayout.
 
 signal change_requested(step: int)
+signal create_requested
 
 const WAYS := [
 	["empty", "Empty table", "Place terrain yourself once you are at the table.", &"table"],
@@ -11,6 +12,8 @@ const WAYS := [
 	["theme", "Ruined Borderland", "", &"table"],
 	["file", "Load a layout", "Open a layout file you saved in the layout editor.", &"folder"]]
 const STEPS := ["Game system", "Biome", "Table size"]
+const CROSS := "<path d='M7 7l10 10M17 7L7 17'/>"
+const DEPLOYMENT := ["", " · Front Line (12\")", " · Custom Zones"]
 const TICK := "<path d='M5 12.5l4.5 4.5L19 7.5'/>"
 const MenuView = preload("res://scripts/startup_menu_view.gd")
 
@@ -19,6 +22,10 @@ var _layout: SetupLayout
 var _cards: Dictionary = {}
 var _note: Label
 var _file: FileDialog
+var _legend: HBoxContainer
+var _facts: Label
+var _lines: VBoxContainer
+var _layout_row: Label
 
 
 func setup(layout: SetupLayout, values: Array) -> void:
@@ -81,8 +88,85 @@ func setup(layout: SetupLayout, values: Array) -> void:
 	_file.title = "Load Terrain Layout"
 	_file.file_selected.connect(func(path: String) -> void: _note.text = _layout.load_file(path))
 	add_child(_file)
+	_build_rail(values)
 	_layout.changed.connect(_refresh)
 	_refresh()
+
+
+## The rail: the picture, the legend with counts, the facts line, the editor's first two guideline lines (ways
+## generated and file only), what the table will be, and Create table.
+func _build_rail(values: Array) -> void:
+	var rail := PanelContainer.new()
+	rail.name = "Rail"
+	rail.theme_type_variation = HouseStyle.PANEL_VARIANT
+	rail.position = Vector2(1160, 108)
+	rail.custom_minimum_size.x = 684
+	add_child(rail)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override(&"separation", 10)
+	rail.add_child(box)
+	var picture := LayoutPreview.new()
+	picture.custom_minimum_size.y = 456
+	picture.show_layout(_layout)
+	box.add_child(picture)
+	_legend = HBoxContainer.new()
+	_legend.add_theme_constant_override(&"separation", 18)
+	box.add_child(_legend)
+	_facts = _text("", 14, HouseStyle.mono(), HouseStyle.MUTED)
+	box.add_child(_facts)
+	_lines = VBoxContainer.new()
+	box.add_child(_lines)
+	for row: Array in [["SYSTEM", values[0]], ["BIOME · SIZE", "%s · %s" % [values[1], values[2]]], ["LAYOUT", ""]]:
+		var line := HBoxContainer.new()
+		var key := _text(row[0], 14, HouseStyle.eyebrow_font(), HouseStyle.MUTED)
+		key.size_flags_horizontal = SIZE_EXPAND_FILL
+		line.add_child(key)
+		var value := _text(str(row[1]), 18, HouseStyle.font(400), HouseStyle.INK)
+		line.add_child(value)
+		box.add_child(line)
+		_layout_row = value
+	var create := HouseStyle.button("Create table", HouseStyle.PRIMARY, 56)
+	create.name = "CreateTable"
+	create.focus_mode = FOCUS_ALL
+	create.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	create.pressed.connect(func() -> void: create_requested.emit())
+	var cap := HouseStyle.key_cap_on_gold("Enter")
+	cap.set_anchors_preset(PRESET_CENTER_RIGHT)
+	cap.grow_horizontal = GROW_DIRECTION_BEGIN
+	cap.offset_left = -16
+	cap.offset_right = -16
+	create.add_child(cap)
+	box.add_child(create)
+
+
+func _refresh_rail() -> void:
+	var facts := _layout.facts()
+	for child: Node in _legend.get_children() + _lines.get_children():
+		child.get_parent().remove_child(child)
+		child.queue_free()
+	for type: int in facts.pieces_by_type:
+		var name_label := _text("%s %d" % [_layout.editor.TERRAIN_NAMES[type], facts.pieces_by_type[type]], 15,
+			HouseStyle.font(400), HouseStyle.INK)
+		var swatch := ColorRect.new()
+		swatch.color = Color(_layout.editor.TERRAIN_COLORS[type], 1.0)
+		swatch.custom_minimum_size = Vector2(12, 12)
+		swatch.size_flags_vertical = SIZE_SHRINK_CENTER
+		_legend.add_child(swatch)
+		_legend.add_child(name_label)
+	_facts.text = "%d PIECES · COVERAGE %.1f %%" % [facts.pieces, facts.coverage_pct]
+	if _layout.way in ["generated", "file"]:
+		for line: Dictionary in (facts.lines as Array).slice(0, 2):
+			var row := HBoxContainer.new()
+			var mark := TextureRect.new()
+			mark.texture = HouseStyle.svg_icon(MenuView.ICON_SVG % (TICK if line.ok else CROSS))
+			mark.custom_minimum_size = Vector2(14, 14)
+			mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			mark.modulate = HouseStyle.OK if line.ok else HouseStyle.WARN
+			row.add_child(mark)
+			row.add_child(_text(str(line.text), 15, HouseStyle.font(400), HouseStyle.OK if line.ok else HouseStyle.WARN))
+			_lines.add_child(row)
+	_layout_row.text = _layout.label() + DEPLOYMENT[_layout.editor.deployment_type]
 
 
 func _way_card(way: String, title: String, caption: String, icon: StringName) -> Button:
@@ -119,6 +203,7 @@ func _way_card(way: String, title: String, caption: String, icon: StringName) ->
 
 ## The chosen way has the lighter fill and the 2 px gold rim; the ready-made table is off off 6 x 4 ft.
 func _refresh() -> void:
+	_refresh_rail()
 	_note.text = _layout.note if not _layout.note.is_empty() else _note.text
 	for way: String in _cards:
 		var card: Button = _cards[way]

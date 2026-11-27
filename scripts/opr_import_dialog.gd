@@ -73,7 +73,21 @@ func _setup_ui() -> void:
 	player_option.add_item("Player 3 (Green)", 3)
 	player_option.add_item("Player 4 (Gold)", 4)
 	player_option.select(0)
+	player_option.visible = false   # the hidden twin of the segment pair: holds the value the import reads
 	player_row.add_child(player_option)
+	# Two players as drawn (maintainer 27.11.); a room seats a third or fourth guest at 3 or 4, so set_player
+	# shows that seat's own segment as well - the menu control changes, no seat loses its import.
+	var segments := HouseStyle.button_row(["Player 1 (Blue)", "Player 2 (Red)", "Player 3 (Green)", "Player 4 (Gold)"],
+		HouseStyle.SEGMENT, HouseStyle.H_SEGMENT)
+	segments.name = "PlayerSegments"
+	segments.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	for i in segments.get_child_count():
+		var segment := segments.get_child(i) as Button
+		segment.custom_minimum_size.x = 150
+		segment.visible = i < 2
+		segment.pressed.connect(func() -> void: _select_player(i))
+	player_row.add_child(segments)
+	_select_player(0)
 	# Solo mode: mark this army as AI-controlled at import (changeable later in the left-panel Solo section).
 	ai_check = CheckBox.new()
 	ai_check.text = "AI-controlled (Solo)"
@@ -256,5 +270,16 @@ func set_player(player_id: int) -> void:
 	# Find index for the given player ID
 	for i in range(player_option.item_count):
 		if player_option.get_item_id(i) == player_id:
-			player_option.select(i)
+			_select_player(i)
 			return
+
+
+## The segment pair and its hidden dropdown twin show the same player; a third or fourth seat shows its segment.
+func _select_player(index: int) -> void:
+	player_option.select(index)
+	var segments := player_option.get_parent().get_node("PlayerSegments")
+	for i in segments.get_child_count():
+		var segment := segments.get_child(i) as Button
+		HouseStyle.set_selected(segment, i == index)
+		if i >= 2:
+			segment.visible = i == index

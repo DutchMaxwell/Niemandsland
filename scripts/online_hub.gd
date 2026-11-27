@@ -9,6 +9,8 @@ signal join_requested(code: String, url: String, player_name: String, button: Bu
 
 const LOCK := "<rect x='5' y='11' width='14' height='9' rx='1.5'/><path d='M8 11V8a4 4 0 0 1 8 0v3'/>"
 const JOIN_CODE_LEN := 6
+const TIMEOUT_S := 8.0
+const REFRESH := "<path d='M20 12a8 8 0 1 1-2.3-5.6M20 4v4.5h-4.5'/>"
 
 var name_field: LineEdit
 var public_check: CheckBox
@@ -18,9 +20,12 @@ var join_button: Button
 var join_error: Label
 var relay_line: Button
 var relay_field: LineEdit
+var lists_on_open := true   # false: no request until refresh() (tests)
 var count_label: Label
 var status_label: Label
 var _rows: VBoxContainer
+var _lobby: InternetLobby
+var _gen := 0
 
 
 func _init() -> void:
@@ -68,7 +73,7 @@ func _init() -> void:
 	left.add_child(relay_field)
 
 
-## The right panel "Public tables": the count in its head, one row per room.
+## The right panel "Public tables": the count and a refresh button in its head, one row per room.
 func _ready() -> void:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override(&"separation", 12)
@@ -84,6 +89,16 @@ func _ready() -> void:
 	count_label = _text("", HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
 	count_label.add_theme_color_override(&"font_color", HouseStyle.MUTED)
 	head.add_child(count_label)
+	var again := HouseStyle.button("", HouseStyle.ICON, 32)
+	again.custom_minimum_size.x = 32
+	again.focus_mode = FOCUS_ALL
+	again.icon = HouseStyle.svg_icon(MenuView.ICON_SVG % REFRESH)
+	again.add_theme_constant_override(&"icon_max_width", 18)
+	again.size_flags_horizontal = SIZE_SHRINK_END
+	again.size_flags_vertical = SIZE_SHRINK_CENTER
+	again.tooltip_text = "Refresh list"
+	again.pressed.connect(refresh)
+	head.add_child(again)
 	box.add_child(head)
 	box.add_child(HSeparator.new())
 	_rows = VBoxContainer.new()
@@ -91,14 +106,43 @@ func _ready() -> void:
 	box.add_child(_rows)
 	status_label = _text("", HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
 	_rows.add_child(status_label)
+	relay_field.text_submitted.connect(func(_url: String) -> void: refresh())
+	if lists_on_open:
+		refresh()
 
 
-## The relay's answer: one row per room and the count, or the zero line.
-func _on_rooms(rooms: Array) -> void:
+## Exactly one kind of request, list_rooms, from a fresh listing lobby; a reply or the timeout of an older request
+## (an older generation) changes nothing.
+func refresh() -> void:
+	_drop_lobby()
+	_gen += 1
+	var gen := _gen
+	_show_status("Loading rooms…")
+	_lobby = InternetLobby.new()
+	add_child(_lobby)
+	_lobby.rooms_list_received.connect(_on_rooms.bind(gen))
+	_lobby.rooms_list_failed.connect(_on_failed.bind(gen))
+	_lobby.list_rooms(_relay())
+	get_tree().create_timer(TIMEOUT_S).timeout.connect(_on_timeout.bind(gen))
+
+
+func _on_timeout(gen: int) -> void:
+	if gen == _gen and status_label.text == "Loading rooms…":
+		_show_status("Could not reach the relay (timed out).")
+
+
+func _on_rooms(rooms: Array, gen: int) -> void:
+	if gen != _gen:
+		return
 	_show_status("0 games online right now." if rooms.is_empty() else "")
 	count_label.text = "%d game%s online" % [rooms.size(), "" if rooms.size() == 1 else "s"]
 	for room: Dictionary in rooms:
 		_rows.add_child(_room_row(str(room.get("code", "")), int(room.get("players", 0))))
+
+
+func _on_failed(reason: String, gen: int) -> void:
+	if gen == _gen:
+		_show_status(reason)
 
 
 func _show_status(text: String) -> void:
@@ -143,6 +187,7 @@ func _room_row(code: String, players: int) -> HBoxContainer:
 	join.size_flags_vertical = SIZE_SHRINK_CENTER
 	join.focus_mode = FOCUS_ALL
 	join.pressed.connect(func() -> void:
+		_drop_lobby()
 		join_requested.emit(code, _relay(), PlayerIdentity.sanitize(name_field.text), join))
 	row.add_child(join)
 	return row
@@ -151,6 +196,18 @@ func _room_row(code: String, players: int) -> HBoxContainer:
 func _relay() -> String:
 	var url := relay_field.text.strip_edges()
 	return url if not url.is_empty() else InternetLobby.DEFAULT_RELAY_URL
+
+
+## The listing socket closes and its node goes when the page closes, a join commits or a table is prepared.
+func _drop_lobby() -> void:
+	if is_instance_valid(_lobby):
+		_lobby.disconnect_internet_game()
+		_lobby.queue_free()
+	_lobby = null
+
+
+func _exit_tree() -> void:
+	_drop_lobby()
 
 
 ## The list panel stands right of the column as drawn: from x = 720, y = 196, 760 px wide.
@@ -241,6 +298,7 @@ func _on_prepare() -> void:
 	var url := relay_field.text.strip_edges()
 	var player_name := PlayerIdentity.sanitize(name_field.text)
 	PlayerIdentity.save_name(player_name)
+	_drop_lobby()
 	host_requested.emit({
 		"niemandsland/pending_internet_lobby": true,
 		"niemandsland/internet_is_host": true,
