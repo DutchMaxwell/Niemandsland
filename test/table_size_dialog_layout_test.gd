@@ -105,3 +105,27 @@ func test_custom_inputs_fit_at_1280x720() -> void:
 func test_1280x720_never_shrinks_below_one_to_one_pixels_and_fits() -> void:
 	var height := await _assert_layout(Vector2i(1280, 720))
 	assert_float(height).is_equal_approx(720.0, 1.0)
+
+
+## Row 04 keeps its "Change" inside the row at 1280x720 (gap review 27.11.: it ran 16 px out of the row's right edge;
+## the opponent's name now gives way, cut with an ellipsis).
+func test_row_04_keeps_change_inside_at_1280x720() -> void:
+	get_tree().root.size = Vector2i(1280, 720)
+	var dialog: TableSizeDialog = auto_free(TableSizeDialog.new())
+	dialog.layout_step = true   # the menu's setup: rows 04 and 05
+	add_child(dialog)
+	dialog.opponent.set_system("gf")   # the longest name the row shows: NACHTMAHR with a faction and points
+	dialog.opponent.set_manifest({"alien_hives": {"name": "Alien Hives", "lists": [{"points": 3000, "file": "a.json"}]}})
+	dialog.opponent.choose_who("solo")
+	for _i in 3:
+		await get_tree().process_frame
+	var row := dialog.find_child("OpponentRow", true, false) as Control
+	var change: Control = null
+	for l: Node in row.find_children("*", "Label", true, false) if row != null else []:
+		if (l as Label).text.strip_edges() == "Change":
+			change = l as Control
+	assert_object(change).override_failure_message("no Change label of row 04").is_not_null()
+	if change == null:
+		return
+	assert_float(change.get_global_rect().end.x).override_failure_message("Change ends at %d, the row at %d" % [
+		int(change.get_global_rect().end.x), int(row.get_global_rect().end.x)]).is_less_equal(row.get_global_rect().end.x)

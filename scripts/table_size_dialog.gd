@@ -436,10 +436,12 @@ func _add_opponent_row(column: VBoxContainer) -> void:
 	var line := HBoxContainer.new()
 	line.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 14)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var heading := _label("04   Who is at the table?",17)
-	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	line.add_child(heading)
-	_opponent_name = _label("",16)
+	line.add_child(_label("04   Who is at the table?",17))
+	_opponent_name = _label("",16)   # takes the room the heading and Change leave, cut with an ellipsis (720p)
+	_opponent_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_opponent_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_opponent_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_opponent_name.clip_text = true
 	line.add_child(_opponent_name)
 	line.add_child(_label("   Change",15,HouseStyle.ACCENT))
 	row.add_child(line)
