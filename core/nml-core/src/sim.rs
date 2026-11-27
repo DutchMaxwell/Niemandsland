@@ -9695,7 +9695,7 @@ fn tray_spell_damage(statics: &[UnitStatic], state: &mut State, ci: usize, host:
     let mut spill: Vec<(usize, i64)> = Vec::new();
     if !spread.is_empty() {
         let models: Vec<i64> = spread.iter().map(|n| n.1).collect();
-        let split = crate::dice::blast_split(total_hits, facets.blast, fanout.max(1), &models);
+        let split = crate::dice::blast_split_at(total_hits, facets.blast, fanout.max(1), &models, seams.rules_epoch);
         let (kept, out) = (split[0], split[1..].iter().sum::<i64>());
         let line = format!("Blast({}): {total_hits} hit{} -> {kept} on {}, {out} on units within reach, {} lost", facets.blast,
             if total_hits == 1 { "" } else { "s" }, ut.name, total_hits * facets.blast - kept - out);

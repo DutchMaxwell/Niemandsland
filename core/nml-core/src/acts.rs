@@ -1115,6 +1115,11 @@ pub const PENDING_EPOCH_CORE_TIERS: u32 = 106;
 /// placeholder past `PENDING_EPOCH_CORE_TIERS` (106). Records stamped 106 or below replay byte-exact. Read only by
 /// `activation::cliff_drop_in`'s two callers (`check_move`, `jump_dice_of`).
 pub const PENDING_EPOCH_RUIN_LEDGES: u32 = 107;
+/// Plan step 29a (ruling D-29-R1): the skirmish Blast spread splits the WHOLE attack's hits evenly over the target and its
+/// units within reach (`dice::blast_split_at`), not each original hit on its own with the remainder always on the target:
+/// 2 hits of Blast(3) over two units with room are 3 + 3, not 4 + 2. A single hit, or no neighbour, lands as before. A
+/// placeholder past `PENDING_EPOCH_RUIN_LEDGES` (107); records stamped 107 or below replay byte-exact.
+pub const PENDING_EPOCH_BLAST_EVEN: u32 = 108;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
