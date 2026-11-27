@@ -85,6 +85,20 @@ static func boot(suite: Node, seat: String) -> SkirmishTable:
 	return t
 
 
+## A clean table in the same seat for the next case (a seed scan, a twin): no units, no turn state, round 1, no lines.
+func reset() -> void:
+	CoreActivation.reset_all(main)
+	for u in main.opr_army_manager.game_units.values():
+		for m in (u as GameUnit).models:
+			(m as ModelInstance).node.queue_free()
+	main.opr_army_manager.game_units.clear()
+	main._hotseat_turn = null
+	main._solo_game_finished = false
+	main.opr_army_manager.current_round = 1
+	main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
+	lines.clear()
+
+
 ## A unit of `sys` ("gff" | "aofs") for `player`: `models` in a row 1.2 in apart along z from (x_in, z_in), Quality 4,
 ## Defense 4, `tough` per model, `weapon` (ParityTable shape; {} = a 24 in rifle, one attack per model), `rules`.
 func unit(sys: String, player: int, name: String, models: int, tough: int, x_in: float, z_in: float,
