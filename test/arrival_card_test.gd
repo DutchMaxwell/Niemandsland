@@ -43,3 +43,18 @@ func test_no_label_is_smaller_than_12_px() -> void:
 		return
 	for label: Label in card.find_children("*", "Label", true, false):
 		assert_int(label.get_theme_font_size(&"font_size")).override_failure_message(label.text).is_greater_equal(12)
+
+
+## Step 49.5b: a close box at the top right emits dismissed (red before: no close box).
+func test_the_close_box_dismisses_the_card() -> void:
+	var card := await _card()
+	if card == null:
+		return
+	var close := card.find_child("CloseButton", true, false) as Button
+	assert_object(close).override_failure_message("no close box").is_not_null()
+	if close == null:
+		return
+	var gone: Array = []
+	card.connect("dismissed", func() -> void: gone.append(true))
+	close.pressed.emit()
+	assert_array(gone).is_equal([true])
