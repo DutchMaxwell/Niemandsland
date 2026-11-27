@@ -16,11 +16,12 @@ extends GdUnitTestSuite
 
 const MAIN_ACTIONS := ["Prepare a new table", "Play online", "Load game", "Learn to play", "Settings"]
 const FOOTER := ["Help & feedback", "Credits & licenses", "Quit"]
-const ONLINE_ROUTE := ["Create a room", "Join with a code", "Public tables"]
 const HELP_ROUTE := ["Learn the controls", "Report a problem"]
 
 class MenuTransitionProbe extends "res://scripts/startup_menu.gd":
 	var entered_game := false
+	func _init() -> void:
+		set("online_hub_lists", false)   # the hub must not ask the production relay from a test
 	func _transition_to_game() -> void:
 		entered_game = true
 	# The room browser opens with a relay request; a test must not reach the production relay.
@@ -195,16 +196,18 @@ func test_load_game_shows_no_file_dialog_until_browse_files_is_pressed() -> void
 	dialog.hide()
 
 
-func test_online_route_lists_its_three_actions_and_closes_on_a_pick() -> void:
-	await _click(_button("Play online"))
-	assert_bool(_view.route_panel.visible).is_true()
-	assert_str(_view.route_title.text).is_equal("Meet around the table.")
-	for t: String in ONLINE_ROUTE:
-		assert_object(_button(t)).override_failure_message("%s is missing from the online route" % t).is_not_null()
-	await _click(_button("Public tables"))
-	await _route_gone()
-	assert_bool(_view.route_panel.visible).override_failure_message("the route did not close on a pick").is_false()
-	assert_object(_menu._browse_popup).is_not_null()
+## "Play online" opens the online hub in place of the list: no route panel, no window in the tree (red on main:
+## the online route, then one of three windows).
+func test_play_online_opens_a_page_and_no_window() -> void:
+	var online := _button("Play online")
+	await _click(online)
+	assert_bool(_view.route_panel.visible).override_failure_message("a route panel opened").is_false()
+	assert_bool(_view.get("page_open") is OnlineHub).override_failure_message("no online hub").is_true()
+	var windows := _menu.find_children("*", "Window", true, false).filter(func(w: Window) -> bool: return w.visible)
+	assert_array(windows).is_empty()
+	if _view.get("page_open") is OnlineHub:
+		await _click((_view.get("page_open") as OnlineHub).back)
+	assert_object(_view.get_viewport().gui_get_focus_owner()).is_same(online)
 
 
 ## "Learn to play" opens the lesson page in place of the list, not a route panel; its way back returns the focus
