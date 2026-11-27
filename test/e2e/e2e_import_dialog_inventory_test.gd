@@ -127,8 +127,8 @@ func test_preview_shows_the_army_name_and_totals() -> void:
 	army.points = 1000
 	_dlg._show_loaded()
 	_dlg._update_preview()
-	assert_str(_dlg.army_preview.text).contains("Test Army")
-	assert_str(_dlg.army_preview.text).contains("[b]Points:[/b] 1000")
+	var texts: Array = _dlg.army_preview.find_children("*", "Label", true, false).map(func(l: Node) -> String: return (l as Label).text)
+	assert_array(texts).contains(["Test Army", "Grimdark Future", "1000 PTS · 0 UNITS"])
 
 
 func test_the_x_cancels_and_the_sheet_is_house_style_and_owns_its_clicks() -> void:
@@ -194,3 +194,26 @@ func test_a_third_seat_keeps_its_own_segment() -> void:
 	_load_fake_army()
 	_dlg.import_btn.pressed.emit()
 	assert_int(int(_imported[0][1])).is_equal(3)
+
+
+## Step 50 (sheet 04): the preview is a header and one row per unit - the name with quality, defense and weapons under
+## it, the model count and the points in mono gold (red before: one rich-text block of bullet lines).
+func test_the_preview_is_one_row_per_unit() -> void:
+	var army := _load_fake_army()
+	army.game_system = "gf"
+	army.points = 590
+	for spec: Array in [["Command Squad", 5, 310, 4, 4], ["Line Infantry", 10, 280, 5, 5]]:
+		var unit := OPRApiClient.OPRUnit.new()
+		unit.name = spec[0]
+		unit.size = spec[1]
+		unit.cost = spec[2]
+		unit.quality = spec[3]
+		unit.defense = spec[4]
+		army.units.append(unit)
+	_dlg._show_loaded()
+	_dlg._update_preview()
+	var texts: Array = _dlg.army_preview.find_children("*", "Label", true, false).map(func(l: Node) -> String: return (l as Label).text)
+	assert_array(texts).contains(["Command Squad", "× 5", "310", "Line Infantry", "× 10", "280", "Q4+ D4+", "590 PTS · 2 UNITS"])
+	var cost: Label = _dlg.army_preview.find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).text == "310")[0]
+	assert_object(cost.get_theme_font("font")).is_same(HouseStyle.mono())
