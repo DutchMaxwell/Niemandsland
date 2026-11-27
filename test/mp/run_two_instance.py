@@ -1365,6 +1365,35 @@ class Run:
             and all(any(t.startswith(line) for t in v.get("battle_log_tail", [])) for v in s.values()),
             diagnostic=lambda s: diag(s) + " host_g1=%r" % self._unit(s, "host", "mp2_oc_g1")))
         self._wound_alloc_phase()
+        self._push_replace_phase()
+
+    def _push_replace_phase(self) -> None:
+        """Plan step 29e-2b (D-29 Q3 by the book, 3.6 p.15: the opponent places the pushed unit's other models within 1 in):
+        the side on turn shoots the other side's squad with its dice in the step transcript (two kills, a failed morale
+        test, a 5 to push), answers Push? and drags the spot; the DEFENDER's machine is asked over the real relay, its player
+        drags the second survivor 0.5 in from the pushed model and presses Enter. Both peers must end with that model on the
+        defender's dragged spot to 1 mm. `--plant-push-shift` sends the answer that far off the drag: the wait must fail."""
+        attacker, defender = ("host", "guest") if self.checkpoints[-1]["host"].get("turn") == 1 else ("guest", "host")
+        for role in ("host", "guest"):
+            self.command(role, "setup_push_replace", {"attacker": 1 if attacker == "host" else 2})
+        gun, squad = "mp2_pr_a", "mp2_pr_d"
+        self.wait_condition(
+            "the push units on both peers",
+            lambda s: all(self._unit(s, r, gun) and self._unit(s, r, squad) for r in ("host", "guest")))
+        self.command(defender, "answer_push_replace", {"plant_shift_in": float(getattr(self.args, "plant_push_shift", 0.0))})
+        self.command(attacker, "one_core_push")
+        pr = lambda s: s[defender]["one_core"]["push_replace"]
+
+        def on_spot(s: dict, role: str) -> bool:
+            spot = pr(s).get("spot") or []
+            return bool(spot) and any(
+                len(p) >= 3 and abs(p[0] - spot[0]) < 0.001 and abs(p[2] - spot[2]) < 0.001 for p in self._unit(s, role, squad).get("positions", []))
+
+        self.checkpoint("one-core-push-replace", self.wait_condition(
+            f"the {defender}'s dragged spot stands on both peers to 1 mm",
+            lambda s: pr(s).get("opened", 0) >= 1 and on_spot(s, "host") and on_spot(s, "guest"),
+            diagnostic=lambda s: "defender=%s prompt=%r host=%r guest=%r" % (
+                defender, pr(s), self._unit(s, "host", squad).get("positions"), self._unit(s, "guest", squad).get("positions"))))
 
     def _wound_alloc_phase(self) -> None:
         """P4.D-25 (the wound-allocation choice, the switch at its default - ON since P4.D-27): the host shoots the guest's three
@@ -1530,6 +1559,12 @@ def parse_args() -> argparse.Namespace:
         "--include-one-core",
         action="store_true",
         help="Also run the one-core P3 step 54 scenario (NML_ONE_CORE_ACTIVATION=1 on both peers, agreed Automatic room).",
+    )
+    parser.add_argument(
+        "--plant-push-shift",
+        type=float,
+        default=0.0,
+        help="Red run of the one-core push re-place phase: the defender's answer leaves this many inches off its drag.",
     )
     parser.add_argument(
         "--game-system-only",

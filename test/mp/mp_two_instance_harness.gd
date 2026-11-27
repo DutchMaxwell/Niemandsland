@@ -42,6 +42,8 @@ const OC_SPECS := [["mp2_oc_h1", 1, "Core Host", Vector3(-0.30, 0.0, 0.10)], ["m
 ## carries no unit rule, so the core door takes it (the slice refuses Tough for now): mixed loadouts are its choice.
 const WA_SHOOTER := "mp2_wa_h"
 const WA_DEFENDER := "mp2_wa_g"
+const PR_ATTACKER := "mp2_pr_a"   # step 29e-2b: the push phase's gunner (the side on turn) and the pushed four-model squad
+const PR_DEFENDER := "mp2_pr_d"
 
 var _args: Dictionary = {}
 var _main: Node = null
@@ -78,6 +80,7 @@ var _tray_rolls: Array = []       # 3.5: every roll this tray showed, "local: <p
 var _oc_received: Dictionary = {}   # step 54: digest-check command types this table received, type -> count
 var _wa_armed := false              # P4.D-25: the guest's batch dice are switched off once its defence roll is in
 var _wa_prompt := {"opened": 0, "clicks": 0}   # P4.D-25: the guest's wound prompt: opened, scripted clicks fed
+var _pr := {"opened": 0, "spot": [], "pushed": 0}   # step 29e-2b: the defender's re-place: prompt opened, its dragged spot
 
 
 func _ready() -> void:
@@ -345,6 +348,14 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 		ok = _setup_wound_alloc()
 	elif action == "one_core_shoot":
 		ok = _require_role("host", action) and await _one_core_shoot(_unit(str(payload.get("unit", ""))), _unit(str(payload.get("target", ""))))
+	elif action == "setup_push_replace":
+		ok = _setup_push_replace(int(payload.get("attacker", 1)))
+	elif action == "one_core_push":
+		ok = true   # the attacker's activation, its push prompt and the drag of the spot: fire-and-forget, it waits for the defender
+		_one_core_push()
+	elif action == "answer_push_replace":
+		ok = true   # the defender's player: "I place", one drag, Enter (`plant_shift_in`: the answer leaves shifted - a red run)
+		_feed_push_replace(float(payload.get("plant_shift_in", 0.0)))
 	elif action == "answer_wound_prompt":
 		ok = _require_role("guest", action)   # the guest's real click answers the choice: fire-and-forget, the volley waits for it
 		if ok:
@@ -775,6 +786,100 @@ func _setup_wound_alloc() -> bool:
 	return true
 
 
+## Step 29e-2b: a gff gunner of the side on turn (`attacker` slot) and the other side's four-model Defense 6, Quality 6 squad.
+func _setup_push_replace(attacker: int) -> bool:
+	for spec in [[PR_ATTACKER, attacker, "Push Gunner", Vector3(-0.15, 0.0, -0.30), 9500, 1], [PR_DEFENDER, 3 - attacker, "Push Squad", Vector3(0.15, 0.0, -0.30), 9510, 4]]:
+		var unit := _spawn_unit(str(spec[0]), int(spec[1]), str(spec[2]), spec[3], int(spec[4]), int(spec[5]))
+		if unit == null:
+			return false
+		var rifle := OPRApiClient.OPRWeapon.new()
+		rifle.name = "Push Rifle"
+		rifle.range_value = 24
+		rifle.attacks = 2
+		unit.source_type = "opr"
+		unit.source_data = OPRApiClient.OPRUnit.new()
+		(unit.source_data as OPRApiClient.OPRUnit).weapons.assign([rifle] if spec[0] == PR_ATTACKER else [])
+		unit.unit_properties.merge({"game_system": "gff", "faction_folder": "robot_legions"}, true)
+		unit.unit_properties["quality"] = 2 if spec[0] == PR_ATTACKER else 6
+		unit.unit_properties["defense"] = 6
+		_main.opr_army_manager.game_units[unit.unit_id] = unit
+		_main.radial_menu_controller.initialize_status_markers_for_unit(unit)
+	SoloHarness.auto_saves(_main)
+	return true
+
+
+## Step 29e-2b, the attacker's machine: Activate through the production door, then the step driver with the dice in its
+## transcript (two hits kill two of four, the morale test fails, the push die is a 5) - the scenario must not hang on luck.
+## Push? is answered yes, the spot is a drag of the squad's first survivor 1.9 in east; the re-place is the defender's.
+func _one_core_push() -> void:
+	var gunner := _unit(PR_ATTACKER)
+	var squad := _unit(PR_DEFENDER)
+	await _main.radial_menu_controller.card_start_activation(gunner)
+	if not CoreActivation.session_open(gunner.unit_id):
+		_failure = "no open activation after Activate: %s" % _main.battle_log.entries().back()
+		return
+	var s: Dictionary = CoreActivation._sessions[gunner.unit_id]
+	var t: Array = (s["transcript"] as Array).duplicate()
+	t.append_array([{"t": "intent", "kind": 0, "shoot": squad.unit_id}, {"t": "faces", "faces": [6, 6]}, {"t": "faces", "faces": [1, 1]},
+		{"t": "faces", "faces": [1]}, {"t": "faces", "faces": [5]}])
+	var done := [false]
+	SoloHarness.instant(_main, false)   # the attacker's prompts are asked off the headless batch (as the wound phase's dice)
+	(func() -> void:
+		await CoreActivation.drive(_main, int(s["handle"]), gunner, t, false)
+		done[0] = true).call()
+	var deadline := Time.get_ticks_msec() + 90000
+	var dragged := false
+	while not done[0] and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+		for c in _main.get_children():
+			if c is PromptCard and (c as PromptCard).title == "Push?":
+				(c as PromptCard).resolve(true)
+		if not CoreActivation.push_pick.is_empty() and not dragged:
+			dragged = true
+			var n: Node3D = (squad.get_alive_models()[0] as ModelInstance).node
+			var from := n.global_position
+			n.global_position = from + Vector3(1.9 * 0.0254, 0.0, 0.0)
+			await SoloHarness.drop(_main, [{"node": n, "inches": 1.9, "from_raw": from,
+				"path": PackedVector2Array([Vector2(from.x, from.z), Vector2(n.global_position.x, n.global_position.z)])}])
+	SoloHarness.instant(_main)
+
+
+## Step 29e-2b, the defender's machine: its player answers "I place", drags the second survivor 0.5 in from the pushed
+## model and presses Enter. `plant_shift_in` > 0 (a red run): the answer leaves that far off the drag and the model is put
+## back, so the wire carries a spot the defender's table does not show.
+func _feed_push_replace(plant_shift_in: float) -> void:
+	SoloHarness.instant(_main, false)   # the owner's prompt is asked off the headless batch
+	var deadline := Time.get_ticks_msec() + 90000
+	while Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+		for c in _main.get_children():
+			if c is PromptCard and (c as PromptCard).title == "Place the rest":
+				_pr["opened"] = int(_pr["opened"]) + 1
+				(c as PromptCard).resolve(true)
+		if CoreActivation.replace_pick.is_empty():
+			continue
+		var squad := _unit(PR_DEFENDER)
+		var alive := squad.get_alive_models()
+		var pushed: Vector3 = (alive[0] as ModelInstance).node.global_position
+		var n: Node3D = (alive[1] as ModelInstance).node
+		var spot := pushed + Vector3(0.0, 0.0, 2.0 * SoloController.model_base_radius_m(alive[0]) + 0.5 * 0.0254)
+		var from := n.global_position
+		n.global_position = spot
+		await SoloHarness.drop(_main, [{"node": n, "inches": from.distance_to(spot) / 0.0254, "from_raw": from,
+			"path": PackedVector2Array([Vector2(from.x, from.z), Vector2(spot.x, spot.z)])}])
+		_pr["spot"] = _rounded(spot)
+		_pr["pushed"] = _rounded(pushed)
+		if plant_shift_in > 0.0:
+			n.global_position = spot + Vector3(0.0, 0.0, plant_shift_in * 0.0254)
+		CoreActivation.finish_replace_pick(true)
+		while not CoreActivation.replace_pick.is_empty():   # the answer is read off the table when the pick closes
+			await get_tree().process_frame
+		if plant_shift_in > 0.0:
+			n.global_position = spot
+		break
+	SoloHarness.instant(_main)
+
+
 ## P4.D-25: Activate through the production door, then the production shot; the volley waits for the guest's saves and its
 ## answer to the wound allocation, so it is not awaited here.
 func _one_core_shoot(shooter: GameUnit, target: GameUnit) -> bool:
@@ -864,7 +969,7 @@ func _snapshot() -> Dictionary:
 		"tray_rolls": _tray_rolls.duplicate(),
 		"protect_done": _protect_done.duplicate(),
 		"rolled_lines": [],
-		"one_core": {"received": _oc_received.duplicate(), "checks_ok": CoreActivation.checks_ok, "wound_prompt": _wa_prompt.duplicate()},
+		"one_core": {"received": _oc_received.duplicate(), "checks_ok": CoreActivation.checks_ok, "wound_prompt": _wa_prompt.duplicate(), "push_replace": _pr.duplicate()},
 	}
 	if _main != null and _main.get("object_manager") != null:
 		for child in _main.object_manager.get_children():
