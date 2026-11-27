@@ -74,8 +74,11 @@ var _valid := true
 var online := false   # set before add_child: a Create-room dialog locks the rules pick to Manual
 var layout_step := false   # set before add_child: the menu's setup has step 04 (the table's chooser does not)
 var layout: SetupLayout
-var _step04: SetupLayoutStep
+var _step04: Control   # the inner page: who is at the table (step 04) or the layout (step 05)
 var _layout_name: Label
+var opponent: SetupOpponent
+var _opponent_name: Label
+var _opponent_key: Label
 var selected_rules := RulesAutomation.Level.MANUAL
 
 class Footprint extends Control:
@@ -301,6 +304,7 @@ func _build_ui() -> void:
 	_add_left_air(left)
 	left.add_child(HSeparator.new())
 	if layout_step:
+		_add_opponent_row(left)
 		_add_layout_row(left)
 	else:
 		left.add_child(_label("+   Your terrain. Your layout.",14,HouseStyle.ACCENT))
@@ -371,12 +375,14 @@ func _build_ui() -> void:
 	var rows := HBoxContainer.new()   # System / Biome / Size on one line, so the 720 page keeps its height
 	rows.add_theme_constant_override("separation",10)
 	summary_column.add_child(rows)
-	for row: String in ["System","Biome","Size"]:
+	for row: String in ["System","Biome","Size"] + (["Opponent"] if opponent != null else []):
 		var row_name := _label(row,12,HouseStyle.MUTED)
 		row_name.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		rows.add_child(row_name)
 		_summary[row] = _label("",16)
 		rows.add_child(_summary[row])
+		if row == "Opponent":
+			_opponent_key = row_name
 	var keys := HBoxContainer.new()   # the key legend: what the keyboard does on this page
 	keys.name = "KeyLegend"
 	keys.theme = HouseStyle.theme()
@@ -401,7 +407,7 @@ func _add_layout_row(column: VBoxContainer) -> void:
 	var row := _button("")
 	row.name = "LayoutRow"
 	row.custom_minimum_size.y = 52
-	row.pressed.connect(_show_state.bind(true))
+	row.pressed.connect(_show_state.bind("layout"))
 	var line := HBoxContainer.new()
 	line.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 14)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -415,19 +421,53 @@ func _add_layout_row(column: VBoxContainer) -> void:
 	column.add_child(row)
 
 
-## The second state shows step 04 in place of steps 01-03 and the summary; the first state takes them back.
-func _show_state(two: bool) -> void:
+## Step 04 in the setup's first state: "04 Who is at the table?", the opponent's name and Change; it opens the
+## "who" page (SetupOpponentStep).
+func _add_opponent_row(column: VBoxContainer) -> void:
+	opponent = SetupOpponent.new()
+	var row := _button("")
+	row.name = "OpponentRow"
+	row.custom_minimum_size.y = 52
+	row.pressed.connect(_show_state.bind("who"))
+	var line := HBoxContainer.new()
+	line.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 14)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var heading := _label("04   Who is at the table?",17)
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.add_child(heading)
+	_opponent_name = _label("",16)
+	line.add_child(_opponent_name)
+	line.add_child(_label("   Change",15,HouseStyle.ACCENT))
+	row.add_child(line)
+	column.add_child(row)
+	opponent.changed.connect(func() -> void:
+		_opponent_name.text = opponent.label()
+		if _summary.has("Opponent"):
+			_summary.Opponent.text = opponent.label())
+
+
+## The inner pages: "who" (step 04) or "layout" (step 05) in place of steps 01-03 and the summary; "" is state one.
+## Change on a folded row returns to state one, except row 04 of the layout page (the who page) and the who page's
+## row 05 (the layout page).
+func _show_state(state: String) -> void:
 	for part: Control in [_system_step, _columns, _footer, _page.get_child(_footer.get_index() - 1)]:
-		part.visible = not two
+		part.visible = state.is_empty()
 	if is_instance_valid(_step04):
 		_step04.queue_free()
-	if two:
-		_step04 = SetupLayoutStep.new()
-		_step04.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		get_child(0).add_child(_step04)
-		_step04.setup(layout, [_summary.System.text, _summary.Biome.text, _summary.Size.text, "Two players, one screen"])
-		_step04.change_requested.connect(func(_step: int) -> void: _show_state(false))
-		_step04.create_requested.connect(_confirm)
+	if state.is_empty():
+		return
+	var values := [_summary.System.text, _summary.Biome.text, _summary.Size.text]
+	_step04 = SetupLayoutStep.new() if state == "layout" else SetupOpponentStep.new()
+	_step04.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	get_child(0).add_child(_step04)
+	_step04.connect("create_requested", _confirm)
+	if state == "layout":
+		_step04.call("setup", layout, values + [opponent.label()])
+		_step04.connect("change_requested", func(step: int) -> void: _show_state("who" if step == 4 else ""))
+	else:
+		_step04.call("setup", opponent, values + [layout.label()])
+		_step04.connect("change_requested", func(_step: int) -> void: _show_state(""))
+		_step04.connect("layout_requested", _show_state.bind("layout"))
 
 
 ## Step 01 of the setup: one card per game system (its name, Battle or Skirmish, the board it starts on).
@@ -609,6 +649,8 @@ func _refresh() -> void:
 	if layout != null and _valid:
 		layout.set_table(inches / 12.0, selected_system)
 		_layout_name.text = layout.label()
+	if opponent != null:
+		opponent.set_system(selected_system)   # refills NACHTMAHR's factions; writes both labels (changed)
 	_layout()
 
 
@@ -631,7 +673,7 @@ func _on_close() -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if visible and event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		if is_instance_valid(_step04) and _step04.visible:
-			_show_state(false)   # Esc: from step 04 back to the first state, from there to the menu
+			_show_state("")   # Esc: from any inner page back to the first state, from there to the menu
 		else:
 			_on_close()
 		get_viewport().set_input_as_handled()
@@ -669,6 +711,9 @@ func _layout(refill := true) -> void:
 		button.custom_minimum_size.y = 38 if compact else 64
 	_system_step.vertical = not compact   # below 800 px: the heading shares the cards' line ...
 	_intro_line.visible = not compact     # ... and the intro's second line goes, so nothing scrolls at 720
+	if _opponent_key != null:   # row 04 names the opponent; the one-line summary has no room for it below 800 px
+		_opponent_key.visible = not compact
+		_summary.Opponent.visible = not compact
 	_hero.custom_minimum_size.y = 250 if compact else 370
 	_footprint.custom_minimum_size.y = 110
 	for air in _left_air:
