@@ -21,6 +21,7 @@ var route_title: Label
 var routes: Dictionary = {}
 var route_back: Button
 var _return_focus: Control
+var page_open: Control   # the MenuPage shown in place of the list, or null
 var news_card: Button
 var _news_eyebrow: Label
 var _news_title: Label
@@ -431,6 +432,30 @@ func show_route(key: String) -> void:
 	set_focus_chain(focus)
 	focus[1].grab_focus()
 	route_opened.emit()
+
+
+## A page of the menu (MenuPage) in place of the list: the masthead, the list, the footer links, the news card
+## and the scene caption go while it is open; its `closed` brings them and the focus back.
+func open_page(page: Control) -> void:
+	_return_focus = get_viewport().gui_get_focus_owner()
+	page_open = page
+	for part: Control in [_masthead, _scroll, _footer, news_card, status]:
+		part.hide()
+	add_child(page)
+	page.connect("closed", close_page)
+	(page.get("back") as Control).grab_focus()
+
+
+func close_page() -> void:
+	if not is_instance_valid(page_open):
+		return
+	page_open.queue_free()
+	page_open = null
+	for part: Control in [_masthead, _scroll, _footer, status]:
+		part.show()
+	_sync_news_card()
+	if is_instance_valid(_return_focus):
+		_return_focus.grab_focus()
 
 
 func close_route() -> void:
