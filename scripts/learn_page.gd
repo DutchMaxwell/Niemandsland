@@ -199,7 +199,9 @@ func _fill_grid(key: String) -> void:
 			tick.modulate = HouseStyle.OK
 			number.add_child(tick)
 		words.add_child(number)
-		words.add_child(_text(str(lesson.title), 19, HouseStyle.font(500)))
+		var lesson_title := _text(str(lesson.title), 19, HouseStyle.font(500))
+		lesson_title.autowrap_mode = TextServer.AUTOWRAP_WORD   # long classic titles wrap inside their card
+		words.add_child(lesson_title)
 		var goal := _text(str(lesson.get("goal", "")), HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
 		goal.autowrap_mode = TextServer.AUTOWRAP_WORD
 		goal.size_flags_vertical = SIZE_EXPAND_FILL
