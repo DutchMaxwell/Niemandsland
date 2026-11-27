@@ -29,13 +29,13 @@ melee_charge TOTAL 1010 19
 planner scripts/solo/ai_planner.gd 1790 7
 planner scripts/solo/ai_position.gd 400 1
 planner scripts/solo/ai_spell.gd 633 4
-planner scripts/solo/battle_sim.gd 2711 23
+planner scripts/solo/battle_sim.gd 2715 23
 planner scripts/solo/solo_sim.gd 1234 3
-planner TOTAL 6768 38
+planner TOTAL 6772 38
 planner_shared scripts/solo/ai_combat_math.gd 629 9
 planner_shared scripts/solo/ai_ev.gd 1331 11
 planner_shared TOTAL 1960 20
-planner_tag erlkoenig 60 750
+planner_tag erlkoenig 60 754
 planner_tag gd_search 87 2238
 planner_tag live_helper 16 184
 planner_tag table_dead 19 99
@@ -43,7 +43,7 @@ planner_tag table_live 68 1217
 planner_tag test_only 1 4
 planner_tag tools_only 71 1027
 planner_tag tree 27 536
-planner_tag TOTAL 349 6055
+planner_tag TOTAL 349 6059
 owner dangerous_morale breath 1 H-38
 owner dangerous_morale dangerous_ai_activation 5 H-44
 owner dangerous_morale dangerous_player_auto 1 H-32
@@ -63,4 +63,4 @@ owner hit_save_shared spells 5 H-45
 owner hit_save_shared table_internal 3 H-46
 owner hit_save_shared trap 2 H-42
 owner hit_save_shared TOTAL 44 -
-TABLE LINES LEFT: 10819
+TABLE LINES LEFT: 10823

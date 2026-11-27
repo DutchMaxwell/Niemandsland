@@ -76,8 +76,20 @@ func test_only_the_owner_picks_and_only_at_deployment() -> void:
 	assert_str(CommandPicks.toggle(_main, plain, a)).is_equal("only an AoF: Skirmish command group picks the units its command reaches")
 	CommandPicks.toggle(_main, cmd, a)
 	_main.opr_army_manager.set_game_phase(OPRArmyManager.GamePhase.PLAYING)
-	assert_array(_picks(cmd)).override_failure_message("battle start keeps the owner's pick").is_equal([a.unit_id])
+	assert_array(_picks(cmd)).override_failure_message("battle start keeps the owner's pick, adds the nearest") \
+		.is_equal([a.unit_id, plain.unit_id])
 	assert_bool(_picks(ai_cmd).is_empty()).override_failure_message("CR3 fills the AI's").is_false()
 	assert_str(CommandPicks.toggle(_main, cmd, plain)).override_failure_message("locked in play") \
 		.is_equal("command picks are chosen at deployment and stay for the battle")
-	assert_array(_picks(cmd)).is_equal([a.unit_id])
+	assert_array(_picks(cmd)).is_equal([a.unit_id, plain.unit_id])
+
+
+func test_a_single_pick_stands_and_battle_start_adds_the_nearest() -> void:
+	var cmd := _unit(1, "Herd", 0.0, ["Banner"])
+	var far := _unit(1, "Far", 30.0, [])
+	var near := _unit(1, "Near", 4.0, [])
+	_unit(1, "Next", 8.0, [])
+	CommandPicks.toggle(_main, cmd, far)
+	_main.opr_army_manager.set_game_phase(OPRArmyManager.GamePhase.PLAYING)
+	assert_array(_picks(cmd)).override_failure_message("exactly two: the pick + the nearest").is_equal([far.unit_id, near.unit_id])
+	assert_array(_lines).contains(["Command group: Herd's Banner reaches Far (chosen) and Near (nearest)"])

@@ -48,9 +48,9 @@ func test_the_two_nearest_friends_are_picked_and_said() -> void:
 
 func test_chosen_picks_and_other_systems_stay() -> void:
 	var army := _board()
-	army.game_units["Cmd"].unit_properties["command_picks"] = ["Far"]
+	army.game_units["Cmd"].unit_properties["command_picks"] = ["Far", "Mid"]
 	assert_array(BattleSim.default_command_picks(army, _core())).is_empty()
-	assert_array(army.game_units["Cmd"].unit_properties["command_picks"]).is_equal(["Far"])
+	assert_array(army.game_units["Cmd"].unit_properties["command_picks"]).is_equal(["Far", "Mid"])
 	var aof := _board("aof")
 	assert_array(BattleSim.default_command_picks(aof, _core())).is_empty()
 	assert_bool(aof.game_units["Cmd"].unit_properties.has("command_picks")).is_false()
