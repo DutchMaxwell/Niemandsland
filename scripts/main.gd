@@ -11760,6 +11760,8 @@ func _solo_choice_local(unit: GameUnit, id: String, options: Array, wounds := 0,
 	if id.get_slice(":", 0) == "versatile_mode":   # step 22b: the table's own Versatile prompt, the answer as the core's option
 		var vm: Dictionary = await _solo_prompt_versatile(str(ctx.get("weapon", "Weapon")), ctx.get("recommended", {"ap": 1, "hit_mod": 0}))
 		return "ap" if int(vm.get("ap", 0)) > 0 else "hit"
+	if id.get_slice(":", 0) == "blast_split":   # step 29c: the defender picks which units take the Blast remainder
+		return await _solo_ask_blast_split(opr_army_manager.get_game_unit_by_id(id.get_slice(":", 1)), options)
 	if id.get_slice(":", 0) == "spot_markers":   # the table's own marker dialog; the count is one of the core's options "0".."N"
 		var marked := opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2))
 		if marked == null or options.is_empty():
@@ -15223,6 +15225,23 @@ func _solo_split_fire_choice(target_a: GameUnit, names: Array) -> Dictionary:
 		if not picked.has(n):
 			rest.append(n)
 	return {"split": true, "names": picked, "rest": rest}
+
+
+## Step 29c (D-29-R1, "defender picks how"): the Blast hits split evenly; the owner picks which of its units take the extra
+## ones. One button per core option (its units by name); Esc / × keeps the core's own (target first).
+func _solo_ask_blast_split(shooter: GameUnit, options: Array) -> String:
+	var card := PromptCard.new("Blast split",
+		"%s's Blast hits split evenly over your units in reach. Which take the extra hit?" % (shooter.get_name() if shooter else "The"),
+		"", "Automatic")
+	card.cancel_value = ""
+	for o in options:
+		var names := PackedStringArray()
+		for k in str(o).split(","):
+			var u := opr_army_manager.get_game_unit_by_id(k)
+			names.append(u.get_name() if u != null else k)
+		card.add_action(" and ".join(names), str(o))
+	add_child(card)
+	return str(await card.answer(""))
 
 
 ## The split-fire question itself (#226): one check box per weapon group; returns the checked names
