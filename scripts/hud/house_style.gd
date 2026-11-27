@@ -285,6 +285,12 @@ static func menu_theme() -> Theme:
 		for state: StringName in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled"]:
 			t.set_stylebox(state, v, _pad_x(t.get_stylebox(state, v), size_pad_weight[1]))
 	t.set_constant(&"buttons_min_height", &"AcceptDialog", MENU_H_ACTION)
+	# A dropdown's arrow is the mockups' thin 12 px chevron (.dd), not the engine's bold arrow; 14 px from the edge.
+	var chevron := svg_icon("<svg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' "
+		+ "stroke='#a7b0b6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>")
+	for v: StringName in [&"OptionButton", BUTTON]:
+		t.set_icon(&"arrow", v, chevron)
+		t.set_constant(&"arrow_margin", v, 14)
 	t.set_stylebox(&"panel", PANEL_VARIANT, _box(PANEL, LINE_SOFT, RADIUS_PANEL, MENU_PAD_PANEL, MENU_PAD_PANEL))
 	# Switches (settings): the pill of the mockups - off a well with a rim and a muted knob, on a gold 25 % fill, gold rim
 	# and gold knob; sliders: an 8 px groove and a 20 px gold knob.
