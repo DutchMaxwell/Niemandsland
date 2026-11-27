@@ -950,6 +950,7 @@ impl Core {
         m.insert("rule_vocab_version".into(), self.knobs.rule_vocab_version.into());
         m.insert("eval_variant".into(), self.knobs.eval_variant.into());
         m.insert("strength_by_points".into(), self.knobs.strength_by_points.into());
+        m.insert("leaf_frac_strength".into(), self.knobs.leaf_frac_strength.into());
         m.insert(
             "search_mode".into(),
             Value::String(

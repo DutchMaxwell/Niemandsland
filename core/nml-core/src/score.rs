@@ -212,10 +212,14 @@ fn activations_needed(
 /// `by_points`) its Army Forge cost times the remaining-wounds fraction
 /// (`cost * remaining / max`). `UnitStatic.cost`/`wounds_max` come from the
 /// army list; empty statics or a woundless unit fall back to the raw reading.
-fn unit_strength(state: &State, statics: &[UnitStatic], i: usize, by_points: bool, _frac: bool) -> f64 {
+fn unit_strength(state: &State, statics: &[UnitStatic], i: usize, by_points: bool, frac: bool) -> f64 {
     let mut strength = 0.0f64;
     for w in &state.wounds[i] {
         strength += *w as f64;
+    }
+    if frac {
+        // `leaf_frac_strength`: the expected damage below one wound counts too.
+        strength = (strength - state.wound_frac.get(i).copied().unwrap_or(0.0)).max(0.0);
     }
     if !by_points {
         return strength;
@@ -839,6 +843,30 @@ mod tests {
         assert!((raw - 10.0 / 19.0).abs() < 1e-9, "raw wounds share, got {raw}");
         assert!(pts < raw, "the 600-pt tank must outweigh 100 pts of levy: {pts} vs {raw}");
         assert!((pts - 100.0 / 700.0).abs() < 1e-9, "points share, got {pts}");
+    }
+
+    /// leaf_frac_strength: the levy fixture above with 0.6 of a wound of expected
+    /// damage left on the levy (the remainder `apply_expected_wounds` carries).
+    /// OFF reads whole wounds only (10/19, today's number bit for bit); ON the
+    /// holder's strength drops to 9.4 and its owner's share to 9.4/18.4.
+    #[test]
+    fn leaf_frac_strength_prices_the_sub_wound_remainder() {
+        let mut st = marker_state(
+            &[U("p1_0_a", 1, 0.0, 1, false, false), U("p2_0_a", 2, 0.0, 9, false, false)],
+            0, 4,
+        );
+        st.wounds[0] = vec![1; 10];
+        st.wound_frac[0] = 0.6;
+        let statics = [
+            UnitStatic { cost: 100, wounds_max: vec![1; 10], ..Default::default() },
+            UnitStatic { cost: 600, wounds_max: vec![9], ..Default::default() },
+        ];
+        let off = super::score_hand_variant_pts(&st, &statics, 1, NO_INCOMING, 0, false, false);
+        let on = super::score_hand_variant_pts(&st, &statics, 1, NO_INCOMING, 0, false, true);
+        assert_eq!(off.to_bits(), score_hand_variant(&st, &statics, 1, NO_INCOMING, 0).to_bits(), "OFF must be today's eval");
+        assert!((off - 10.0 / 19.0).abs() < 1e-9, "OFF reads whole wounds, got {off}");
+        assert!(on < off, "the remainder must lower the holder's share: on {on} vs off {off}");
+        assert!((on - 9.4 / 18.4).abs() < 1e-9, "ON share, got {on}");
     }
 
     /// S02 helper: one arm with the points weighting composed on top.

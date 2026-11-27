@@ -328,6 +328,13 @@ pub struct Knobs {
     /// site `eval_variant` is.
     #[serde(default)]
     pub strength_by_points: bool,
+    /// The leaf prices the sub-wound remainder: a unit's hold strength is its
+    /// whole wounds minus `State::wound_frac` (the expected damage below one
+    /// wound that `apply_expected_wounds` leaves on it). Research knob,
+    /// default OFF; read at the same `Rollout::blend_score_leaf` site as
+    /// `strength_by_points` and composed with it.
+    #[serde(default)]
+    pub leaf_frac_strength: bool,
     /// Tree search knob: `"oneply"` (default, today's search) or `"tree"`.
     /// Registration only; absent from every recorded corpus, so it replays
     /// byte-identical.
@@ -1906,6 +1913,7 @@ impl Default for Knobs {
             rule_vocab_version: crate::rows::LEGACY_VOCAB_VERSION,
             eval_variant: 0,
             strength_by_points: false,
+            leaf_frac_strength: false,
             search_mode: SearchMode::OnePly,
             tree_leaf: TreeLeaf::Blend,
             tree_dice: TreeDice::Ev,

@@ -2452,6 +2452,8 @@ def play_from_state(
 KNOB_PRESETS: dict[str, dict[str, Any]] = {
     # the strength_by_points eval arm (T2c): presence weighted by unit points
     "afpoints_p1": {"strength_by_points": True},
+    # the leaf prices the sub-wound remainder (State.wound_frac) in a unit's hold strength
+    "leaf_frac": {"leaf_frac_strength": True},
     "charge_path": {"charge_needs_path": True},
     # opponent-model diagnosis (c) (08.10.2026): every root rollout stops right after the opener and is
     # priced there by the blend + net leaf — no scripted opponent reply, no scripted tail.
