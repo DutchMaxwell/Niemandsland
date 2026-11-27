@@ -64,3 +64,55 @@ func test_commit_writes_a_file_a_second_editor_loads_with_the_same_pieces() -> v
 	assert_bool(second.load_layout(str(choice.path))).is_true()
 	assert_int((second.get("placed_pieces") as Array).size()).is_equal(pieces)
 	DirAccess.remove_absolute(str(choice.path))
+
+
+## Step 65.3: the ready-made table, a layout file, the mirror and the deployment zones (red before: no such ways).
+func test_the_ready_made_table_needs_6_by_4() -> void:
+	var layout := _layout()
+	if layout == null:
+		return
+	layout.call("set_table", Vector2(4, 4), "gf")
+	assert_bool(layout.call("choose", "theme")).is_false()
+	assert_str(str(layout.get("way"))).is_equal("empty")
+	layout.call("set_table", Vector2(6, 4), "gf")
+	assert_bool(layout.call("choose", "theme")).is_true()
+	layout.call("commit")
+	assert_dict(ProjectSettings.get_setting(KEY, null)).is_equal({"theme": "ruined_borderland"})
+	layout.call("set_table", Vector2(4, 4), "gf")   # the size rules the theme out: back to the default
+	assert_str(str(layout.get("way"))).is_equal("empty")
+
+
+func test_a_file_for_another_size_is_refused_and_changes_nothing() -> void:
+	var layout := _layout()
+	if layout == null or not layout.has_method("load_file"):
+		fail("no load_file")
+		return
+	var path := "user://setup_layout_4x4.json"
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
+		"res://test/fixtures/setup_layout/three_pieces_6x4.json"))
+	data.table_size = {"x": 4.0, "y": 4.0}
+	FileAccess.open(path, FileAccess.WRITE).store_string(JSON.stringify(data))
+	assert_str(layout.call("load_file", path)).is_equal("This layout is for a 4 × 4 ft table.")
+	assert_str(str(layout.get("way"))).is_equal("empty")
+	assert_str(layout.call("load_file", "res://test/fixtures/setup_layout/three_pieces_6x4.json")).is_empty()
+	assert_str(layout.call("label")).is_equal("Loaded layout")
+	assert_int((layout.call("facts") as Dictionary).pieces).is_greater(0)
+	DirAccess.remove_absolute(path)
+
+
+func test_front_line_survives_the_commit_and_a_new_size_generates_again() -> void:
+	var layout := _layout()
+	if layout == null or not layout.has_method("set_deployment"):
+		fail("no set_deployment")
+		return
+	layout.call("choose", "generated")
+	layout.call("set_mirror", true)
+	assert_bool(layout.get("editor").get("point_symmetry_enabled")).is_true()
+	layout.call("set_deployment", 1)
+	layout.call("commit")
+	var saved: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
+		str((ProjectSettings.get_setting(KEY, {}) as Dictionary).get("path", ""))))
+	assert_int(int(saved.deployment_type)).is_equal(1)
+	layout.call("set_table", Vector2(4, 4), "gf")
+	assert_str(str(layout.get("way"))).is_equal("generated")
+	assert_int((layout.call("facts") as Dictionary).pieces).is_greater(0)
