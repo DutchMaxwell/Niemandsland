@@ -455,6 +455,10 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 				transcript.append({"t": "choice", "id": id, "option": "0"})   # O3: no answer is no interference; the core's static check wants the entry
 			continue
 		if str(r["step"]) == "done":
+			if not ai and _sessions.has(unit.unit_id) and landed.get("moved_self") != null \
+					and lines.any(func(l: Dictionary) -> bool: return str(l.get("rule", "")) == "fall") \
+					and fall_replace_needed(main, unit, landed["moved_self"]):
+				_sessions[unit.unit_id]["fall_replace"] = landed["moved_self"]
 			if not cx.is_empty():
 				await _cast_finish(main, cx)
 			await land_delta(main, _tokens_the_core_changed(core, h, r.get("delta", [])), start_models, landed,
@@ -1558,13 +1562,16 @@ static func _models_by_slot(start_models: Array, gu: GameUnit) -> Array:
 ## P4.0-1: each landed model also carries the core's `(unit, slot)`. For now the position still decides which model it is
 ## (the 1 mm XZ match, as before: a table that lost a model after the capture shifts its slot list, the position stays
 ## right); the slot is the cross-check, and a landing whose slot names another model is a push_error, never silent.
-static func land_step(main, _gu: GameUnit, landings: Array, start_models: Array, done: Dictionary) -> void:
+static func land_step(main, active: GameUnit, landings: Array, start_models: Array, done: Dictionary) -> void:
 	for event in landings.size():
 		var entry: Dictionary = landings[event]
 		var lgu: GameUnit = main.opr_army_manager.game_units.get(str(entry["unit"]))
 		var by_slot: Array = _models_by_slot(start_models, lgu) if lgu != null else []
 		if lgu != null and not (entry.get("moved_to", []) as Array).is_empty():
-			_land_push(main, lgu, entry["moved_to"], start_models, done, "%d:%s:move" % [event, entry["unit"]])
+			var key := "%d:%s:move" % [event, entry["unit"]]
+			if lgu == active and not done.has(key):   # 27c: the active unit's own move is a fall's - the model the core moved
+				done["moved_self"] = _moved_model(start_models, lgu, entry["moved_to"])
+			_land_push(main, lgu, entry["moved_to"], start_models, done, key)
 			continue
 		var died: Array[ModelInstance] = []
 		for lm in entry["models"]:
@@ -2593,6 +2600,8 @@ static var _ending: Dictionary = {}
 ## (the reason is logged and toasted, the player sees why), or answered otherwise (a defect, reported), or this End is
 ## already running (a second press while the dice roll).
 static func end(main, gu: GameUnit, on_throw: Callable = Callable()) -> bool:
+	if gu != null and _sessions.has(gu.unit_id) and (_sessions[gu.unit_id] as Dictionary).has("fall_replace"):
+		return fall_lock(main, gu)
 	if not is_core_unit(main, gu) or not _sessions.has(gu.unit_id) or last_target != null or table_struck(gu):
 		return false
 	if _ending.has(gu.unit_id):
@@ -2606,13 +2615,51 @@ static func end(main, gu: GameUnit, on_throw: Callable = Callable()) -> bool:
 	var r: Dictionary = await drive(main, int(_sessions[gu.unit_id]["handle"]), gu, t, false, on_throw)
 	_ending.erase(gu.unit_id)
 	if str(r["step"]) == "done":
-		return false
+		return _sessions.has(gu.unit_id) and (_sessions[gu.unit_id] as Dictionary).has("fall_replace") and fall_lock(main, gu)
 	if str(r["step"]) == "refused" and int(r["index"]) < t.size():
 		main._log_rule_event(BattleLog.Category.MOVEMENT, str(r["reason"]))
 		main._show_toast(str(r["reason"]))
 	else:
 		push_error("end: the core answered %s for the End of %s" % [r, gu.get_name()])
 	return true
+
+
+## Plan step 27c-2a (D-27c Q2): while a model of `gu` that fell stands more than 1 in from the others, End is locked with one
+## line (true); once it does not, the state lifts and End ends the activation (false). The core's step is over - its jump was
+## rolled once, in the End or the shot that made the model fall: nothing here drives it again.
+static func fall_lock(main, gu: GameUnit) -> bool:
+	var fell: ModelInstance = _sessions[gu.unit_id]["fall_replace"]
+	if fall_replace_needed(main, gu, fell):
+		var line := "Place the other models within 1 in of %s's model that fell" % gu.get_name()
+		main._log_rule_event(BattleLog.Category.MOVEMENT, line)
+		main._show_toast(line)
+		return true
+	(_sessions[gu.unit_id] as Dictionary).erase("fall_replace")
+	return false
+
+
+## Does a model of `gu` stand more than 1 in from its model `fell`, on the board as it stands now (a fresh capture: the
+## player re-places after the step)? The core measures (`NmlCore.fall_replace_needed`); false when `fell` died.
+static func fall_replace_needed(main, gu: GameUnit, fell: ModelInstance) -> bool:
+	var slot := gu.get_alive_models().find(fell)
+	var h := capture(main) if slot >= 0 else 0
+	if h == 0:
+		return false
+	var core: Object = (main.solo_controller as SoloController)._core_node_ready()
+	var needed := bool(core.fall_replace_needed(h, gu.unit_id, slot))
+	core.release(h)
+	return needed
+
+
+## The model of `gu` whose position the core's `to` moves (XZ, more than a millimetre), or null.
+static func _moved_model(start_models: Array, gu: GameUnit, to: Array) -> ModelInstance:
+	var rows: Array = start_models.filter(func(e: Dictionary) -> bool:
+		return (e["model"] as ModelInstance).unit == gu and (e["model"] as ModelInstance).is_alive)
+	for i in mini(rows.size(), to.size()):
+		var at: Vector3 = rows[i]["at"]
+		if Vector2(at.x - (to[i] as Vector3).x, at.z - (to[i] as Vector3).z).length() > 0.001:
+			return rows[i]["model"]
+	return null
 
 
 ## One-core P3 step 32 (the snap-back answer): `gu` back where its open activation started. Every model that is still
