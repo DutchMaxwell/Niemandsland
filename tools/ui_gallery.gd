@@ -179,36 +179,6 @@ func _shoot_inline() -> void:
 		await _capture(str(c["n"]), "inline in main.gd — rebuilt with the shipped theme + width")
 		await _clear()
 
-	# The AI-opponent dialog carries real widgets, so build those too.
-	var ai := ConfirmationDialog.new()
-	ai.title = "AI Opponent"
-	ai.min_size = Vector2i(width, 220)
-	if theme != null:
-		ai.theme = theme
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	for line in ["NACHTMAHR builds its own list.", "Faction:"]:
-		var l := Label.new()
-		l.text = line
-		l.add_theme_font_size_override("font_size", 13)
-		box.add_child(l)
-	var opt := OptionButton.new()
-	opt.add_item("Human Defense Force")
-	box.add_child(opt)
-	var l2 := Label.new()
-	l2.text = "Points:"
-	l2.add_theme_font_size_override("font_size", 13)
-	box.add_child(l2)
-	var opt2 := OptionButton.new()
-	opt2.add_item("1000 points")
-	box.add_child(opt2)
-	ai.add_child(box)
-	ai.ok_button_text = "Build & deploy list"
-	_root.add_child(ai)
-	ai.popup_centered()
-	await _capture("ai_opponent", "inline in main.gd — rebuilt with real widgets")
-	await _clear()
-
 	# The deployment strip: the central solo surface, now panel-styled.
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", HudTokens.panel_style())

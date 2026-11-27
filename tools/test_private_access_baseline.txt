@@ -111,7 +111,6 @@ _on_success_target_pressed 2
 _on_trails_dropped 1
 _on_transport_spill_dangerous 1
 _on_units_dropped 6
-_open_ai_opponent_dialog 1
 _owner_request 2
 _owner_roll 5
 _owner_roll_timeout_s 12
@@ -155,7 +154,6 @@ _set_roll_purpose 2
 _set_room_code_display 1
 _set_table_size 1
 _show_action_confirm 1
-_show_ai_opponent_dialog 4
 _show_dream_overlay 3
 _show_fps_advisory 7
 _show_solo_ai_banner 3
@@ -314,7 +312,7 @@ _solo_melee_scores 4
 _solo_melee_strike_phase 42
 _solo_mirror_spell_state 4
 _solo_mission_has_roles 3
-_solo_mission_id 41
+_solo_mission_id 39
 _solo_mission_reserve_rolls 2
 _solo_mobile_marker_round_start 3
 _solo_modeled_rules_for 2

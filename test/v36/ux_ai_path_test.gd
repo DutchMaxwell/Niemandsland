@@ -1,19 +1,12 @@
 extends GdUnitTestSuite
 ## UX-AI-PATH (0.3.15): the table loads NACHTMAHR's lists through AiLists from the rules-3.6 CDN folder
-## (ai_lists_v36/; the sources and caches themselves are test/ai_lists_test.gd). The AI Opponent dialog offers only
-## the lists of the system the human army plays (an entry without "system" counts as "gf"); with no
-## human army it offers all, suffixed " (GF)" / " (AoF)" when the manifest mixes both.
+## (ai_lists_v36/; the sources and caches themselves are test/ai_lists_test.gd; the system filter of the setup's
+## step 04 is test/setup_opponent_test.gd).
 ## The CDN fetch is a recorder stub: no network. Probe files are removed again after each test.
 
-const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const PROBE_FILE := "_ux_ai_path_probe.json"
 const OLD_CACHE := "user://ai_lists_cache"
 const NEW_CACHE := "user://ai_lists_cache_v36"
-const MIXED := {
-	"orc_tribes": {"name": "Orc Tribes", "system": "gf", "lists": [{"points": 1000, "file": "orc_tribes_1000.json"}]},
-	"aof_orc_tribes": {"name": "Orc Tribes", "system": "aof", "lists": [{"points": 1000, "file": "aof_orc_tribes_1000.json"}]},
-	"old_guard": {"name": "Old Guard", "lists": [{"points": 750, "file": "old_guard_750.json"}]},
-}
 
 
 ## main.gd with the toast stubbed; its AiLists is a recorder of every requested CDN path (no bundle, no cache).
@@ -35,14 +28,7 @@ class Lists extends AiLists:
 		return ""
 
 
-var _root_before: Array = []
-var _booted := false
-
-
 func after_test() -> void:
-	if _booted:
-		E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
-		_booted = false
 	for d: String in [OLD_CACHE, NEW_CACHE]:
 		if FileAccess.file_exists("%s/%s" % [d, PROBE_FILE]):
 			DirAccess.remove_absolute("%s/%s" % [d, PROBE_FILE])
@@ -68,48 +54,3 @@ func test_the_cdn_probe_default_follows_the_v36_folder() -> void:
 		"cdn_lists_probe has no v36 default path").is_true()
 	if has_default:
 		assert_str(str(probe_tool.call("_default_path"))).is_equal("ai_lists_v36/_manifest.json")
-
-
-## The AI Opponent dialog over `manifest` with the human slot holding an army of `system` ("" = none):
-## the offered faction names, or ["<no dialog>"] when the dialog did not open.
-func _offered(manifest: Dictionary, system: String) -> Array:
-	E2EBoot.arm_harness_mode()
-	_root_before = E2EBoot.root_children(get_tree())
-	_booted = true
-	var runner := scene_runner(E2EBoot.MAIN_SCENE)
-	var main: Node = runner.scene()
-	await runner.simulate_frames(4)
-	var slot: int = main.solo_controller.human_slot if main.solo_controller != null else 1
-	main.opr_army_manager.armies.erase(slot)
-	if not system.is_empty():
-		var army := OPRApiClient.OPRArmy.new()
-		army.game_system_abbrev = system
-		army.points = 1000
-		main.opr_army_manager.armies[slot] = army
-	main._show_ai_opponent_dialog(manifest, func(_f: String, _s: int) -> void: pass)
-	await runner.simulate_frames(2)
-	var out: Array = ["<no dialog>"]
-	for c in main.get_children():
-		if c is CanvasLayer and c.name == "AiOpponentLayer" and not c.is_queued_for_deletion():
-			var fac := c.find_children("*", "OptionButton", true, false)[0] as OptionButton
-			out = []
-			for i in fac.item_count:
-				out.append(fac.get_item_text(i))
-	return out
-
-
-func test_a_gf_army_is_offered_only_the_gf_lists() -> void:
-	assert_array(await _offered(MIXED, "gf")).is_equal(["Old Guard", "Orc Tribes"])
-
-
-func test_an_aof_army_is_offered_only_the_aof_lists() -> void:
-	assert_array(await _offered(MIXED, "aof")).is_equal(["Orc Tribes"])
-
-
-func test_without_a_human_army_every_list_is_offered_with_its_system() -> void:
-	assert_array(await _offered(MIXED, "")).is_equal(["Orc Tribes (AoF)", "Old Guard (GF)", "Orc Tribes (GF)"])
-
-
-func test_an_army_without_lists_of_its_system_gets_no_dialog() -> void:
-	var gf_only := {"old_guard": MIXED["old_guard"]}
-	assert_array(await _offered(gf_only, "aof")).is_equal(["<no dialog>"])

@@ -10,7 +10,7 @@ extends GdUnitTestSuite
 ## test/ui_click_ownership_test.gd stays as the cheap first line: it pins mouse_filter on the stored
 ## scenes/main.tscn. It structurally CANNOT cover this, for two reasons:
 ##   - it never adds the scene to a tree, so nothing is ever dispatched, and
-##   - the controls that matter most are BUILT IN _ready() (AiOpponentBtn at main.gd:606, unit_dock at
+##   - the controls that matter most are BUILT IN _ready() (unit_dock at
 ##     :597, _terrain_mode_btn at :10071) and so do not exist in the .tscn at all.
 ##
 ## WHAT THIS SUITE DRIVES: everything real. The real scene, the real _ready(), the real hamburger
@@ -250,8 +250,8 @@ func test_a_click_on_a_menu_button_works_the_button_and_not_the_battlefield(time
 ## are in its list: a mouse_filter regression on one is invisible to the very file that pins the rule.
 ##
 ## The click point is one the panel ALONE claims (no child over it) — that is the only place its own
-## filter decides. Deliberately not AiOpponentBtn: that one lives inside the STOP button column, so the
-## column would answer for it and its own filter would never be tested.
+## filter decides. Deliberately not a button of the STOP button column: the column would answer for it and
+## its own filter would never be tested.
 func test_a_hud_surface_built_at_runtime_owns_its_clicks_too(timeout := 120000) -> void:
 	await _open_menu()
 	var panel := _main.battle_log_panel as Control
