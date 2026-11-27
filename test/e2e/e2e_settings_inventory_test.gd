@@ -614,3 +614,36 @@ func test_the_menus_audio_page_is_one_row_per_volume() -> void:
 	for key: String in ["Master Volume", "Music Volume"]:
 		var lines := page.find_children("*", "Label", true, false).filter(func(l: Node) -> bool: return (l as Label).text == help[key])
 		assert_int(lines.size()).override_failure_message("%s has %d help lines" % [key, lines.size()]).is_equal(1)
+
+
+## In the menu Display and Gameplay stand as rows too (step 79, the rest): the page's name as an eyebrow (no "DISPLAY:"),
+## one row per setting in the page's order, a slider with its value in mono beside it, one help line each (red before:
+## the old list with the help under each control).
+func test_the_menus_display_and_gameplay_pages_are_one_row_per_setting() -> void:
+	_panel.set_modal(true)
+	var expected := {"Display": ["RowUIScale", "RowFullscreen"], "Gameplay": ["RowShowMoveTrails",
+		"RowShowRuleTextsattheTable", "RowGore", "RowCombatStage(pacestheresolution)", "RowStagebeat",
+		"RowEnforceMovementLimit", "RowAIExplanationsStayUp"]}
+	for page_name: String in expected:
+		var page: Node = _panel._page(page_name)
+		var names: Array = page.get_children().filter(func(n: Node) -> bool: return String(n.name).begins_with("Row")).map(
+			func(r: Node) -> String: return String(r.name)).filter(func(n: String) -> bool: return n != "RowMonitor")
+		assert_array(names).override_failure_message("%s: %s" % [page_name, str(names)]).is_equal(expected[page_name])
+		var colon := page.find_children("*", "Label", true, false).filter(func(l: Node) -> bool: return (l as Label).text.ends_with(":"))
+		assert_array(colon).override_failure_message("%s keeps a heading with a colon" % page_name).is_empty()
+	var help: Dictionary = _panel.get_script().get_script_constant_map().get("HELP", {})
+	for key: String in ["UI Scale", "Fullscreen", "Gore", "Show Move Trails"]:
+		var lines := _panel.find_children("*", "Label", true, false).filter(func(l: Node) -> bool: return (l as Label).text == help[key])
+		assert_int(lines.size()).override_failure_message("%s has %d help lines" % [key, lines.size()]).is_equal(1)
+	var beat: HSlider = null
+	for n: Node in _panel._page("Gameplay").find_children("*", "HSlider", true, false):
+		beat = n as HSlider
+	if beat == null:
+		return
+	var value := beat.get_parent().get_child(1) as Label
+	assert_object(value.get_theme_font("font")).is_same(HouseStyle.mono())
+	var before: float = GraphicsSettings.combat_stage_hold_s
+	beat.value = 6.0 if before != 6.0 else 1.0
+	assert_str(value.text).is_equal("%.1fs" % beat.value)
+	assert_float(GraphicsSettings.combat_stage_hold_s).is_equal_approx(beat.value, 0.01)
+	beat.value = before

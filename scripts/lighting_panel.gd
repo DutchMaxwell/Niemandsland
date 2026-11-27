@@ -672,6 +672,8 @@ func _apply_menu_layout() -> void:
 		_build_graphics_rows()
 		_build_switch_rows("Accessibility", ["Calm Mode", "Reduce Motion"])
 		_build_audio_rows()
+		_build_mixed_rows("Display")
+		_build_mixed_rows("Gameplay")
 	for page_name: String in PAGES:
 		_style_page_button(_page_buttons[page_name] as Button, page_name)
 	_sync_page_ticks()
@@ -754,6 +756,62 @@ func _build_switch_rows(page_name: String, names: Array) -> void:
 	for row_name: String in names:
 		if by_name.has(row_name):
 			page.add_child(_as_row(by_name[row_name], row_name, str(HELP.get(row_name, ""))))
+
+
+## Display and Gameplay as rows, in the page's order under its name as an eyebrow: a switch is its own row; a "Name
+## [dropdown]" line (Monitor, Gore) and a slider block (UI Scale, Stage beat) give their control to a row named after their
+## label - a slider with its value (mono, gold) beside it. The old "DISPLAY:" heading goes.
+func _build_mixed_rows(page_name: String) -> void:
+	var page := _page(page_name)
+	var rows: Array = []
+	for n: Node in page.get_children():
+		var control: Control = n as Control
+		var row_name := ""
+		if n is CheckButton:
+			row_name = (n as Button).text
+		elif n is BoxContainer:
+			var labels: Array = n.find_children("*", "Label", true, false)
+			var picks: Array = n.find_children("*", "OptionButton", true, false) + n.find_children("*", "HSlider", true, false)
+			if labels.is_empty() or picks.is_empty():
+				continue
+			control = picks[0]
+			row_name = (labels[0] as Label).text.get_slice(":", 0)   # "Stage beat: 2.0s" names its row "Stage beat"
+			_drop_help_line(labels[0])
+			if control is HSlider:
+				control = _slider_with_value(control as HSlider, labels[-1] as Label)
+			else:
+				control.get_parent().remove_child(control)
+				control.custom_minimum_size.x = ROW_FRAME_W
+		else:
+			continue   # the "DISPLAY:" heading and the old help lines go with the page's leftovers
+		rows.append(_as_row(control, row_name, str(HELP.get(row_name, ""))))
+	for n: Node in page.get_children():
+		page.remove_child(n)
+		n.queue_free()
+	page.add_child(HouseStyle.label(page_name.to_upper(), HouseStyle.EYEBROW))
+	for row: Control in rows:
+		page.add_child(row)
+
+
+## A slider and its value label side by side for a row's right column; the value in mono gold, without the name.
+func _slider_with_value(slider: HSlider, value_label: Label) -> HBoxContainer:
+	slider.get_parent().remove_child(slider)
+	value_label.get_parent().remove_child(value_label)
+	slider.custom_minimum_size.x = 300.0
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	value_label.custom_minimum_size.x = 62.0
+	value_label.add_theme_font_override(&"font", HouseStyle.mono())
+	value_label.add_theme_color_override(&"font_color", HouseStyle.GOLD)
+	var strip := func(_v: float = 0.0) -> void: value_label.text = value_label.text.get_slice(": ", 1) \
+			if value_label.text.contains(": ") else value_label.text
+	strip.call()
+	slider.value_changed.connect(strip)   # after the slider's own handler, which writes "Stage beat: 2.0s"
+	var control := HBoxContainer.new()
+	control.add_theme_constant_override(&"separation", HouseStyle.GAP_SECTION)
+	control.add_child(slider)
+	control.add_child(value_label)
+	return control
 
 
 ## Takes away the help line that was hung under `control` (the row carries its own).
