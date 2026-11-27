@@ -88,6 +88,7 @@ static func boot(suite: Node, seat: String) -> SkirmishTable:
 ## A clean table in the same seat for the next case (a seed scan, a twin): no units, no turn state, round 1, no lines.
 func reset() -> void:
 	CoreActivation.reset_all(main)
+	main.object_manager._deselect_all()   # no selection may outlive the models freed below
 	for u in main.opr_army_manager.game_units.values():
 		for m in (u as GameUnit).models:
 			(m as ModelInstance).node.queue_free()
