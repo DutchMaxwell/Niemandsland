@@ -14,6 +14,9 @@ const WAYS := [
 	["board", "Generated board", "", &"table"]]
 ## GEN-6: the names of the generated boards (GameSystem.generated_boards ids) on the board card.
 const BOARD_NAMES := {"tiefwerk": "Tiefwerk", "ruined_town": "Ruined town"}
+## GEN-13: the kit theme of a generated board id, and how long a download may stand still before the card says it failed.
+const KIT_THEMES := {"tiefwerk": "tiefwerk", "ruined_town": "ruintown"}
+const KIT_STALL_S := 20.0
 const STEPS := ["Game system", "Biome", "Table size", "Opponent"]
 const REFRESH := "<path d='M20 12a8 8 0 1 1-2.3-5.6M20 4v4.5h-4.5'/>"
 const CROSS := "<path d='M7 7l10 10M17 7L7 17'/>"
@@ -41,6 +44,11 @@ var _keys: HBoxContainer
 var _folded: Array[Control] = []
 var _head: HBoxContainer
 var _objectives: Label
+## GEN-13: (kit theme) -> {state, pct}, main.gd's door by default (BoardgenKit.wait_state); tests put a stub here.
+var kit_state: Callable
+var _kit := {"state": "not_used", "pct": 100}
+var _kit_seen := {"pct": -1, "at": 0.0}
+var _main_script: GDScript = null   # main.gd, loaded on a thread for its kit door
 
 
 func setup(layout: SetupLayout, values: Array) -> void:
@@ -83,6 +91,13 @@ func setup(layout: SetupLayout, values: Array) -> void:
 	add_child(_file)
 	_build_rail(values)
 	_layout.changed.connect(_refresh)
+	if not kit_state.is_valid():
+		kit_state = _kit_door
+	var poll := Timer.new()   # the kit download starts when step 05 opens; the card follows it
+	poll.wait_time = 0.5
+	poll.autostart = true
+	poll.timeout.connect(poll_kit)
+	add_child(poll)
 	var keys := HBoxContainer.new()   # the key legend at the foot of the page
 	_keys = keys
 	keys.add_theme_constant_override(&"separation", 8)
@@ -120,7 +135,7 @@ func _place() -> void:
 	for card: Button in _cards.values():
 		card.custom_minimum_size.y = 128 if compact else 196
 		(card.get_child(0).get_child(1) as Label).add_theme_font_size_override(&"font_size", 16 if compact else 20)
-		(card.get_child(0).get_child(2) as Control).visible = not compact   # the caption
+		(card.get_child(0).get_child(2) as Control).visible = not compact or _kit_says(card)   # the caption
 		var needs := card.get_child(0).get_node_or_null("Needs") as Label
 		if needs != null:
 			needs.text = needs.text.trim_prefix("NEEDS ") if compact else "NEEDS " + needs.text.trim_prefix("NEEDS ")
@@ -329,6 +344,44 @@ func _way_card(way: String, title: String, caption: String, icon: StringName) ->
 	return card
 
 
+## GEN-13: main.gd's kit door. The menu has not loaded main.gd (a cold load holds the main thread ~6 s), so it is loaded on a
+## thread first; until then the kit counts as "waiting" at 0 %.
+func _kit_door(kit_theme: String) -> Dictionary:
+	const MAIN_SCRIPT := "res://scripts/main.gd"
+	if _main_script == null:
+		var status := ResourceLoader.load_threaded_get_status(MAIN_SCRIPT)
+		if status == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
+			ResourceLoader.load_threaded_request(MAIN_SCRIPT)
+			return {"state": "waiting", "pct": 0}
+		if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			return {"state": "waiting", "pct": 0}
+		_main_script = (ResourceLoader.load_threaded_get(MAIN_SCRIPT) if status == ResourceLoader.THREAD_LOAD_LOADED else load(MAIN_SCRIPT)) as GDScript
+	return _main_script.call("board_kit_state", self, kit_theme)
+
+
+## GEN-13: the board card's caption tells the kit download, so it shows in the compact layout too.
+func _kit_says(card: Button) -> bool:
+	return card == _cards.get("board") and _kit.state in ["waiting", "offline"]
+
+
+## GEN-13: asks whether the offered board's kit is cached (starting its download) and redraws the card when that changes;
+## a download that stands still for KIT_STALL_S is "offline" and the card stays off.
+func poll_kit() -> void:
+	var boards := GameSystem.generated_boards(_layout.system)
+	if boards.is_empty() or not kit_state.is_valid():
+		return
+	var k: Dictionary = kit_state.call(str(KIT_THEMES.get(boards[0], boards[0])))
+	var now := Time.get_ticks_msec() / 1000.0
+	if int(k.get("pct", 0)) != int(_kit_seen.pct):
+		_kit_seen = {"pct": int(k.get("pct", 0)), "at": now}
+	elif k.get("state") == "waiting" and now - float(_kit_seen.at) > KIT_STALL_S:
+		k = {"state": "offline", "pct": k.get("pct", 0)}
+	if k != _kit:
+		_kit = k.duplicate()   # a copy: the door may hand the same dictionary again, changed
+		_refresh()
+		_place()
+
+
 ## The chosen way has the lighter fill and the 2 px gold rim; the ready-made table is off off 6 x 4 ft.
 func _refresh() -> void:
 	_refresh_rail()
@@ -339,8 +392,12 @@ func _refresh() -> void:
 	var boards := GameSystem.generated_boards(_layout.system)
 	_cards["board"].visible = not boards.is_empty()
 	if not boards.is_empty():
-		(_cards["board"].get_child(0).get_child(2) as Label).text = "A whole battlefield built for this game: %s. New board until you like it." \
-			% str(BOARD_NAMES.get(boards[0], boards[0]))
+		var caption := "A whole battlefield built for this game: %s. New board until you like it." % str(BOARD_NAMES.get(boards[0], boards[0]))
+		if _kit.state == "waiting":
+			caption = "Downloading the board kit ... %d %%" % int(_kit.pct)
+		elif _kit.state == "offline":
+			caption = "The board kit could not be downloaded. Check your connection."
+		(_cards["board"].get_child(0).get_child(2) as Label).text = caption
 	for i in _zones.size():
 		HouseStyle.set_selected(_zones[i], i == _layout.editor.deployment_type)
 	var count: int = _layout.editor.mission_objectives.size()
@@ -351,7 +408,7 @@ func _refresh() -> void:
 		var on := way == _layout.way
 		card.set_meta("chosen", on)
 		card.disabled = (way == "theme" and not TableTheme.load_theme(SetupLayout.THEME_ID).fits(_layout.editor.table_size_feet)) \
-			or (way == "board" and not _layout.board_offered())
+			or (way == "board" and (not _layout.board_offered() or _kit.state in ["waiting", "offline"]))
 		if on:
 			var rim := HouseStyle.menu_theme().get_stylebox(&"normal", &"Button").duplicate() as StyleBoxFlat
 			rim.bg_color = HouseStyle.CARD_CHOSEN
