@@ -253,7 +253,7 @@ func _legal_line() -> Label:
 	var menu := load("res://scripts/startup_menu.gd") as GDScript
 	var line := Label.new()
 	line.name = "LegalLine"
-	line.text = "Fan project for OnePageRules     " + str(menu.call("version_string"))
+	line.text = "Fan project for OnePageRules  ·  " + str(menu.call("version_string"))
 	line.uppercase = true
 	line.add_theme_font_override("font", HouseStyle.mono())
 	line.add_theme_font_size_override("font_size", HouseStyle.FONT_EYEBROW_LARGE)

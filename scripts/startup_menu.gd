@@ -67,7 +67,7 @@ func _ready() -> void:
 	var save := SaveManager.latest_save_info()
 	_continue_path = str(save.get("path",""))
 	view.set_save(save)
-	view.version.text = "Fan project for OnePageRules     " + version_string()
+	view.version.text = "Fan project for OnePageRules  ·  " + version_string()
 	continue_btn.pressed.connect(_on_continue_pressed)
 	start_battle_btn.pressed.connect(_on_start_battle_pressed)
 	view.buttons.LearnBtn.pressed.connect(_open_learn_page.bind(false))
@@ -515,7 +515,9 @@ func _maybe_warn_core_missing() -> void:
 func _show_core_missing_dialog() -> PromptCard:
 	# The closing instruction stands in its own paragraph (the same words).
 	var text := CoreLoadNotice.TEXT.replace(" Download the full game", "\n\nDownload the full game")
-	return _show_notice(CoreLoadNotice.TITLE, text)
+	var card := _show_notice(CoreLoadNotice.TITLE, text)
+	card.set_title_tone(HouseStyle.GOLD)   # a warning (sheet 08): the title in gold, not the accent
+	return card
 
 
 ## A plain notice: one house card with an OK (Enter or Esc closes it); it wraps at the card's own width and

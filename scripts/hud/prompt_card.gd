@@ -141,6 +141,11 @@ func resolve(value: Variant) -> void:
 
 ## Waits for the answer, then frees the card. `unanswered` is what a card that left the tree without
 ## an answer means (freed with its host).
+## The title's colour (a warning reads gold, sheet 08); the accent eyebrow otherwise.
+func set_title_tone(colour: Color) -> void:
+	_title_label.add_theme_color_override(&"font_color", colour)
+
+
 func answer(unanswered: Variant = false) -> Variant:
 	while _outcome.is_empty() and is_inside_tree():
 		await get_tree().process_frame
