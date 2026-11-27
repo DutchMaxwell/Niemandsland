@@ -10,7 +10,8 @@ const SHEET_W := 620
 ## UI Elements
 var player_option: OptionButton
 var ai_check: CheckBox   # "AI-controlled (Solo)" — goal 001 / bus 038
-var army_preview: RichTextLabel
+var army_preview: ScrollContainer   # the loaded list: a header, then one row per unit (sheet 04)
+var _preview_rows: VBoxContainer
 var state_panel: StatePanel
 var import_btn: Button
 var cancel_btn: Button
@@ -98,14 +99,15 @@ func _setup_ui() -> void:
 	player_row.add_child(ai_check)
 
 	vbox.add_child(HouseStyle.label("Preview", HouseStyle.CAPTION))
-	army_preview = RichTextLabel.new()
-	army_preview.bbcode_enabled = true
-	army_preview.add_theme_color_override("default_color", HouseStyle.INK)
-	# Small minimum so a long army list never pushes the buttons off: the label fills the well and scrolls.
+	army_preview = ScrollContainer.new()
+	army_preview.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# Small minimum so a long army list never pushes the buttons off: the rows fill the well and scroll.
 	army_preview.custom_minimum_size = Vector2(0, 180)
-	army_preview.scroll_active = true
-	army_preview.scroll_following = true
 	army_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_preview_rows = VBoxContainer.new()
+	_preview_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_preview_rows.add_theme_constant_override("separation", 0)
+	army_preview.add_child(_preview_rows)
 	var preview_panel := HouseStyle.card(army_preview)
 	preview_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(preview_panel)
@@ -195,42 +197,59 @@ func _set_status(text: String, tone: StringName) -> void:
 	link_status_label.add_theme_color_override("font_color", HouseStyle.tone_ink(tone))
 
 
+## The loaded list as on sheet 04: its name and game system, "2000 PTS · 8 UNITS · 37 MODELS" in mono, then one row
+## per unit - the name with quality, defense and weapons under it, the model count and the points (mono, gold).
 func _update_preview() -> void:
+	for child: Node in _preview_rows.get_children():
+		_preview_rows.remove_child(child)
+		child.queue_free()
 	if not _preview_army:
-		army_preview.text = ""
 		return
-
-	var text = "[b]%s[/b]\n" % _preview_army.name
-	text += "%s\n\n" % _tint(_preview_army.game_system, HouseStyle.MUTED)
-
-	text += "[b]Points:[/b] %d | " % _preview_army.points
-	text += "[b]Units:[/b] %d | " % _preview_army.units.size()
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
+	var army_name := HouseStyle.label(_preview_army.name, HouseStyle.BODY)
+	army_name.add_theme_font_override("font", HouseStyle.font(500))
+	army_name.add_theme_font_size_override("font_size", HouseStyle.FONT_VALUE)
+	head.add_child(army_name)
+	var system := _preview_army.game_system
+	head.add_child(HouseStyle.label(GameSystem.label(system) if GameSystem.is_known(system) else system, HouseStyle.NOTE))
+	_preview_rows.add_child(head)
+	var facts := "%d PTS · %d UNITS" % [_preview_army.points, _preview_army.units.size()]
 	if _preview_army.model_count > 0:
-		text += "[b]Models:[/b] %d" % _preview_army.model_count
-	text += "\n\n"
-
+		facts += " · %d MODELS" % _preview_army.model_count
+	_preview_rows.add_child(_mono(facts, HouseStyle.MUTED))
 	for unit in _preview_army.units:
-		var unit_line = "• %s" % unit.get_display_name()
-		if unit.cost > 0:
-			unit_line += " " + _tint("(%d pts)" % unit.cost, HouseStyle.GOLD)
-		unit_line += " %s %s" % [_tint("Q%d+" % unit.quality, HouseStyle.OK), _tint("D%d+" % unit.defense, HouseStyle.ACCENT)]
-		text += unit_line + "\n"
+		var weapon_strs: Array[String] = []
+		for w in unit.weapons:
+			weapon_strs.append("%dx %s" % [w.count, w.name] if w.count > 1 else w.name)
+		var words := VBoxContainer.new()
+		words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		words.add_theme_constant_override("separation", 0)
+		words.add_child(HouseStyle.label(unit.custom_name if not unit.custom_name.is_empty() else unit.name, HouseStyle.BODY))
+		words.add_child(HouseStyle.label("  ".join(["Q%d+ D%d+" % [unit.quality, unit.defense]] + ([", ".join(weapon_strs)] if not weapon_strs.is_empty() else [])), HouseStyle.CAPTION))
+		var row := HBoxContainer.new()
+		row.custom_minimum_size.y = 42
+		row.add_child(words)
+		var count := HouseStyle.label("× %d" % unit.size, HouseStyle.CAPTION)
+		count.custom_minimum_size.x = 70
+		count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		row.add_child(count)
+		var cost := _mono(str(unit.cost) if unit.cost > 0 else "", HouseStyle.GOLD)
+		cost.custom_minimum_size.x = 90
+		cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		row.add_child(cost)
+		_preview_rows.add_child(row)
+		var rule := ColorRect.new()
+		rule.color = Color(HouseStyle.LINE, 0.6)
+		rule.custom_minimum_size.y = 1
+		_preview_rows.add_child(rule)
 
-		# Show weapons
-		if unit.weapons.size() > 0:
-			var weapon_strs: Array[String] = []
-			for w in unit.weapons:
-				var ws = w.name
-				if w.count > 1:
-					ws = "%dx %s" % [w.count, w.name]
-				weapon_strs.append(ws)
-			text += "  %s\n" % _tint(", ".join(weapon_strs), HouseStyle.MUTED)
 
-	army_preview.text = text
-
-
-func _tint(text: String, color: Color) -> String:
-	return "[color=#%s]%s[/color]" % [color.to_html(false), text]
+func _mono(text: String, colour: Color) -> Label:
+	var l := HouseStyle.label(text, HouseStyle.CAPTION)
+	l.add_theme_font_override("font", HouseStyle.mono())
+	l.add_theme_color_override("font_color", colour)
+	return l
 
 
 func _on_import() -> void:
@@ -264,7 +283,7 @@ func _reset_dialog() -> void:
 	_preview_army = null
 	share_link_input.text = ""
 	link_status_label.text = ""
-	army_preview.text = ""
+	_update_preview()
 	import_btn.disabled = true
 	if ai_check:
 		ai_check.button_pressed = false
