@@ -51,32 +51,6 @@ static func code_as_typed(raw: String) -> String:
 	return kept if kept.length() <= 3 else kept.substr(0, 3) + "-" + kept.substr(3)
 
 
-## The relay address, folded away: a "Relay server:" row that opens the address field below it. Nobody needs
-## the address unless the default relay is down, so it stays out of the way; the field keeps its default text
-## and is read as before. Adds the row and the field to `content` and returns the field.
-static func advanced_relay(
-	content: VBoxContainer, default_url: String, placeholder: String
-) -> LineEdit:
-	var input := line_edit(default_url, placeholder)
-	input.visible = false
-	var toggle := Button.new()
-	toggle.text = "Relay server:  " + HouseStyle.GLYPH_GO
-	toggle.flat = true
-	toggle.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	toggle.focus_mode = Control.FOCUS_ALL
-	toggle.pressed.connect(
-		func() -> void:
-			input.visible = not input.visible
-			toggle.text = (
-				"Relay server:  "
-				+ (HouseStyle.GLYPH_COLLAPSE if input.visible else HouseStyle.GLYPH_GO)
-			)
-	)
-	content.add_child(toggle)
-	content.add_child(input)
-	return input
-
-
 ## A content text field with placeholder.
 static func line_edit(text_value: String, placeholder: String) -> LineEdit:
 	var edit := LineEdit.new()
