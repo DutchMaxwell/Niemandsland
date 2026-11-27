@@ -148,3 +148,14 @@ func test_the_sheet_fits_a_720p_window() -> void:
 		"sheet %s outside %s" % [sheet.get_global_rect(), window]).is_true()
 	var close := browser.find_child("CloseButton", true, false) as Control
 	assert_bool(window.encloses(close.get_global_rect())).is_true()
+
+
+## Sheets 05 and 09: a full menu sheet's close box is 44 px with a drawn thin cross (red before: 26 px with the "×").
+func test_the_sheet_close_box_is_44_px_with_a_drawn_cross() -> void:
+	var browser := await _open(DIR)
+	if browser == null:
+		return
+	var close := browser.find_child("CloseButton", true, false) as Button
+	assert_float(close.custom_minimum_size.x).is_equal(44.0)
+	assert_str(close.text).is_empty()
+	assert_object(close.icon).is_not_null()

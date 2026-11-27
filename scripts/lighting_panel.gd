@@ -669,6 +669,7 @@ func _apply_menu_layout() -> void:
 	_footer_note.visible = on
 	_footer_close.visible = on
 	if on and not _graphics_rows:
+		HouseStyle.sheet_close_box(close as Button)
 		_build_graphics_rows()
 		_build_switch_rows("Accessibility", ["Calm Mode", "Reduce Motion"])
 		_build_audio_rows()

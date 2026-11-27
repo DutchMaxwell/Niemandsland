@@ -38,6 +38,7 @@ func open(host: Node, dir := "") -> void:
 	_small = view.y < 800
 	(parts["sheet"] as Control).custom_minimum_size = Vector2(minf(1200, view.x - 128), minf(780, view.y - 120))
 	(parts["close"] as Button).pressed.connect(close)
+	HouseStyle.sheet_close_box(parts["close"] as Button)
 	var body := parts["body"] as VBoxContainer
 	body.add_child(_text("Open a saved game", HouseStyle.BODY, HouseStyle.FONT_PAGE_TITLE, HouseStyle.font(500)))
 	var scroll := ScrollContainer.new()
