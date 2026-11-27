@@ -234,7 +234,7 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 	if action not in ["quit", "snapshot", "leave_to_menu"] and not _session_ready():
 		ok = false
 		error = "session is not ready"
-	elif action not in ["setup", "quit", "snapshot", "leave_to_menu", "close_window", "answer_start_question", "answer_rules_card", "set_game_system"] and not _fixture_ready:
+	elif action not in ["setup", "quit", "snapshot", "leave_to_menu", "close_window", "answer_start_question", "answer_rules_card", "set_game_system", "lay_board"] and not _fixture_ready:
 		ok = false
 		error = "fixture is not ready"
 	elif action == "setup":
@@ -337,6 +337,14 @@ func _run_command(seq: int, action: String, payload: Dictionary) -> void:
 			ok = _main.set_table_system(system, "the harness")   # the real switch door: sets it and pushes it
 		else:
 			_main.network_manager.broadcast_table_settings({"game_system": system})
+	elif action == "lay_board":
+		# GEN-12: the host lays a generated board (Tiefwerk) on a 4 x 4 ft table through the release door; `plant` gives the
+		# record a wrong digest, so a joining guest's GEN-11 check must refuse it (the check can fail).
+		_main.table.setup_table(Vector2(4, 4))
+		var record := GeneratedBoard.resolve("tiefwerk", int(payload.get("seed", 0)))
+		if bool(payload.get("plant", false)):
+			record["digest"] = "0000000000000000"
+		ok = _require_role("host", action) and _main.apply_generated_board(record)
 	elif action == "set_automatic":
 		_main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
 		_main._hotseat_turn = null
@@ -941,6 +949,10 @@ func _snapshot() -> Dictionary:
 		"turn": int(_main.call("_hotseat_side_on_turn")) \
 			if _main != null and _main.has_method("_hotseat_side_on_turn") else -1,
 		"last_refusal": _last_refusal,
+		"board": GeneratedBoard.code(_main.generated_board()) if _main != null else "",   # GEN-12
+		"board_digest": str(_main.generated_board().get("digest", "")) if _main != null else "",
+		"board_line": JSON.stringify(AiActRecorder.tiers_of_board(_main.generated_board())).sha256_text().left(16) \
+			if _main != null else "",
 		"units": {},
 		"los": _los_result.duplicate(true),
 		"ai_slots": [],

@@ -56,6 +56,8 @@ FEAT_MARKS = {
     "mp2_prot_h": "ignore_feat_used_protection_feat",
     "mp2_prot_g": "ignore_feat_used_protection_feat",
 }
+## GEN-12: the generated board the host lays (Tiefwerk; any seed the generator accepts).
+GEN_BOARD_SEED = 42
 
 
 class HarnessFailure(RuntimeError):
@@ -328,6 +330,7 @@ class Run:
         self.feat_marks = False  # MP1: once-per-game Feat latches reach both tables and survive a guest rejoin
         self.one_core = False  # one-core P3 step 54: the activation digest check, its mismatch and the correction
         self.game_system = False  # game-system switch step 5: the table's system is host-owned and reaches a late joiner
+        self.generated_board = ""  # GEN-12: "match" / "plant" - a host's generated board reaches a joining guest (or is refused)
         self.proxy: StallProxy | None = None
         self.proxies: dict[str, StallProxy] = {}
         self.seq = {"host": 0, "guest": 0}
@@ -575,6 +578,9 @@ class Run:
             return
         if self.game_system:
             self.game_system_scenario()
+            return
+        if self.generated_board:
+            self.generated_board_scenario()
             return
         self.command_both("setup")
         states = self.wait_condition(
@@ -1184,6 +1190,37 @@ class Run:
         )
         print("[mp2] PASS game-system (host-owned, live push, late-joiner push)")
 
+    def generated_board_scenario(self) -> None:
+        """GEN-12: the host lays a generated board (Tiefwerk, seed GEN_BOARD_SEED) through the release door; a guest that
+        joins afterwards gets it through the join state (the save's table block). Both peers must name the same board
+        code, digest and core terrain line. "plant": the host's record carries a wrong digest, so the guest's GEN-11
+        check refuses the board and logs its [Board] line - and this scenario fails (the check can fail)."""
+        self.command("host", "lay_board", {"seed": GEN_BOARD_SEED, "plant": self.generated_board == "plant"})
+        self.wait_condition("the host's board stands", lambda s: bool(s["host"].get("board")))
+        room = self.states()["host"]["room"]
+        self.command("guest", "close_window")
+        old = self.clients["guest"]
+        old.proc.wait(timeout=15)
+        for suffix in (".state.json", ".ack.json", ".command.json"):
+            (self.run_dir / f"guest{suffix}").unlink(missing_ok=True)
+        old.close_log()
+        self.seq["guest"] = 0
+        self._start_client("guest", self.relay_url, str(room))
+        self.wait_condition(
+            "the joined guest is at the table",
+            lambda s: s["guest"].get("session_ready") and s["host"].get("occupied_slots") == [1, 2],
+            timeout=90,
+        )
+        time.sleep(3.0)
+        states = self.states()
+        for role in ("host", "guest"):
+            st = states[role]
+            print(f"MP2: {role} board {st.get('board')} digest {st.get('board_digest')} line {st.get('board_line')}")
+        if any(states["host"].get(k) != states["guest"].get(k) for k in ("board", "board_digest", "board_line")):
+            said = [line for line in self.clients["guest"].lines if "[Board]" in line]
+            raise HarnessFailure("the peers hold different boards" + (f"; the guest said: {said[-1].strip()}" if said else ""))
+        print(f"[mp2] PASS generated board {states['host'].get('board')} (join state, digest, terrain line)")
+
     def _start_question_scenario(self) -> None:
         """Bug 6c: the host is asked ONCE whether to play with rules automation when the second player
         sits down. Yes -> the guest gets the confirm card -> both Automatic; Not now -> both Manual and
@@ -1572,6 +1609,12 @@ def parse_args() -> argparse.Namespace:
         help="Run only the game-system switch step 5 scenario: the host-owned table system, a guest's push ignored.",
     )
     parser.add_argument(
+        "--generated-board-only",
+        choices=["match", "plant"],
+        default="",
+        help="Run only GEN-12: a host's generated board reaches a joining guest (match), or is refused (plant: wrong digest).",
+    )
+    parser.add_argument(
         "--require-core",
         action="store_true",
         help="Fail the run when a peer log does not say NmlCore loaded (CI: the core library must be installed).",
@@ -1606,7 +1649,7 @@ def main() -> int:
                  silence: str = "", outage: bool = False, link_cut: bool = False,
                  rejoin_race: bool = False, guest_owed_cut: bool = False,
                  guest_answers_during_cut: bool = False, feat_marks: bool = False,
-                 one_core: bool = False, game_system: bool = False) -> list[dict]:
+                 one_core: bool = False, game_system: bool = False, generated_board: str = "") -> list[dict]:
         run_dir.mkdir(parents=True, exist_ok=False)
         run = Run(args, run_dir)
         run.rules_online = rules_online
@@ -1620,6 +1663,7 @@ def main() -> int:
         run.feat_marks = feat_marks
         run.one_core = one_core
         run.game_system = game_system
+        run.generated_board = generated_board
         try:
             print(f"[mp2] run {run_dir.name}: {run_dir}")
             run.start()
@@ -1653,6 +1697,10 @@ def main() -> int:
         if args.game_system_only:
             run_once(root / "game-system-01", False, None, game_system=True)
             print("[mp2] RESULT PASS: game system")
+            return 0
+        if args.generated_board_only:
+            run_once(root / f"generated-board-{args.generated_board_only}", False, None, generated_board=args.generated_board_only)
+            print("[mp2] RESULT PASS: generated board")
             return 0
         if args.rejoin_race:
             run_once(root / "rejoin-race-01", False, None, rejoin_race=True)
@@ -1694,6 +1742,7 @@ def main() -> int:
         run_once(root / "silence-host-outage", False, None, silence="host", outage=True)
         run_once(root / "feat-marks-01", False, None, feat_marks=True)
         run_once(root / "game-system-01", False, None, game_system=True)
+        run_once(root / "generated-board-01", False, None, generated_board="match")
         if args.include_one_core:
             run_once(root / "one-core-01", False, None, one_core=True)
         if args.include_link_cut:
