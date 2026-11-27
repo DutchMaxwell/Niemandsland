@@ -20,6 +20,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	PendingOpponent.who = "local"
+	PendingOpponent.label = ""
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -145,3 +147,49 @@ func test_with_reduce_motion_the_hud_stands_after_120_ms() -> void:
 	assert_float(hud.modulate.a).is_equal_approx(1.0, 0.001)
 	for piece: CanvasItem in _pieces():
 		assert_float(piece.modulate.a).is_equal_approx(1.0, 0.001)
+
+
+## Spec 97 (step 97.13): line 2 knows who the setup put at the table. Solo: "NACHTMAHR brings <faction>", done once
+## NACHTMAHR's army stands (line 1 stays the player's); two players: "Bring the second army" opens the import on
+## Player 2. No line opens the old AI Opponent dialog (red before: "Pick an opponent" opened it).
+func _arrival_with(who: String) -> Control:
+	PendingOpponent.who = who
+	PendingOpponent.label = "NACHTMAHR · Alien Hives · 3000" if who == "solo" else "Two players, one screen"
+	PendingOpponent.slot = 2
+	if not _start("new"):
+		return null
+	await _runner.simulate_frames(10, 100)
+	return _arrival()
+
+
+func _line_text(card: Control, index: int) -> String:
+	return (card.find_child("Line%d" % (index + 1), true, false).find_children("*", "Label", true, false)[0] as Label).text
+
+
+func test_solo_names_nachtmahr_and_its_army_ticks_line_2() -> void:
+	var card := await _arrival_with("solo")
+	if card == null:
+		fail("no arrival card")
+		return
+	assert_str(_line_text(card, 1)).is_equal("NACHTMAHR brings Alien Hives")
+	_main.solo_ai_slots[2] = true
+	_main.opr_army_manager.armies[2] = OPRApiClient.OPRArmy.new()
+	_main.opr_army_manager.army_spawned.emit(_main.opr_army_manager.armies[2], [] as Array[Node3D])
+	assert_array([card.call("state", 0), card.call("state", 1)]).is_equal([&"now", &"done"])
+	(card.find_child("Line2", true, false) as Button).pressed.emit()   # the army stands: nothing to load again
+	(card.find_child("Line1", true, false) as Button).pressed.emit()
+	assert_int(_main.opr_import_dialog.player_option.get_selected_id()).is_equal(1)
+	assert_object(_main.find_child("AiOpponentLayer", true, false)).is_null()
+
+
+func test_two_players_bring_the_second_army_on_player_2() -> void:
+	var card := await _arrival_with("local")
+	if card == null:
+		fail("no arrival card")
+		return
+	assert_str(_line_text(card, 1)).is_equal("Bring the second army")
+	(card.find_child("Line2", true, false) as Button).pressed.emit()
+	await _runner.simulate_frames(2)
+	assert_bool(_main.opr_import_dialog.visible).is_true()
+	assert_int(_main.opr_import_dialog.player_option.get_selected_id()).is_equal(2)
+	assert_object(_main.find_child("AiOpponentLayer", true, false)).is_null()

@@ -8,6 +8,8 @@ const KEY := "niemandsland/pending_table_opponent"
 ## The last applied choice, for the arrival card: "local" when nothing was chosen.
 static var who := "local"
 static var label := ""
+static var file := ""
+static var slot := 2
 
 
 static func store(choice: Dictionary) -> void:
@@ -23,8 +25,9 @@ static func apply(main: Node) -> bool:
 	var c: Dictionary = choice if choice is Dictionary else {}
 	who = str(c.get("who", "local"))
 	label = str(c.get("label", ""))
-	var file := str(c.get("file", ""))
+	file = str(c.get("file", ""))
+	slot = int(c.get("slot", 2))
 	if who != "solo" or file.is_empty() or main._engine_refused_without_core():
 		return false
-	main._load_ai_opponent_list(file, int(c.get("slot", 2)))
+	main._load_ai_opponent_list(file, slot)
 	return true

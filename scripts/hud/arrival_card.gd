@@ -14,7 +14,7 @@ const RING := 22
 const TICK := [Vector2(6.5, 11.5), Vector2(9.5, 14.5), Vector2(15.5, 8.0)]
 
 var _lines: Array[Button] = []
-var _done := 0
+var _flags: Array = []   # per line: done
 var _body: VBoxContainer
 
 
@@ -60,12 +60,18 @@ func set_lines(texts: Array) -> void:
 		line.add_child(row)
 		_body.add_child(line)
 		_lines.append(line)
-	set_done(_done)
+	set_flags(_flags)
 
 
-## `count` lines are done; the next one is current.
+## The first `count` lines are done.
 func set_done(count: int) -> void:
-	_done = count
+	set_flags(range(maxi(count, _lines.size())).map(func(i: int) -> bool: return i < count))
+
+
+## Each line is done by its own flag (NACHTMAHR's army may stand before the player's); the first line not done is
+## the current one, the rest are next.
+func set_flags(done: Array) -> void:
+	_flags = done
 	for i in _lines.size():
 		var label := _lines[i].find_children("*", "Label", true, false)[0] as Label
 		label.add_theme_color_override(&"font_color", HouseStyle.INK if state(i) == &"now" else HouseStyle.MUTED)
@@ -75,7 +81,16 @@ func set_done(count: int) -> void:
 
 
 func state(index: int) -> StringName:
-	return &"done" if index < _done else (&"now" if index == _done else &"next")
+	if _is_done(index):
+		return &"done"
+	for i in index:
+		if not _is_done(i):
+			return &"next"
+	return &"now"
+
+
+func _is_done(index: int) -> bool:
+	return index < _flags.size() and bool(_flags[index])
 
 
 func _draw_ring(ring: Control, index: int) -> void:
