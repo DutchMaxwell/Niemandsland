@@ -11,7 +11,11 @@ const CM_TO_FEET := 1.0/30.48
 const PAGE_ASPECT := 1768.0/1080.0
 ## Spare window height grows the preview and the biome cards only down to these proportions.
 const HERO_MIN_ASPECT := 2.2
-const RAIL_MIN_H := 900.0   # from this window height the right column is the rail card (sheet 03)
+const RAIL_MIN_H := 900.0
+const SIX_MIN_W := 1000.0   # a left column this wide shows the six biomes in one row (step 83, sheet 03)
+const SIX_PHOTO_H := 150.0
+const SIX_BAND_H := 44.0
+const SIX_MIN_ASPECT := 0.6   # a card of the one-row form grows up to 0.6 : 1 to fill the left column   # from this window height the right column is the rail card (sheet 03)
 const CARD_MIN_ASPECT := 2.0
 const CARD_MAX_ASPECT := 2.8
 const FONT = preload("res://assets/ui_glassmorphism/fonts/Inter.ttf")
@@ -77,6 +81,7 @@ var _grid: GridContainer
 var _hero: Control
 var _margin: MarginContainer
 var _cards: Array[TextureRect] = []
+var _card_names: Array[Label] = []
 var _valid := true
 var online := false:   # an online room locks the rules pick to Manual; it follows the card of step 04
 	set(value):
@@ -239,6 +244,7 @@ func _build_ui() -> void:
 		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		stack.add_child(label)
+		_card_names.append(label)
 		button.pressed.connect(_select_biome.bind(key))
 		_grid.add_child(button)
 		_biome_buttons[key] = button
@@ -320,6 +326,7 @@ func _build_ui() -> void:
 	else:
 		left.add_child(_label("+   Your terrain. Your layout.",14,HouseStyle.ACCENT))
 		left.add_child(_label("Place and rearrange terrain freely after creating your table. The biome defines its visual style.",12,HouseStyle.MUTED,true))
+	_add_left_air(left)   # a third share of the slack beside the rail card (16:10)
 	_rail_card = PanelContainer.new()
 	_rail_card.name = "RailCard"
 	_rail_card.clip_contents = true
@@ -740,8 +747,12 @@ func _layout(refill := true) -> void:
 	_columns.vertical = narrow
 	_columns.add_theme_constant_override("separation",24 if compact else 36)
 	_grid.columns = 2 if area.x < 560 else 3
+	var six := _six_biomes()
 	for photo in _cards:
-		photo.custom_minimum_size.y = 24   # expands to its card, which _fill_height may make flatter
+		photo.custom_minimum_size.y = SIX_PHOTO_H if six else 24.0   # expands to its card, which _fill_height may make flatter
+	for name_label in _card_names:
+		name_label.custom_minimum_size.y = SIX_BAND_H if six else 30.0
+		name_label.add_theme_font_size_override("font_size",16 if six else 12)
 	for button in _biome_buttons.values():
 		button.custom_minimum_size.y = 76 if compact else 106
 	for button in _system_buttons.values():
@@ -822,7 +833,13 @@ func _fill_height(usable: float, separation: int) -> void:
 	# Cards start at their flattest allowed shape and grow from there, so they also make room (the Custom
 	# inputs at 1280x720).
 	var buttons := _biome_buttons.values()
-	for columns: int in [2,3]:
+	if _six_biomes():   # one row of tall cards (sheet 03): the picture's height is fixed, the rest of the page grows
+		_grid.columns = 6
+		for button in buttons:
+			button.custom_minimum_size.y = SIX_PHOTO_H+SIX_BAND_H
+		_grow([_hero],_hero.size.x/HERO_MIN_ASPECT,usable)   # the card's picture first, then the row takes the rest
+		_grow(buttons,(_grid.size.x-50)/6/SIX_MIN_ASPECT,usable)
+	for columns: int in ([] if _six_biomes() else [2,3]):
 		_grid.columns = columns
 		var card_width := (_grid.size.x-10*(columns-1))/columns
 		for button in buttons:
@@ -842,6 +859,11 @@ func _fill_height(usable: float, separation: int) -> void:
 	var spare := usable-_page.get_combined_minimum_size().y
 	if spare > 0 and gaps > 0:
 		_page.add_theme_constant_override("separation",separation+int(spare/gaps))
+
+
+## The six biomes stand in one row when the rail form leaves the left column at least SIX_MIN_W wide.
+func _six_biomes() -> bool:
+	return _rail_body.visible and _left.size.x >= SIX_MIN_W
 
 
 ## Raises the controls' minimum height toward `cap` as far as the page still fits `usable` (bisection).
@@ -889,7 +911,9 @@ func _style(button: Button, selected: bool, primary := false) -> void:
 		var color := HouseStyle.GOLD if primary else Color("253035") if selected else Color("142027")
 		if state == "hover":
 			color = Color("ebd19a") if primary else Color("293b43")
-		button.add_theme_stylebox_override(state,_box(color,HouseStyle.GOLD if selected or state == "focus" else HouseStyle.LINE))
+		var box := _box(color,HouseStyle.GOLD if selected or state == "focus" else HouseStyle.LINE)
+		box.set_border_width_all(2 if selected and not primary else 1)   # the chosen card's 2 px gold rim (step 83)
+		button.add_theme_stylebox_override(state,box)
 	for state in ["font_color","font_hover_color","font_pressed_color","font_focus_color"]:
 		button.add_theme_color_override(state,Color.TRANSPARENT if button.has_meta("visual_card") else Color("192125") if primary else HouseStyle.INK)
 
