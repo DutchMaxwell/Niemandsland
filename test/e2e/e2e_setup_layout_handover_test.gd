@@ -55,3 +55,13 @@ func test_a_missing_file_reveals_the_table_empty() -> void:
 	assert_bool(main.get_node("UI").visible).is_true()
 	assert_int(main.map_layout_editor.placed_pieces.size()).is_equal(0)
 	assert_object(ProjectSettings.get_setting(LAYOUT_KEY, null)).is_null()
+
+
+## Step 65.9: Front Line chosen in the setup stands on the table after the reveal.
+func test_front_line_from_the_setup_reaches_the_table() -> void:
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FIXTURE))
+	data.deployment_type = 1
+	FileAccess.open(PENDING, FileAccess.WRITE).store_string(JSON.stringify(data))
+	ProjectSettings.set_setting(LAYOUT_KEY, {"path": PENDING})
+	var main := await _boot()
+	assert_int(int(main.map_layout_editor.deployment_type)).is_equal(1)

@@ -9,7 +9,7 @@ signal changed
 const DEFAULT_WAY := "empty"
 const FILE := "user://pending_layout.json"
 const LABELS := {"empty": "Empty table", "generated": "Auto-generated", "theme": "Ruined Borderland",
-	"file": "Loaded layout"}
+	"file": "Loaded layout", "edited": "Edited layout"}
 const THEME_ID := "ruined_borderland"
 const CHECK := "✓"
 const CROSS := "✗"
@@ -23,6 +23,29 @@ func _init() -> void:
 	editor = (load("res://scenes/map_layout.tscn") as PackedScene).instantiate()
 	editor.visible = false
 	add_child(editor)
+	editor.layout_closed.connect(_on_editor_closed)
+	editor.theme_requested.connect(func(_id: String) -> void:
+		editor.hide()
+		choose("theme"))
+
+
+## Today's layout editor, full-window over the setup with whatever the chosen way laid out; its system row stays
+## locked. Its Close returns to step 04 and the way reads "Edited layout".
+## `mode` "deployment" opens its Deployment tab (custom zones are drawn there), "objectives" its objectives mode.
+func open_editor(mode := "") -> void:
+	editor.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	editor.show()
+	if mode == "deployment":
+		(editor.find_child("TabDeploymentButton", true, false) as Button).pressed.emit()
+	elif mode == "objectives":
+		(editor.find_child("TabObjectivesButton", true, false) as Button).pressed.emit()
+		editor._objectives_toggle_btn.button_pressed = true
+
+
+func _on_editor_closed() -> void:
+	if way != "theme":
+		way = "edited"
+	changed.emit()
 
 
 ## The setup's table size and game system; a generated layout is laid out again for a new size.

@@ -360,15 +360,12 @@ func _build_routes() -> void:
 	column.add_child(route_title)
 	_route_body = VBoxContainer.new()
 	column.add_child(_route_body)
-	for key in ["online","help"]:
+	for key in ["help"]:
 		var group := VBoxContainer.new()
 		group.add_theme_constant_override("separation",12)
 		_route_body.add_child(group)
 		routes[key] = group
 	for row in [
-		["online","HostOnlineBtn","Create a room","Prepare a table for your group"],
-		["online","JoinOnlineBtn","Join with a code","Enter a six-character invitation code"],
-		["online","BrowseOnlineBtn","Public tables","Find an open game"],
 		["help","HelpTutorialBtn","Learn the controls","Open the tutorial"],
 		["help","WhatsNewBtn",WhatsNewContent.new().text_for(TranslationServer.get_locale(), "menu"),""],
 		["help","ReportProblemBtn","Report a problem","Create a diagnostics file to share"]]:
@@ -415,7 +412,7 @@ func show_route(key: String) -> void:
 	_return_focus = get_viewport().gui_get_focus_owner()
 	for route in routes:
 		routes[route].visible = route == key
-	route_title.text = {"online":"Meet around the table.","help":"Help & feedback."}[key]
+	route_title.text = {"help":"Help & feedback."}[key]
 	route_panel.reset_size()
 	route_panel.show()
 	_sync_news_card()
