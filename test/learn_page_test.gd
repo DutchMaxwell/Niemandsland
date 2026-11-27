@@ -149,3 +149,27 @@ func test_selecting_the_classic_track_shows_its_lessons() -> void:
 	page.connect("tutorial_requested", func(id: String) -> void: requested.append(id))
 	(cards[1] as Button).pressed.emit()
 	assert_array(requested).is_equal([TutorialFlow.ids(TutorialFlow.build_tool_track())[1]])
+
+
+## Step 48.7b: a done lesson carries a drawn tick, the last Trial card spans two columns and reads "11 · FINALE",
+## and the classic track's reset link empties its progress (red before: none of these).
+func test_tick_finale_and_reset() -> void:
+	var page := await _page(2, 1)
+	if page == null:
+		return
+	await get_tree().process_frame
+	var cards := _lesson_cards(page)
+	assert_int(cards[0].find_children("Tick", "TextureRect", true, false).size()).is_equal(1)
+	assert_int(cards[3].find_children("Tick", "TextureRect", true, false).size()).is_equal(0)
+	var finale := cards[10] as Control
+	assert_array(_texts(finale)).contains(["11 · FINALE", "Finale"])
+	assert_float(finale.size.x).is_greater(1.9 * (cards[8] as Control).size.x)
+	page.call("select", "ClassicTrack")
+	var reset := page.find_child("ResetTutorial", true, false) as Button
+	assert_object(reset).override_failure_message("no reset link").is_not_null()
+	if reset == null:
+		return
+	reset.pressed.emit()
+	assert_str((_card(page, "ClassicTrack").button as Button).text).is_equal("Start")
+	page.call("select", "TrialTrack")
+	assert_bool((page.find_child("ResetTutorial", true, false) as Control).visible).is_false()
