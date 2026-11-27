@@ -236,6 +236,7 @@ func _fill_grid(key: String) -> void:
 			rim.border_color = HouseStyle.GOLD
 			card.add_theme_stylebox_override(&"normal", rim)
 		row.add_child(card)
+	_chain()
 
 
 ## The selected card's two gold corner brackets (top left, bottom right), as on the menu's Continue card.
@@ -245,3 +246,17 @@ func _draw_corners(card: Control) -> void:
 	for corner: Array in [[Vector2.ONE, Vector2.ONE], [card.size - Vector2.ONE, -Vector2.ONE]]:
 		card.draw_line(corner[0], corner[0] + Vector2(14 * corner[1].x, 0), HouseStyle.GOLD, 1.5, true)
 		card.draw_line(corner[0], corner[0] + Vector2(0, 14 * corner[1].y), HouseStyle.GOLD, 1.5, true)
+
+
+## Tab in reading order: the way back, the two track buttons, the lesson cards row by row, the reset link (while
+## shown), and round again; the arrow keys keep the engine's neighbour search inside the grid.
+func _chain() -> void:
+	var stops: Array[Control] = [back]
+	for key: String in _cards:
+		stops.append(_cards[key][2])
+	stops.append_array(_grid.find_children("Lesson*", "Button", true, false))
+	if _reset.visible:
+		stops.append(_reset)
+	for i in stops.size():
+		stops[i].focus_next = stops[i].get_path_to(stops[(i + 1) % stops.size()])
+		stops[i].focus_previous = stops[i].get_path_to(stops[i - 1])
