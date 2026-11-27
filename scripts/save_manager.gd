@@ -959,6 +959,8 @@ static func latest_save_info(dir_path: String = "") -> Dictionary:
 static func list_saves(dir_path: String = "") -> Array[Dictionary]:
 	var dir := dir_path if not dir_path.is_empty() else get_default_save_dir()
 	var saves: Array[Dictionary] = []
+	if not DirAccess.dir_exists_absolute(dir):
+		return saves
 	for file in DirAccess.get_files_at(dir):
 		if file.to_lower().ends_with(".nml"):
 			var path := dir.path_join(file)
