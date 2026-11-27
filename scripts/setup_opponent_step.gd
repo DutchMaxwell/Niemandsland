@@ -253,7 +253,7 @@ func _refresh_solo() -> void:
 	_seat.select(_seat.get_item_index(_opponent.seat))
 
 
-## The chosen card has the lighter fill and the 2 px gold rim (as the layout step's way cards); Solo is off while
+## The chosen card has the sheet's lighter fill and the 2 px gold rim; Solo is off while
 ## NACHTMAHR has no list for the picked system.
 func _refresh() -> void:
 	for id: String in _cards:
@@ -261,7 +261,8 @@ func _refresh() -> void:
 		card.disabled = id == "solo" and not _opponent.solo_available()
 		if id == _opponent.who:
 			var rim := HouseStyle.menu_theme().get_stylebox(&"normal", &"Button").duplicate() as StyleBoxFlat
-			rim.bg_color = HouseStyle.ROW_HOVER
+			rim.bg_color = HouseStyle.CARD_CHOSEN
+			rim.draw_center = true   # the theme's button box may draw its rim only
 			rim.border_color = HouseStyle.GOLD
 			rim.set_border_width_all(2)
 			card.add_theme_stylebox_override(&"normal", rim)

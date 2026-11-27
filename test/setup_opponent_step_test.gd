@@ -181,3 +181,11 @@ func test_at_the_table_a_human_seat_is_not_nachtmahrs() -> void:
 	assert_bool(seat.is_item_disabled(seat.get_item_index(2))).is_true()
 	assert_str(seat.get_item_text(seat.get_item_index(2))).is_equal("Player 2 (Red) — human player")
 	assert_int(step.get("_opponent").seat).is_equal(1)
+
+
+## The chosen card is as light as on sheet 03b (#253035), not the 10 % accent wash of a hovered row (red before).
+func test_the_chosen_card_has_the_sheets_fill() -> void:
+	var step := _step()
+	var box := _card(step, "solo").get_theme_stylebox(&"normal") as StyleBoxFlat
+	assert_str(box.bg_color.to_html(false)).is_equal("253035")
+	assert_bool(box.draw_center).override_failure_message("the fill is not drawn").is_true()
