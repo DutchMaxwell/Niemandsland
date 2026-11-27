@@ -31,6 +31,7 @@ var _rail: PanelContainer
 var _opponent_row: Label
 var _layout_row: Button
 var _keys: HBoxContainer
+var _enter_key: Label   # the legend's word for Enter: "create table", at the table the rail button's action
 var _create: Button
 var _next: Label
 var table_mode := false   # set before setup: the page opened at the table (rows read-only, no step 05)
@@ -72,9 +73,11 @@ func setup(opponent: SetupOpponent, values: Array) -> void:
 			_opponent.choose_seat(3 - _opponent.seat)
 	_keys = HBoxContainer.new()   # the key legend at the foot of the page, as state one
 	_keys.add_theme_constant_override(&"separation", 8)
-	for pair: Array in [["Tab", "next step"], ["← →", "choose"], ["Enter", "create table"], ["Esc", "back"]]:
+	for pair: Array in [["Tab", "next step"], ["← →", "choose"], ["Enter", "create table"],
+			["Esc", "back to the table" if table_mode else "back"]]:
 		_keys.add_child(HouseStyle.key_cap(pair[0]))
 		_keys.add_child(SetupLayoutStep._text(pair[1], 15, HouseStyle.font(400), HouseStyle.MUTED))
+	_enter_key = _keys.get_child(5) as Label
 	add_child(_keys)
 	_opponent.changed.connect(_refresh)
 	resized.connect(_place)
@@ -273,3 +276,4 @@ func _refresh() -> void:
 	_opponent_row.text = _opponent.label()
 	if table_mode:
 		_create.text = TABLE_ACTIONS[_opponent.who]
+		_enter_key.text = _create.text.left(1).to_lower() + _create.text.substr(1)

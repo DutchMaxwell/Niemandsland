@@ -189,3 +189,19 @@ func test_the_chosen_card_has_the_sheets_fill() -> void:
 	var box := _card(step, "solo").get_theme_stylebox(&"normal") as StyleBoxFlat
 	assert_str(box.bg_color.to_html(false)).is_equal("253035")
 	assert_bool(box.draw_center).override_failure_message("the fill is not drawn").is_true()
+
+
+## At the table the key legend says what Enter and Esc do there (the rail button's action, back to the table), not
+## "create table" (red before: the legend of the setup).
+func test_at_the_table_the_key_legend_follows_the_button() -> void:
+	var step := _table_step([])
+	if step == null:
+		return
+	var words: Array = (step.get("_keys") as Control).find_children("*", "Label", false, false).map(
+		func(l: Label) -> String: return l.text)
+	assert_array(words).contains(["bring NACHTMAHR", "back to the table"])
+	assert_array(words).not_contains(["create table"])
+	_card(step, "local").pressed.emit()
+	words = (step.get("_keys") as Control).find_children("*", "Label", false, false).map(
+		func(l: Label) -> String: return l.text)
+	assert_array(words).contains(["bring the second army"])
