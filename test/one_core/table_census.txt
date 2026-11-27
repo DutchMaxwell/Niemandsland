@@ -11,11 +11,11 @@ hit_save_shared scripts/main.gd:_solo_hazardous_self_wounds 28 1
 hit_save_shared scripts/main.gd:_solo_hits 139 2
 hit_save_shared scripts/main.gd:_solo_land_deadly_wounds 79 3
 hit_save_shared scripts/main.gd:_solo_land_takedown_wounds 35 2
-hit_save_shared scripts/main.gd:_solo_land_wounds 18 18
+hit_save_shared scripts/main.gd:_solo_land_wounds 18 17
 hit_save_shared scripts/main.gd:_solo_resolve_saves 122 8
 hit_save_shared scripts/main.gd:_solo_save_batch 233 7
 hit_save_shared scripts/main.gd:_solo_takedown_pick 34 1
-hit_save_shared TOTAL 744 44
+hit_save_shared TOTAL 744 43
 human_shoot TOTAL 0 0
 melee_charge scripts/main.gd:_run_ai_melee 190 1
 melee_charge scripts/main.gd:_run_human_melee 106 1
@@ -54,7 +54,6 @@ owner dangerous_morale transport_spill 1 H-41
 owner dangerous_morale TOTAL 13 -
 owner hit_save_shared breath 2 H-38
 owner hit_save_shared deathstrike 2 P4.D-49/H-35
-owner hit_save_shared jump_fall 1 H-43
 owner hit_save_shared melee 20 P4.D-49/E-32
 owner hit_save_shared melee_exception 1 H-39
 owner hit_save_shared other_rule_hits 6 H-38
@@ -62,5 +61,5 @@ owner hit_save_shared self_destruct 2 P4.D-49/H-35
 owner hit_save_shared spells 5 H-45
 owner hit_save_shared table_internal 3 H-46
 owner hit_save_shared trap 2 H-42
-owner hit_save_shared TOTAL 44 -
+owner hit_save_shared TOTAL 43 -
 TABLE LINES LEFT: 10823

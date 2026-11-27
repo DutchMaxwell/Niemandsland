@@ -108,3 +108,43 @@ func test_an_empty_folder_says_so() -> void:
 		if label.is_visible_in_tree():
 			texts.append(label.text)
 	assert_array(texts).contains(["No saved games yet.", "Games you save at the table appear here."])
+
+
+## Step 48.4: the row with focus is the selected one - its Load is the gold button, no other is (red before: every
+## Load is the plain button).
+func test_the_focused_row_has_the_gold_load_and_no_other_row_has() -> void:
+	var browser := await _open(DIR)
+	if browser == null:
+		return
+	await get_tree().process_frame
+	var buttons: Array = []
+	for row: Node in (browser.get("rows") as Node).get_children():
+		buttons.append(row.find_children("*", "Button", true, false)[0])
+	(buttons[2] as Button).grab_focus()
+	var gold: Array = buttons.map(func(b: Button) -> bool: return b.theme_type_variation == HouseStyle.PRIMARY)
+	assert_array(gold).is_equal([false, false, true, false])
+
+
+## Step 48.4: in a 1280 x 720 window the rows are 78 px high (red before: 98), the sheet stays inside the window
+## and its close box on screen.
+func test_the_sheet_fits_a_720p_window() -> void:
+	var small := SubViewport.new()   # a headless window does not resize: a 1280 x 720 viewport stands in
+	small.size = Vector2i(1280, 720)
+	_host.add_child(small)
+	var host := Control.new()
+	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	small.add_child(host)
+	_host = host
+	var browser := await _open(DIR)
+	if browser == null:
+		return
+	for _i in 3:
+		await get_tree().process_frame
+	var window := Rect2(Vector2.ZERO, Vector2(small.size))
+	var first_row := (browser.get("rows") as Node).get_child(0) as Control
+	assert_float(first_row.custom_minimum_size.y).is_equal(78.0)
+	var sheet := browser.find_child("Sheet", true, false) as Control
+	assert_bool(window.encloses(sheet.get_global_rect())).override_failure_message(
+		"sheet %s outside %s" % [sheet.get_global_rect(), window]).is_true()
+	var close := browser.find_child("CloseButton", true, false) as Control
+	assert_bool(window.encloses(close.get_global_rect())).is_true()

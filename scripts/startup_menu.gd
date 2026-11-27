@@ -491,6 +491,7 @@ func _launch_scenario(chapter: Dictionary) -> void:
 func _on_load_battle_pressed() -> void:
 	_save_browser = SaveBrowser.new()
 	_save_browser.load_requested.connect(_on_save_chosen)
+	_save_browser.closed.connect(load_battle_btn.grab_focus)
 	_save_browser.open(self)
 
 
