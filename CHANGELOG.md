@@ -86,6 +86,13 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   capped. Before, the drag line only turned orange. (#2691)
 
 ### Changed — NACHTMAHR (the AI opponent)
+- **You choose your opponent while you prepare the table.** The table setup has a new step 04, "Who is at
+  the table?": Solo against NACHTMAHR (pick its faction, the points and the seat it plays), two players on one
+  screen, or an online room. NACHTMAHR's army stands in its seat when the table opens, and the "First steps" card
+  at the table follows your choice ("NACHTMAHR brings ..." or "Bring the second army"). The setup remembers your
+  choice for the next table. "Lay out the table" is now step 05. The game menu's AI Opponent button is gone; to
+  play NACHTMAHR with a list of your own, tick "AI-controlled (Solo)" when you import it, as before. Changing
+  NACHTMAHR's own list means preparing a new table.
 - **NACHTMAHR pays for every climb.** A unit of several models that crossed a container could spend
   more than its move once ground and climb were added up (an 8" Rush measured 9.6"). Every step that
   trims or re-routes its move now counts the climb, so its units climb less often and stop short of a
