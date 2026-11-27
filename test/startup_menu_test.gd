@@ -113,9 +113,11 @@ func test_enter_in_the_host_name_field_prepares_the_table() -> void:
 
 func test_load_opens_real_nml_file_dialog() -> void:
 	_menu.load_battle_btn.pressed.emit()
-	assert_object(_menu._load_dialog).is_not_null()
-	assert_int(_menu._load_dialog.file_mode).is_equal(FileDialog.FILE_MODE_OPEN_FILE)
-	assert_bool(_menu._load_dialog.visible).is_true()
+	assert_object(_menu._save_browser).is_not_null()
+	_menu._save_browser.browse_button.pressed.emit()
+	assert_int(_menu._save_browser.file_dialog.file_mode).is_equal(FileDialog.FILE_MODE_OPEN_FILE)
+	assert_bool(_menu._save_browser.file_dialog.visible).is_true()
+	_menu._save_browser.file_dialog.hide()
 
 func test_tutorial_entry_arms_existing_runtime_flags() -> void:
 	var mode = ProjectSettings.get_setting("niemandsland/tutorial_mode",false)
