@@ -6,15 +6,15 @@ extends GdUnitTestSuite
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const FIXTURE := "res://test/fixtures/setup_opponent/probe_list.json"
-const MANIFEST := {"probe": {"name": "Probe", "lists": [{"points": 100, "file": "probe_list.json"}]}}
+const MANIFEST := {"probe": {"name": "Probe", "lists": [{"points": 100, "file": "_e2e_table_opponent_probe.json"}]}}
+
+
+const CACHED := "user://ai_lists_cache_v36/_e2e_table_opponent_probe.json"
 
 
 class Lists extends AiLists:
 	func manifest() -> Dictionary:
 		return MANIFEST
-
-	func list_text(_file: String) -> String:
-		return FileAccess.get_file_as_string(FIXTURE)
 
 
 var _runner: GdUnitSceneRunner
@@ -29,12 +29,14 @@ func before_test() -> void:
 	_main = _runner.scene()
 	await _runner.simulate_frames(4)
 	_main.opr_army_manager.api_client._common_rules_cache[2] = {"rules": [], "traits": []}   # 2 = gf: no API call
-	var stub := Lists.new()
-	_main.add_child(stub)
-	_main._ai_lists = stub
+	TableOpponentLayer.lists_override = auto_free(Lists.new())
+	DirAccess.make_dir_recursive_absolute(CACHED.get_base_dir())
+	FileAccess.open(CACHED, FileAccess.WRITE).store_string(FileAccess.get_file_as_string(FIXTURE))
 
 
 func after_test() -> void:
+	TableOpponentLayer.lists_override = null
+	DirAccess.remove_absolute(CACHED)
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null

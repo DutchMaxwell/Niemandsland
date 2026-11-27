@@ -5,6 +5,9 @@ extends CanvasLayer
 ## loader), the army import on Player 2, or the Host dialog. Esc or Back closes it and changes nothing. Bringing
 ## NACHTMAHR into a seat that already holds an army replaces it, as any import into that seat does.
 
+## Tests hand in their own list source here (no CDN); null = the table's.
+static var lists_override: AiLists = null
+
 var page: SetupOpponentStep
 var opponent := SetupOpponent.new()
 var _main: Node
@@ -47,7 +50,8 @@ func _build() -> void:
 	back.pressed.connect(queue_free)
 	fill.add_child(back)
 	opponent.loading = true
-	opponent.set_manifest(await _main._ai_lists.manifest())
+	var lists: AiLists = lists_override if lists_override != null else _main._ai_lists
+	opponent.set_manifest(await lists.manifest())
 
 
 func _act() -> void:
