@@ -15,6 +15,7 @@ const STEPS := ["Game system", "Biome", "Table size", "Opponent"]
 const REFRESH := "<path d='M20 12a8 8 0 1 1-2.3-5.6M20 4v4.5h-4.5'/>"
 const CROSS := "<path d='M7 7l10 10M17 7L7 17'/>"
 const DEPLOYMENT := ["", " · Front Line (12\")", " · Custom Zones"]
+const RAIL_LINE_H := 40   # a summary row of the rail (sheets 03b, 03c)
 const TICK := "<path d='M5 12.5l4.5 4.5L19 7.5'/>"
 const MenuView = preload("res://scripts/startup_menu_view.gd")
 
@@ -117,6 +118,7 @@ func _place() -> void:
 		(card.get_child(0).get_child(1) as Label).add_theme_font_size_override(&"font_size", 16 if compact else 20)
 		(card.get_child(0).get_child(2) as Control).visible = not compact   # the caption
 	_legend.add_theme_constant_override(&"separation", 8 if compact else 18)
+	fit_rail_lines(_rail, compact)
 	_keys.position = Vector2(pad, size.y - (44.0 if compact else 60.0))
 	for box: Control in [left, _rail]:   # a container keeps its old height: shrink both to their new content
 		box.reset_size.call_deferred()
@@ -224,13 +226,8 @@ func _build_rail(values: Array) -> void:
 	box.add_child(_lines)
 	for row: Array in [["SYSTEM", values[0]], ["BIOME · SIZE", "%s · %s" % [values[1], values[2]]],
 			["OPPONENT", values[3]], ["LAYOUT", ""]]:
-		var line := HBoxContainer.new()
-		var key := _text(row[0], 14, HouseStyle.eyebrow_font(), HouseStyle.MUTED)
-		key.size_flags_horizontal = SIZE_EXPAND_FILL
-		line.add_child(key)
 		var value := _text(str(row[1]), 18, HouseStyle.font(400), HouseStyle.INK)
-		line.add_child(value)
-		box.add_child(line)
+		box.add_child(rail_line(row[0], value))
 		_layout_row = value
 	var create := HouseStyle.button("Create table", HouseStyle.PRIMARY, 56)
 	create.name = "CreateTable"
@@ -334,6 +331,33 @@ func _refresh() -> void:
 			card.add_theme_stylebox_override(&"normal", rim)
 		else:
 			card.remove_theme_stylebox_override(&"normal")
+
+
+## A rail's summary row as on sheets 03b/03c: the key in eyebrow caps left, `value` right, 40 px high, a hairline under it.
+static func rail_line(key: String, value: Label) -> VBoxContainer:
+	var wrapper := VBoxContainer.new()
+	wrapper.add_theme_constant_override(&"separation", 0)
+	var line := HBoxContainer.new()
+	line.custom_minimum_size.y = RAIL_LINE_H
+	line.set_meta("rail_line", true)
+	var key_label := _text(key, 14, HouseStyle.eyebrow_font(), HouseStyle.MUTED)
+	key_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.add_child(key_label)
+	line.add_child(value)
+	wrapper.add_child(line)
+	var rule := ColorRect.new()
+	rule.color = Color(HouseStyle.LINE, 0.6)
+	rule.custom_minimum_size.y = 1
+	wrapper.add_child(rule)
+	return wrapper
+
+
+## Below 800 px the rail's summary rows close up and lose their hairlines, so the rail keeps fitting a 720p window.
+static func fit_rail_lines(rail: Control, compact: bool) -> void:
+	for line: Node in rail.find_children("*", "HBoxContainer", true, false):
+		if line.has_meta("rail_line"):
+			(line as Control).custom_minimum_size.y = 0.0 if compact else float(RAIL_LINE_H)
+			(line.get_parent().get_child(1) as Control).visible = not compact
 
 
 ## A folded step row of the setup: "01 ✓" in mono, the step's name muted, its value, "Change" (`Change<index>`)
