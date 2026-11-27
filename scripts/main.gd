@@ -11757,6 +11757,12 @@ func _solo_choice_local(unit: GameUnit, id: String, options: Array, wounds := 0,
 	if id.get_slice(":", 0) == "versatile_mode":   # step 22b: the table's own Versatile prompt, the answer as the core's option
 		var vm: Dictionary = await _solo_prompt_versatile(str(ctx.get("weapon", "Weapon")), ctx.get("recommended", {"ap": 1, "hit_mod": 0}))
 		return "ap" if int(vm.get("ap", 0)) > 0 else "hit"
+	if id.get_slice(":", 0) == "push":   # step 29e-1 (D-29-R2): the attacker decides after the dice
+		var pushed := opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2))
+		return "push" if await _solo_ask("Push?", "%s is Shaken after your attack.\nTry to push one of its models up to 2 in (4+)?" % (
+			pushed.get_name() if pushed else "The target"), "Try to push", "No") else "no"
+	if id.get_slice(":", 0) == "push_to":
+		return await CoreActivation.pick_push_spot(self, opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2)))
 	if id.get_slice(":", 0) == "blast_split":   # step 29c: the defender picks which units take the Blast remainder
 		return await _solo_ask_blast_split(opr_army_manager.get_game_unit_by_id(id.get_slice(":", 1)), options)
 	if id.get_slice(":", 0) == "spot_markers":   # the table's own marker dialog; the count is one of the core's options "0".."N"
@@ -14635,6 +14641,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	# LAST fallback, every window, ghost, radial, drag and pick mode before it keeps its own Esc.
 	var key := event as InputEventKey
 	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
+		if CoreActivation.skip_push_pick():   # step 29e-1: Esc skips the push spot
+			get_viewport().set_input_as_handled()
+			return
 		if not _esc_owned:
 			# maintainer test 7, 26.10.2026: Esc with a selection deselects first; the menu opens on the next Esc.
 			if not left_panel_scroll.visible and object_manager != null \
@@ -22604,6 +22613,9 @@ func _on_unit_moved() -> void:
 func _on_units_dropped(moves: Array) -> void:
 	if opr_army_manager == null or opr_army_manager.is_deployment_phase():
 		return
+	for mv in moves:
+		if CoreActivation.take_push_drop(self, mv):   # step 29e-1: the push spot is the drop, not a move of that unit
+			return
 	for mv in moves:
 		if float((mv as Dictionary).get("inches", 0.0)) <= 0.1:
 			continue

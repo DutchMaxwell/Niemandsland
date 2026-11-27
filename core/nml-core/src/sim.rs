@@ -13449,7 +13449,7 @@ fn resolve_with(
                 let line = if face < 4 {
                     format!("Push: {name} rolls {face} to push {tname} - no push on 1-3")
                 } else {
-                    let answer = up_front.map(Ok).or_else(|| tray.reach_free(&to_id, &skey).map(|a| push_answer(&next, ti, &tkey, &a)));
+                    let answer = up_front.map(Ok).or_else(|| tray.reach_free(&to_id, &skey).filter(|a| a != "skip").map(|a| push_answer(&next, ti, &tkey, &a)));
                     match answer.map(|p| p.and_then(|p| push_spot(&next, ti, &p, cover).map(|r| (p, r)))) {
                         None => format!("Push: {name} rolls {face} to push {tname} - no spot named, nothing moves"),
                         Some(Err(why)) => {
