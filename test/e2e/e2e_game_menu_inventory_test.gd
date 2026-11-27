@@ -9,7 +9,7 @@ extends GdUnitTestSuite
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 
 ## Rows 2 and 4: every button by its text ("Next Round" by prefix: its label names the round).
-const BUTTONS := ["Import OPR Army...", "Map Layout...", "Terrain Mode", "Clear Table",
+const BUTTONS := ["Import OPR Army...", "Opponent…", "Map Layout...", "Terrain Mode", "Clear Table",
 	"Sort Table", "Next Round", "Settings", "Save Game...", "Load Game...", "End Battle - To Main Menu"]
 ## Row 3 while offline (Disconnect shows once connected).
 const MP_BUTTONS := ["Host Online Game", "Join Online Game"]
@@ -32,7 +32,7 @@ const STATES := [
 ## The graphics quality dropdown, in GraphicsSettings.QualityPreset order.
 const GRAPHICS := ["Performance", "Low", "Medium", "High", "Ultra"]
 ## Buttons that explain themselves on hover.
-const TOOLTIPS := ["Sort Table", "Next Round", "Settings"]
+const TOOLTIPS := ["Sort Table", "Next Round", "Settings", "Opponent…"]
 ## Row 6: deployment zones and the phase gate (the host tools show only to the host of a live session).
 const DEPLOY_BUTTONS := ["Show Deployment Zones", "Flip Zone Colours", "Start Game"]
 const DEPLOY_LABELS := ["Deployment Zones:", "(Configure in Map Tool)"]
