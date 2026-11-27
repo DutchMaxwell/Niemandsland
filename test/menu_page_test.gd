@@ -44,3 +44,28 @@ func test_the_way_back_and_esc_close_the_page() -> void:
 	page.get_viewport().push_input(esc)
 	await get_tree().process_frame
 	assert_array(heard).is_equal(["closed", "closed"])
+
+
+## Step 48.5b: the menu shows a page in place of its list and brings the list back (red before: no open_page).
+func test_the_menu_opens_a_page_in_place_of_its_list_and_returns() -> void:
+	var runner := scene_runner("res://scenes/startup_menu.tscn")
+	var view: Control = runner.scene().view
+	assert_bool(view.has_method("open_page")).override_failure_message("no open_page").is_true()
+	if not view.has_method("open_page"):
+		return
+	var learn := view.buttons.LearnBtn as Control
+	learn.grab_focus()
+	var page: Control = (load(SCRIPT) as GDScript).new()
+	view.call("open_page", page)
+	await runner.simulate_frames(2)
+	for key: String in ["_scroll", "_footer", "news_card", "_masthead"]:
+		assert_bool((view.get(key) as Control).visible).override_failure_message(key + " shown").is_false()
+	assert_object(view.get_viewport().gui_get_focus_owner()).is_same(page.get("back"))
+	runner.simulate_key_pressed(KEY_ESCAPE)
+	await runner.simulate_frames(2)
+	assert_bool(is_instance_valid(page) and page.is_inside_tree()).is_false()
+	assert_array(runner.scene().find_children("*", "PromptCard", true, false)).is_empty()   # Esc is not Quit here
+	assert_bool((view.get("_scroll") as Control).visible).is_true()
+	assert_object(view.get_viewport().gui_get_focus_owner()).is_same(learn)
+	view.call("show_route", "help")
+	assert_bool(view.route_panel.visible).is_true()
