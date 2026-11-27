@@ -60,3 +60,21 @@ func test_a_problem_seed_is_silently_rerolled_to_the_next() -> void:
 	core.bad = range(900, 950)
 	assert_dict(gb.call("resolve", "tiefwerk", 900, core)).is_empty()
 	assert_dict(gb.call("resolve", "castle", 1, StubCore.new())).is_empty()
+
+
+## GEN-11: a stored record is checked against this build's board of the same seed - equal digest and version = "",
+## else the reason names both board codes; a record without a digest (the dev door's) is not checked.
+func test_a_stored_board_is_checked_against_this_builds() -> void:
+	var gb := _gb()
+	if gb == null:
+		return
+	var core := StubCore.new()
+	var rec: Dictionary = gb.call("resolve", "tiefwerk", 77, core)
+	assert_str(gb.call("verify", rec, core)).is_empty()
+	var planted := rec.duplicate()
+	planted["digest"] = "0000000000000000"
+	assert_str(gb.call("verify", planted, core)).contains("TW-1-77").contains("does not match")
+	var older := rec.duplicate()
+	older["version"] = 0
+	assert_str(gb.call("verify", older, core)).contains("board version 0").contains("this build makes version 1")
+	assert_str(gb.call("verify", {"seed": 7, "theme": ""}, core)).is_empty()

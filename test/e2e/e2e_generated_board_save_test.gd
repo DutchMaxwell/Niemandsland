@@ -63,3 +63,19 @@ func test_a_save_without_a_board_loads_flat(do_skip := not ClassDB.class_exists(
 	await _main.save_manager.load_game(SAVE_PATH)
 	await get_tree().process_frame
 	assert_dict(_main.generated_board()).is_empty()
+
+
+## GEN-11: a save whose board digest is not this build's board -> the board is NOT laid (and the line is logged).
+@warning_ignore('unused_parameter')
+func test_a_board_with_a_foreign_digest_is_not_laid(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
+	assert_bool(_main.apply_generated_board(BOARD)).is_true()
+	assert_int(_main.save_manager.save_game(SAVE_PATH)).is_equal(OK)
+	var text := FileAccess.get_file_as_string(SAVE_PATH).replace(str(BOARD["digest"]), "0000000000000000")
+	FileAccess.open(SAVE_PATH, FileAccess.WRITE).store_string(text)
+	var loaded: Array = []
+	_main.save_manager.load_completed.connect(func(_n: int) -> void: loaded.append(true), CONNECT_ONE_SHOT)
+	await _main.save_manager.load_game(SAVE_PATH)
+	await get_tree().process_frame
+	assert_int(loaded.size()).override_failure_message("the load itself was refused").is_equal(1)
+	assert_dict(_main.generated_board()).override_failure_message("a foreign board was laid").is_empty()
