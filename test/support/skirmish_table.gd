@@ -188,6 +188,34 @@ func shoot(att: GameUnit, target: GameUnit) -> void:
 	await E2EBoot.settle(_tree)
 
 
+## A player's Shoot (`melee` false) or Fight through the radial's targeting door and a left click on `target`'s first live
+## model: the click handler picks it with a ray (each target model gets a pick body, as spawned models carry), validates
+## it and logs the refusal or resolves the attack.
+func aim(att: GameUnit, target: GameUnit, melee := false) -> void:
+	await main.solo_begin_targeting(att, melee)
+	for m in target.get_alive_models():
+		var n: Node3D = (m as ModelInstance).node
+		if n.get_node_or_null("FtPick") == null:
+			var body := StaticBody3D.new()
+			body.name = "FtPick"
+			body.set_meta("game_unit", target)
+			var shape := CollisionShape3D.new()
+			var ball := SphereShape3D.new()
+			ball.radius = 0.016
+			shape.shape = ball
+			body.add_child(shape)
+			n.add_child(body)
+			body.position = Vector3(0, 0.03, 0)
+	await runner.simulate_frames(3)
+	var at: Vector3 = (target.get_alive_models()[0] as ModelInstance).node.global_position + Vector3(0, 0.03, 0)
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = main.get_viewport().get_camera_3d().unproject_position(at)
+	await main._solo_targeting_input(click)
+	await E2EBoot.settle(_tree)
+
+
 ## Pin the table to the pending rules epoch `n` and record the pin (R-FT1); teardown restores the shipped epoch.
 func need_epoch(n: int) -> void:
 	AiActRecorder.rules_epoch = n
