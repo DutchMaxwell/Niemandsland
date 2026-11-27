@@ -31,8 +31,9 @@ class WireNet extends "res://scripts/network_manager.gd":
 	func send_command(type: String, payload: Variant = {}, target_peer: int = 0) -> bool:
 		wire.append({"t": type, "p": payload, "to": target_peer})
 		return true
-	func slot_has_human_peer(_slot: int) -> bool:
-		return false
+	var human_slots: Array = []   # the slots a human peer plays (their units are asked through the wire)
+	func slot_has_human_peer(slot: int) -> bool:
+		return human_slots.has(slot)
 	func get_my_peer_id() -> int:
 		return 1
 	func get_my_player_slot() -> int:
@@ -329,6 +330,19 @@ func deploy_done(gu: GameUnit) -> bool:
 func toast_text() -> String:
 	var t := main.get_node_or_null("UI/SoloActionToast") as Label
 	return "" if t == null else t.text
+
+
+## O seat: a human guest (peer 2) holds slot 2 - its units' owner choices go over the wire; `timeout_s` bounds the wait.
+func seat_guest(timeout_s: float) -> void:
+	net.human_slots = [2]
+	net.peer_to_slot = {1: 1, 2: 2}
+	net.connected_peers.assign([2])
+	main._owner_requests_instance().timeout_s = timeout_s
+
+
+## The guest's answer frame to the owner request `req`, through the host's command receive door.
+func answer_owner(req: int, faces: Array) -> void:
+	main._on_network_command("roll_result", {"req": req, "faces": faces}, 2)
 
 
 ## Pin the table to the pending rules epoch `n` and record the pin (R-FT1); teardown restores the shipped epoch.
