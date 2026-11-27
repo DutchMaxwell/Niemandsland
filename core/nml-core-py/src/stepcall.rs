@@ -138,12 +138,6 @@ fn input_of(v: &Value) -> Option<Input> {
         "cast" => Input::Cast(cast_of(o)?),
         // meleefix: the Godot seam's `consolidate` entry, field for field; `unit` is required.
         "consolidate" => Input::Consolidate(consolidate_of(o)?),
-        // The skirmish Pushing rule: `{"t": "push", "target", "model", "to": [x, y, z]}`, every field required.
-        "push" => Input::Push(nmlcore::activation::PushInput {
-            target: o.get("target")?.as_str()?.to_string(),
-            model: o.get("model")?.as_u64()? as usize,
-            to: coords(o.get("to")?, 3).map(|c| [c[0], c[1], c[2]])?,
-        }),
         // D-PAR3 14a: the Godot seam's `paid` entry; each flag absent = false.
         "paid" => {
             let on = |k: &str| o.get(k).and_then(Value::as_bool).unwrap_or(false);

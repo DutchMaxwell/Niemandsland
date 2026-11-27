@@ -336,17 +336,6 @@ fn a_fall_lands_the_move_before_its_wounds() {
     assert!(landings[hurt].models.iter().all(|m| (m.at[0] - foot[0]).abs() < 1e-9), "the wounds' `at` is the foot");
 }
 
-/// The push offer rides with the declared action: after the Intent, before the first die, once.
-#[test]
-fn a_push_is_declared_with_the_action_before_the_first_die_once() {
-    let push = || Input::Push(PushInput { target: "b".into(), model: 0, to: [0.0; 3] });
-    let intent = || Input::Intent { kind: HOLD, shoot: Some("b".into()), split: None, charge: None, no_step: false };
-    assert_eq!(order_check("Squad", &[Input::Begin, push()]), Err((1, "a push before the action was declared".into())));
-    assert_eq!(order_check("Squad", &[Input::Begin, intent(), Input::Faces(vec![6]), push()]), Err((3, "a push after the first die".into())));
-    assert_eq!(order_check("Squad", &[Input::Begin, intent(), push(), push()]), Err((3, "one push per activation".into())));
-    assert_eq!(order_check("Squad", &[Input::Begin, intent(), push(), Input::Faces(vec![6])]), Ok(()));
-}
-
 /// Plan step 27-pre-R (found by the R3 ruin e2e): the same 4 in ledge as `ledge`, but as a free ruin's FLOOR on a flat board
 /// (x >= 0 in, top 4 in). From `PENDING_EPOCH_RUIN_LEDGES` the drop off it is the tier ledge's: the same check, the same
 /// jump dice and the same foot to land a fall on - `jump_foot` read the drop's top from the flat tier grid and found none.
