@@ -2026,6 +2026,11 @@ static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionar
 
 ## Ruling D16: the twin of the core's `rules::carries_command` - the AoF: Skirmish book limits command groups
 ## (`Book::one_command_upgrade_each`) and the unit has a Banner or a Musician.
+## Public for the owner's pick door (CommandPicks): the same test the capture and CR3 read.
+static func carries_command(u: GameUnit) -> bool:
+	return _carries_command(u)
+
+
 static func _carries_command(u: GameUnit) -> bool:
 	if str(u.unit_properties.get("game_system", "")) != "aofs" or u.models.is_empty():
 		return false
