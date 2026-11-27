@@ -69,3 +69,22 @@ func test_the_menu_opens_a_page_in_place_of_its_list_and_returns() -> void:
 	assert_object(view.get_viewport().gui_get_focus_owner()).is_same(learn)
 	view.call("show_route", "help")
 	assert_bool(view.route_panel.visible).is_true()
+
+
+## Sheets 02 and 07: the header breathes - 26 px from the way back to the eyebrow, 22 px from the title to the column
+## (red before: 10 px each, the way back glued to the eyebrow).
+func test_the_header_has_the_sheets_rhythm() -> void:
+	var page := await _page()
+	if page == null:
+		return
+	(page.get("eyebrow") as Label).text = "LEARN TO PLAY"
+	(page.get("title") as Label).text = "Find your starting point."
+	(page.get("left") as Control).add_child(Control.new())
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var back := (page.get("back") as Control).get_parent() as Control
+	var eyebrow := page.get("eyebrow") as Control
+	var title := page.get("title") as Control
+	var left := page.get("left") as Control
+	assert_float(eyebrow.get_global_rect().position.y - back.get_global_rect().end.y).is_between(24.0, 28.0)
+	assert_float(left.get_global_rect().position.y - title.get_global_rect().end.y).is_between(20.0, 24.0)
