@@ -31,7 +31,10 @@ func _assert_layout(window: Vector2i) -> float:
 	var card: Control = dialog._biome_buttons.values()[0]
 	var card_aspect := card.size.x / card.size.y
 	var hero_aspect := dialog._hero.size.x / dialog._hero.size.y
-	assert_float(card_aspect).override_failure_message("%s: biome card %.2f:1" % [window, card_aspect]).is_between(2.0, 2.8)
+	if dialog._grid.columns == 6:   # one row of tall cards (step 83, sheet 03): the picture is at least 150 px high
+		assert_float(dialog._cards[0].size.y).override_failure_message("%s: picture %d px" % [window, int(dialog._cards[0].size.y)]).is_greater_equal(150.0)
+	else:
+		assert_float(card_aspect).override_failure_message("%s: biome card %.2f:1" % [window, card_aspect]).is_between(2.0, 2.8)
 	assert_float(hero_aspect).override_failure_message("%s: preview %.2f:1" % [window, hero_aspect]).is_between(2.2, 2.9)
 	assert_float(dialog._page.get_combined_minimum_size().y) \
 		.override_failure_message("%s: the page needs scrolling" % window).is_less_equal(dialog._scroll.size.y)
@@ -151,3 +154,18 @@ func test_from_900_px_the_right_column_is_the_rail_card() -> void:
 	var small := await _open(Vector2i(1280, 720))
 	assert_bool(small.find_child("RailCard", true, false).is_ancestor_of(small._create)) \
 		.override_failure_message("the 720 page lost its footer button").is_false()
+
+
+## Step 83 (sheet 03): with the rail card's wide left column the six biomes stand in one row, each picture at least
+## 150 px high over a 44 px name band in 16 px; the chosen card has a 2 px gold rim. 1280x720 keeps its grid (red
+## before: a 3 x 2 grid of flat cards).
+func test_the_six_biomes_stand_in_one_row_at_1080p() -> void:
+	var dialog := await _open(Vector2i(1920, 1080))
+	assert_int(dialog._grid.columns).is_equal(6)
+	var tops: Array = dialog._biome_buttons.values().map(func(b: Control) -> int: return int(b.get_global_rect().position.y))
+	assert_int(tops.max() - tops.min()).override_failure_message("the cards are not one row").is_less_equal(1)
+	assert_float(dialog._cards[0].size.y).is_greater_equal(150.0)
+	var chosen := dialog._biome_buttons[dialog.selected_biome] as Button
+	assert_int((chosen.get_theme_stylebox("normal") as StyleBoxFlat).border_width_top).is_equal(2)
+	var small := await _open(Vector2i(1280, 720))
+	assert_int(small._grid.columns).is_less_equal(3)
