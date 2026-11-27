@@ -5,10 +5,17 @@ extends MenuPage
 ## online table; hosting begins at the table, nothing touches the network here.
 
 signal host_requested(settings: Dictionary)
+signal join_requested(code: String, url: String, player_name: String, button: Button)
+
+const LOCK := "<rect x='5' y='11' width='14' height='9' rx='1.5'/><path d='M8 11V8a4 4 0 0 1 8 0v3'/>"
+const JOIN_CODE_LEN := 6
 
 var name_field: LineEdit
 var public_check: CheckBox
 var prepare_button: Button
+var code_boxes: CodeBoxes
+var join_button: Button
+var join_error: Label
 var relay_line: Button
 var relay_field: LineEdit
 
@@ -25,7 +32,7 @@ func _init() -> void:
 	name_field.max_length = PlayerIdentity.MAX_NAME_LEN
 	name_field.text_submitted.connect(func(_text: String) -> void: _on_prepare())
 	left.add_child(name_field)
-	var create := _block("table", "Create a room", "Prepare a table for your group")
+	var create := _block(MenuView._icon(&"table"), "Create a room", "Prepare a table for your group")
 	create.draw.connect(_draw_corners.bind(create))
 	public_check = CheckBox.new()
 	public_check.text = "List room publicly"
@@ -43,6 +50,7 @@ func _init() -> void:
 		HouseStyle.font(400))
 	note.add_theme_color_override(&"font_color", HouseStyle.MUTED)
 	create.get_child(0).add_child(note)
+	_build_join()
 	relay_line = Button.new()
 	relay_line.flat = true
 	relay_line.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -65,7 +73,7 @@ func _layout() -> void:
 
 
 ## A block of the left column (panel box, 18 px padding): a drawn icon, its title and a line under it.
-func _block(icon: StringName, heading: String, line: String) -> PanelContainer:
+func _block(icon: Texture2D, heading: String, line: String) -> PanelContainer:
 	var block := PanelContainer.new()
 	block.theme_type_variation = HouseStyle.PANEL_VARIANT
 	var body := VBoxContainer.new()
@@ -74,9 +82,10 @@ func _block(icon: StringName, heading: String, line: String) -> PanelContainer:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override(&"separation", 14)
 	var mark := TextureRect.new()
-	mark.texture = MenuView._icon(icon)
+	mark.texture = icon
 	mark.custom_minimum_size = Vector2(28, 28)
 	mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	mark.modulate = HouseStyle.ACCENT
 	head.add_child(mark)
 	var words := VBoxContainer.new()
@@ -88,6 +97,55 @@ func _block(icon: StringName, heading: String, line: String) -> PanelContainer:
 	body.add_child(head)
 	left.add_child(block)
 	return block
+
+
+## "Join with a code": the six boxes and Join (off below six characters, gold from then on, with an Enter cap); the
+## two error lines of today's join window under the boxes, only when needed, until the next keystroke.
+func _build_join() -> void:
+	var block := _block(HouseStyle.svg_icon(MenuView.ICON_SVG % LOCK), "Join with a code",
+		"Enter a six-character invitation code")
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override(&"separation", 10)
+	code_boxes = CodeBoxes.new()
+	code_boxes.changed.connect(_on_code_changed)
+	code_boxes.submitted.connect(func(_code: String) -> void: _on_join())
+	row.add_child(code_boxes)
+	join_button = HouseStyle.button("Join", HouseStyle.BUTTON, 62)
+	join_button.focus_mode = FOCUS_ALL
+	join_button.disabled = true
+	join_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	join_button.pressed.connect(_on_join)
+	var cap := HouseStyle.key_cap("Enter")
+	cap.mouse_filter = MOUSE_FILTER_IGNORE
+	cap.set_anchors_preset(PRESET_CENTER_RIGHT)
+	cap.grow_horizontal = GROW_DIRECTION_BEGIN
+	cap.offset_left = -10
+	cap.offset_right = -10
+	join_button.add_child(cap)
+	row.add_child(join_button)
+	block.get_child(0).add_child(row)
+	join_error = _text("", HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
+	join_error.add_theme_color_override(&"font_color", HouseStyle.tone_ink(HouseStyle.TONE_DANGER))
+	join_error.visible = false
+	block.get_child(0).add_child(join_error)
+
+
+func _on_code_changed(code: String) -> void:
+	join_error.visible = false
+	join_button.disabled = code.length() != JOIN_CODE_LEN
+	join_button.theme_type_variation = HouseStyle.BUTTON if join_button.disabled else HouseStyle.PRIMARY
+
+
+func _on_join() -> void:
+	var code := code_boxes.text
+	if code.length() != JOIN_CODE_LEN:
+		join_error.text = "Enter your game’s invitation code." if code.is_empty() else \
+			"An invitation code has %d characters, for example ABC-123." % JOIN_CODE_LEN
+		join_error.visible = true
+		return
+	var url := relay_field.text.strip_edges()
+	join_requested.emit(code, url if not url.is_empty() else InternetLobby.DEFAULT_RELAY_URL,
+		PlayerIdentity.sanitize(name_field.text), join_button)
 
 
 ## Today's settings of an online table (the menu's create window had the same five).

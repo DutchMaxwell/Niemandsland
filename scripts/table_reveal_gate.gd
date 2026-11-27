@@ -128,4 +128,5 @@ func _reveal(by_cap: bool) -> void:
 	if by_cap and _mode == "join" and not done.has("Table") and _main.has_method("_show_toast"):
 		_main._show_toast(HOST_LATE)
 	revealed.emit(by_cap)
+	TableArrival.start(_main, _mode)
 	queue_free.call_deferred()
