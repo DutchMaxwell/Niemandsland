@@ -60,6 +60,9 @@ var _back: Button
 var _back_wide: HBoxContainer   # from 900 px: a bordered "Back to main menu" with its Esc cap (step 84)
 var _wide_only: Array[Control] = []   # the breadcrumb and the eyebrow "NEW TABLE": shown from 900 px only
 var _intro: VBoxContainer
+var _headings: Array = []    # [number, name, hint] of each step heading (step 84: 22 px, mono number, hint at the right)
+var _size_texts: Array = []  # [caption, value, sub-line] of each size card
+var _size_note: Label        # "Table size is fixed once you create it." under the cards; the heading's hint from 900 px
 var _title: Label
 var _preview: TextureRect
 var _preview_title: Label
@@ -244,7 +247,7 @@ func _build_ui() -> void:
 	left.size_flags_stretch_ratio = 1
 	left.add_theme_constant_override("separation",14)
 	_columns.add_child(left)
-	left.add_child(_label("02   Choose a biome",17))
+	left.add_child(_step_heading("02","Choose a biome","The biome defines the visual style. Terrain stays yours to place."))
 	_grid = GridContainer.new()
 	_grid.columns = 3
 	_grid.add_theme_constant_override("h_separation",10)
@@ -278,7 +281,7 @@ func _build_ui() -> void:
 	_add_left_air(left)
 	var size_header := HBoxContainer.new()
 	left.add_child(size_header)
-	var size_title := _label("03   Set the table size",17)
+	var size_title := _step_heading("03","Set the table size","Table size is fixed once you create it.")
 	size_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_header.add_child(size_title)
 	_unit_option = OptionButton.new()
@@ -315,10 +318,11 @@ func _build_ui() -> void:
 		column.offset_right = -8
 		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		button.add_child(column)
-		column.add_child(_label(spec[1],11,HouseStyle.MUTED))
-		var value := _label("Your dimensions",13)
-		column.add_child(value)
-		column.add_child(_label(spec[2],10,HouseStyle.MUTED))
+		var texts := [_label(spec[1],11,HouseStyle.MUTED),_label("Your dimensions",13),_label(spec[2],10,HouseStyle.MUTED)]
+		for text in texts:
+			column.add_child(text)
+		_size_texts.append(texts)
+		var value: Label = texts[1]
 		_size_labels[spec[0]] = value
 		button.pressed.connect(_select_size.bind(spec[0]))
 		presets.add_child(button)
@@ -344,7 +348,8 @@ func _build_ui() -> void:
 			_length_input = input
 	_error = _label("",12,Color("eab2a2"),true)
 	left.add_child(_error)
-	left.add_child(_label("Table size is fixed once you create it.",11,HouseStyle.MUTED))
+	_size_note = _label("Table size is fixed once you create it.",11,HouseStyle.MUTED)
+	left.add_child(_size_note)
 	_add_left_air(left)
 	left.add_child(HSeparator.new())
 	if layout_step:
@@ -549,7 +554,8 @@ func _add_system_cards() -> void:
 	step.add_theme_constant_override("separation",10)
 	_page.add_child(step)
 	_system_step = step
-	var heading := _label("01   Choose a game system",17)
+	var heading := _step_heading("01","Choose a game system",
+		"Sets the terrain on offer, the starting table size and the army lists the table accepts.")
 	heading.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	step.add_child(heading)
 	var row := HBoxContainer.new()
@@ -833,6 +839,21 @@ func _set_rail(on: bool) -> void:
 	_title.add_theme_font_size_override("font_size",44 if on else 34)
 	_title.add_theme_font_override("font",HouseStyle.font(500) if on else FONT)
 	_intro_line.add_theme_font_size_override("font_size",17 if on else 13)
+	for parts: Array in _headings:
+		parts[0].add_theme_font_override("font",HouseStyle.mono() if on else FONT)
+		parts[0].add_theme_font_size_override("font_size",15 if on else 17)
+		parts[0].add_theme_color_override("font_color",HouseStyle.GOLD if on else HouseStyle.INK)
+		parts[1].add_theme_font_size_override("font_size",22 if on else 17)
+		parts[1].add_theme_font_override("font",HouseStyle.font(500) if on else FONT)
+		parts[2].visible = on
+	_size_note.visible = not on
+	for texts: Array in _size_texts:
+		texts[0].text = texts[0].text.to_upper() if on else texts[0].text.capitalize()
+		texts[0].add_theme_font_override("font",HouseStyle.mono() if on else FONT)
+		for i in 3:
+			texts[i].add_theme_font_size_override("font_size",[14,20,15][i] if on else [11,13,10][i])
+	for button in _size_buttons.values():
+		button.custom_minimum_size.y = 108 if on else 76
 	for pair: Array in [[_intro,0],[_system_step,1]]:
 		var home: Node = _left if on and _columns.visible else _page   # the inner pages keep the title over them
 		if pair[0].get_parent() != home:
@@ -901,6 +922,22 @@ func _fill_height(usable: float, separation: int) -> void:
 	var spare := usable-_page.get_combined_minimum_size().y
 	if spare > 0 and gaps > 0:
 		_page.add_theme_constant_override("separation",separation+int(spare/gaps))
+
+
+## A step's heading: its number, its name and (from 900 px, _set_rail) a hint at the right in 15 px muted.
+func _step_heading(number: String, step_name: String, hint: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation",14)
+	var parts := [_label(number,17),_label(step_name,17),_label(hint,15,HouseStyle.MUTED)]
+	parts[2].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parts[2].horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	parts[2].clip_text = true
+	parts[2].text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	for part in parts:
+		part.size_flags_vertical = Control.SIZE_SHRINK_END
+		row.add_child(part)
+	_headings.append(parts)
+	return row
 
 
 ## The six biomes stand in one row when the rail form leaves the left column at least SIX_MIN_W wide.
