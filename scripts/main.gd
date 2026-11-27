@@ -393,9 +393,7 @@ var _solo_cargo_hint_round: int = -1         # #338: passengers-left hint printe
 var _solo_ai_banner: Label = null            # non-blocking "NACHTMAHR is taking its turn…" banner during the tail
 var _solo_dream_overlay: Control = null      # centred "NACHTMAHR dreams…" + spinner while the AI computes
 var _ai_opponent_btn: Button = null          # "AI Opponent" — NACHTMAHR builds its own army
-const AI_LISTS_DIR := "res://assets/ai_lists"          # dev/arena bundle — NEVER in the public repo
-const AI_LISTS_CDN_PATH := "ai_lists_v36"               # <AssetCdn.HOST>/ai_lists_v36/… (rules 3.6; 0.3.14 keeps ai_lists/)
-const AI_LISTS_CACHE_DIR := "user://ai_lists_cache_v36" # offline replay of fetched 3.6 lists (a 3.5 cache is never read)
+var _ai_lists: AiLists = null               # where NACHTMAHR's lists come from (bundle, cache, CDN)
 var _solo_fast: bool = false                 # fast-forward: shrink pacing holds + skip move animation
 var _solo_auto_saves: bool = false           # A3 (NML-202): skip _solo_prompt_saves' dialog, roll straight to the tray
 var _solo_batch: bool = false                # headless sweeps: instant (non-physics) dice + zero pacing holds (implies fast)
@@ -816,6 +814,8 @@ func _ready() -> void:
 
 	# AI-opponent setup (maintainer): next to the import button, a "let NACHTMAHR bring its own list"
 	# entry. The alternative — hand the AI YOUR imported list — is the existing per-slot AI checkbox.
+	_ai_lists = AiLists.new()
+	add_child(_ai_lists)
 	_ai_opponent_btn = Button.new()
 	_ai_opponent_btn.name = "AiOpponentBtn"
 	_ai_opponent_btn.text = "AI Opponent"
@@ -20946,7 +20946,7 @@ func _on_import_opr_army() -> void:
 func _open_ai_opponent_dialog() -> void:
 	if _engine_refused_without_core():
 		return
-	var manifest := await _load_ai_list_manifest()
+	var manifest: Dictionary = await _ai_lists.manifest()
 	if manifest.is_empty():
 		_solo_show_toast("No AI lists available (no connection yet?) — import any list with the AI checkbox instead")
 		return
@@ -21058,11 +21058,7 @@ func _load_ai_opponent_list(file: String, slot: int) -> void:
 	if network_manager != null and network_manager.slot_has_human_peer(slot):
 		_solo_show_toast("P%d is a connected human player — NACHTMAHR stays out" % slot)
 		return
-	var text := _ai_lists_local_text(file)
-	if text.is_empty():
-		text = await _fetch_cdn_text("%s/%s" % [AI_LISTS_CDN_PATH, file])
-		if not text.is_empty():
-			_ai_lists_cache_write(file, text)
+	var text: String = await _ai_lists.list_text(file)
 	if text.is_empty():
 		_solo_show_toast("AI list not found: %s (no bundle, no cache, no connection)" % file)
 		return
@@ -21074,57 +21070,6 @@ func _load_ai_opponent_list(file: String, slot: int) -> void:
 	# Same path an imported army takes, flagged AI-controlled → the AI slot + difficulty wire up.
 	await _on_opr_army_imported(army, slot, true)
 	_solo_show_toast("NACHTMAHR: %s ready (player %d)" % [army.name, slot])
-
-
-## Local sources for an AI-list file: the dev/arena bundle first, then the user cache of earlier
-## CDN downloads (offline replay). "" when neither exists.
-func _ai_lists_local_text(file: String) -> String:
-	var text := FileAccess.get_file_as_string("%s/%s" % [AI_LISTS_DIR, file])
-	if not text.is_empty():
-		return text
-	return FileAccess.get_file_as_string("%s/%s" % [AI_LISTS_CACHE_DIR, file])
-
-
-func _ai_lists_cache_write(file: String, text: String) -> void:
-	DirAccess.make_dir_recursive_absolute(AI_LISTS_CACHE_DIR)
-	var f := FileAccess.open("%s/%s" % [AI_LISTS_CACHE_DIR, file], FileAccess.WRITE)
-	if f != null:
-		f.store_string(text)
-
-
-## One-shot CDN text fetch (browser UA — the R2 host rejects bare clients). "" on any failure;
-## callers fall back to bundle/cache/toast.
-func _fetch_cdn_text(rel_path: String) -> String:
-	var http := HTTPRequest.new()
-	http.timeout = 15.0
-	add_child(http)
-	var err := http.request("%s/%s" % [AssetCDN.HOST, rel_path],
-		["User-Agent: Mozilla/5.0 (X11; Linux x86_64) Niemandsland"])
-	if err != OK:
-		http.queue_free()
-		return ""
-	var res: Array = await http.request_completed
-	http.queue_free()
-	if int(res[0]) != HTTPRequest.RESULT_SUCCESS or int(res[1]) != 200:
-		return ""
-	return (res[3] as PackedByteArray).get_string_from_utf8()
-
-
-## Read the bundled AI-list manifest (faction → display name + point-bracket files). {} when absent.
-## AI-list index: bundle → CDN (fresh) → user cache (offline). The CDN copy wins over a stale
-## cache; a successful fetch refreshes the cache for the next offline session.
-func _load_ai_list_manifest() -> Dictionary:
-	var text := FileAccess.get_file_as_string("%s/_manifest.json" % AI_LISTS_DIR)
-	if text.is_empty():
-		text = await _fetch_cdn_text("%s/_manifest.json" % AI_LISTS_CDN_PATH)
-		if not text.is_empty():
-			_ai_lists_cache_write("_manifest.json", text)
-		else:
-			text = FileAccess.get_file_as_string("%s/_manifest.json" % AI_LISTS_CACHE_DIR)
-	if text.is_empty():
-		return {}
-	var parsed = JSON.parse_string(text)
-	return parsed if parsed is Dictionary else {}
 
 
 ## Handle army imported from dialog
