@@ -44,3 +44,70 @@ static func toggle(main, owner_unit: GameUnit, pick: GameUnit) -> String:
 		if not names.is_empty() else "Command group: %s's picks cleared - the two nearest at battle start" % owner_unit.get_name()
 	main._log_rule_event(BattleLog.Category.GENERAL, line)
 	return line
+
+
+## PC2 (D-PICK Q1/Q2): the card's "Command picks" arms a pick on the table for `owner_unit`: every friendly living unit
+## wears a pulse ring, the picked ones a solid ring; a click on one picks it or takes it back (the card stays on the
+## owner). The card's "Done picking", a second press, or the battle start ends it.
+static var picking: GameUnit = null
+static var _rings: Array = []
+
+
+static func begin(main, owner_unit: GameUnit) -> void:
+	var why := refusal(main, owner_unit)
+	if not why.is_empty():
+		main._show_toast(why)
+		return
+	finish(main)
+	picking = owner_unit
+	_draw(main)
+	main._show_toast("Click up to two friendly units for %s's command; click one again to take it back" % owner_unit.get_name())
+
+
+static func finish(main) -> void:
+	_clear_rings()
+	var was := picking
+	picking = null
+	if was != null and main != null and main.unit_dock != null:
+		main.unit_dock.refresh_presented()
+
+
+## A table click while a pick is armed: a friendly candidate is picked or taken back and true comes back (the caller keeps
+## the owner's card); anything else ends the pick (false: the click selects as usual). Battle start ends it too.
+static func take_click(main, clicked: GameUnit) -> bool:
+	if picking == null:
+		return false
+	if not refusal(main, picking).is_empty() or clicked == null or clicked == picking \
+			or int(clicked.unit_properties.get("player_id", 0)) != int(picking.unit_properties.get("player_id", 0)):
+		finish(main)
+		return false
+	toggle(main, picking, clicked)
+	_draw(main)
+	main.unit_dock.present_unit(picking)
+	return true
+
+
+static func _clear_rings() -> void:
+	for r in _rings:
+		if is_instance_valid(r):
+			(r as Node).queue_free()
+	_rings.clear()
+
+
+static func _draw(main) -> void:
+	_clear_rings()
+	var picks: Array = picking.unit_properties.get("command_picks", [])
+	for u in main.opr_army_manager.game_units.values():
+		var gu := u as GameUnit
+		if gu == picking or gu.get_alive_count() <= 0 \
+				or int(gu.unit_properties.get("player_id", 0)) != int(picking.unit_properties.get("player_id", 0)):
+			continue
+		var at := Vector3.ZERO
+		var n := 0
+		for m in gu.get_alive_models():
+			if (m as ModelInstance).node != null:
+				at += (m as ModelInstance).node.global_position
+				n += 1
+		if n > 0:
+			_rings.append(main._solo_spawn_picked_ring(at / n) if picks.has(gu.unit_id)
+				else main._solo_spawn_pulse_ring(at / n, Color(1.0, 0.75, 0.2, 0.8)))

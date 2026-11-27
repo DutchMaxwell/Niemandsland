@@ -21530,6 +21530,8 @@ func _on_selection_changed_update_card(selected_objects: Array[Node3D]) -> void:
 	if units.is_empty():
 		unit_dock.present_unit(null)
 		return
+	if units.size() == 1 and CommandPicks.take_click(self, units[0]):   # PICK-CHOICE: a click picks for the armed command
+		return
 
 	# Prefer a host unit (not a joined Hero) as the card subject, so its attached
 	# Hero shows as part of it rather than as a separate "+1".
@@ -22543,6 +22545,7 @@ func _on_game_phase_changed(phase: int) -> void:
 	if phase == OPRArmyManager.GamePhase.PLAYING:
 		_drag_refusal_logged.clear()   # a new game logs its first drag refusals again
 		_log_aura_grants()   # AIG-G2: the import expansion's silent grants surface at battle start
+		CommandPicks.finish(self)   # PICK-CHOICE: battle start ends an armed pick (its rings go)
 		# Ruling D16 (CR3): an AoF: Skirmish command group without picks gets the core's default two at battle start.
 		if opr_army_manager != null and battle_log != null:
 			for line in BattleSim.default_command_picks(opr_army_manager):

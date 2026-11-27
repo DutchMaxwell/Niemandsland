@@ -24,6 +24,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	CommandPicks.finish(_main)
 	_main.battle_log.entry_added.disconnect(_tap)
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
@@ -93,3 +94,46 @@ func test_a_single_pick_stands_and_battle_start_adds_the_nearest() -> void:
 	_main.opr_army_manager.set_game_phase(OPRArmyManager.GamePhase.PLAYING)
 	assert_array(_picks(cmd)).override_failure_message("exactly two: the pick + the nearest").is_equal([far.unit_id, near.unit_id])
 	assert_array(_lines).contains(["Command group: Herd's Banner reaches Far (chosen) and Near (nearest)"])
+
+
+## The presented card's visible button with `text`, or null.
+func _card_button(gu: GameUnit, text: String) -> Button:
+	_main.unit_dock.present_unit(gu)
+	for b in _main.unit_dock.find_children("*", "Button", true, false):
+		if (b as Button).text == text and (b as Button).is_visible_in_tree() and not b.is_queued_for_deletion():
+			return b
+	return null
+
+
+func _click(gu: GameUnit) -> void:
+	_main.object_manager.select_objects([(gu.models[0] as ModelInstance).node])
+
+
+func test_the_card_arms_a_table_pick_and_clicks_pick_until_done() -> void:
+	var cmd := _unit(1, "Herd", 0.0, ["Banner"])
+	var a := _unit(1, "Alpha", 3.0, [])
+	var b := _unit(1, "Beta", 30.0, [])
+	var foe := _unit(2, "Raider", 9.0, [])
+	assert_object(_card_button(a, "Command picks")).override_failure_message("no button off a command group").is_null()
+	var arm := _card_button(cmd, "Command picks")
+	assert_object(arm).override_failure_message("the command group's card offers it at deployment").is_not_null()
+	if arm == null:
+		return
+	arm.pressed.emit()
+	assert_object(CommandPicks.picking).is_same(cmd)
+	assert_int(CommandPicks._rings.size()).override_failure_message("a ring on each friendly candidate").is_equal(2)
+	_click(a)
+	_click(b)
+	assert_array(_picks(cmd)).override_failure_message("two clicks, two picks").is_equal([a.unit_id, b.unit_id])
+	assert_object(_main.unit_dock._presented_unit).override_failure_message("the card stays on the owner").is_same(cmd)
+	_click(foe)
+	assert_object(CommandPicks.picking).override_failure_message("a foe's click ends the pick").is_null()
+	assert_int(CommandPicks._rings.size()).is_equal(0)
+	assert_array(_picks(cmd)).is_equal([a.unit_id, b.unit_id])
+	_card_button(cmd, "Command picks").pressed.emit()
+	_card_button(cmd, "Done picking").pressed.emit()
+	assert_object(CommandPicks.picking).override_failure_message("Done picking ends it").is_null()
+	_card_button(cmd, "Command picks").pressed.emit()
+	_main.opr_army_manager.set_game_phase(OPRArmyManager.GamePhase.PLAYING)
+	assert_object(CommandPicks.picking).override_failure_message("battle start ends it").is_null()
+	assert_str(CommandPicks.refusal(_main, cmd)).override_failure_message("no button in play (the card reads the refusal)").is_not_empty()

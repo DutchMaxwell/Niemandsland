@@ -104,6 +104,10 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 			var back := HouseStyle.button("Cancel")
 			back.pressed.connect(func() -> void: on_action.call("cancel_activation"))
 			col.add_child(back)
+	elif not compact and not str(data.get("command_picks", "")).is_empty():   # PICK-CHOICE: deployment only
+		var picks := HouseStyle.button(str(data["command_picks"]))
+		picks.pressed.connect(func() -> void: on_action.call("command_picks"))
+		col.add_child(picks)
 	elif not compact and bool(data.get("can_activate", false)):
 		var go := HouseStyle.button("Activate", HouseStyle.PRIMARY)
 		go.pressed.connect(func() -> void: on_action.call("start_activation"))
