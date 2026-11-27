@@ -811,9 +811,18 @@ func _ready() -> void:
 	# Connect OPR import button
 	import_opr_btn.pressed.connect(_on_import_opr_army)
 
-	# NACHTMAHR's own lists (bundle, cache, CDN): the setup's step 04 chooses one, the table loads it.
+	# NACHTMAHR's own lists (bundle, cache, CDN): the setup's step 04 chooses one, the table loads it; "Opponent…"
+	# opens that same page at the table (TableOpponentLayer) to bring NACHTMAHR or a second player later.
 	_ai_lists = AiLists.new()
 	add_child(_ai_lists)
+	var opponent_btn := Button.new()
+	opponent_btn.name = "OpponentBtn"
+	opponent_btn.text = "Opponent…"
+	opponent_btn.tooltip_text = "Who is at the table: NACHTMAHR with a list of its own, a second player, or an online room."
+	opponent_btn.pressed.connect(func() -> void: TableOpponentLayer.open(self))
+	if import_opr_btn.get_parent() != null:
+		import_opr_btn.get_parent().add_child(opponent_btn)
+		import_opr_btn.get_parent().move_child(opponent_btn, import_opr_btn.get_index() + 1)
 	GameMenu.style(left_panel_scroll, [import_opr_btn.get_parent(), host_button.get_parent(), save_game_btn.get_parent(),
 		graphics_quality_option.get_parent(), end_battle_btn.get_parent()], [end_battle_btn])
 	GameMenu.set_status(network_status_label, "Offline", HouseStyle.TONE_MUTED)
