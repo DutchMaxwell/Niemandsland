@@ -459,6 +459,7 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 					and lines.any(func(l: Dictionary) -> bool: return str(l.get("rule", "")) == "fall") \
 					and fall_replace_needed(main, unit, landed["moved_self"]):
 				_sessions[unit.unit_id]["fall_replace"] = landed["moved_self"]
+				_sessions[unit.unit_id]["fall_ring"] = _fall_ring(main, landed["moved_self"])
 			if not cx.is_empty():
 				await _cast_finish(main, cx)
 			await land_delta(main, _tokens_the_core_changed(core, h, r.get("delta", [])), start_models, landed,
@@ -2192,6 +2193,7 @@ static func close_session(main, unit_id: String) -> void:
 	var core: Object = sc._core_node_ready() if sc != null else null
 	if core != null:
 		core.release(int(_sessions[unit_id]["handle"]))
+	_free_fall_ring(_sessions[unit_id])
 	_sessions.erase(unit_id)
 	if main != null and str(main.get("_movement_cap_picked_for")) == unit_id:
 		main.set("_movement_cap_picked_for", "")   # a mode pressed in this activation is not the next one's declaration
@@ -2635,7 +2637,24 @@ static func fall_lock(main, gu: GameUnit) -> bool:
 		main._show_toast(line)
 		return true
 	(_sessions[gu.unit_id] as Dictionary).erase("fall_replace")
-	return false
+	return false   # the End goes on: the activation's close_session takes the ring off
+
+
+## Plan step 27c-2b (D-27c Q1): the 1 in ring round the model that fell, drawn as the picked-target ring (solid, no pulse:
+## its edge is the measure) sized to the model's base + 1 in; the owner drags the others into it, no modal.
+static func _fall_ring(main, fell: ModelInstance) -> MeshInstance3D:
+	var ring: MeshInstance3D = main._solo_spawn_picked_ring(fell.node.global_position)
+	var r := SoloController.model_base_radius_m(fell) + 0.0254
+	(ring.mesh as TorusMesh).inner_radius = r - 0.003
+	(ring.mesh as TorusMesh).outer_radius = r + 0.003
+	return ring
+
+
+static func _free_fall_ring(s: Dictionary) -> void:
+	var ring: Variant = s.get("fall_ring")
+	if is_instance_valid(ring) and ring is Node:   # validity first: `is` on a freed instance raises
+		(ring as Node).queue_free()
+	s.erase("fall_ring")
 
 
 ## Does a model of `gu` stand more than 1 in from its model `fell`, on the board as it stands now (a fresh capture: the

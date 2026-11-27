@@ -175,3 +175,26 @@ func test_a_shot_that_made_a_model_fall_locks_the_end_the_same(
 	assert_int(activated[0]).override_failure_message("(4) lifted after the shot").is_equal(1)
 	assert_int(_count("Jump: Leaper model 1 jumps")).override_failure_message("(1) one jump roll on the shot path").is_equal(1)
 	_main.radial_menu_controller.unit_activated.disconnect(on_act)
+
+
+@warning_ignore('unused_parameter')
+func test_a_1_in_ring_marks_the_fallen_model_while_locked(
+		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "NmlCore extension not loaded") -> void:
+	var att: GameUnit = (await _fallen_leaper())[0]
+	await _press_end(att)
+	var s: Dictionary = CoreActivation._sessions[att.unit_id]
+	var ring: Variant = s.get("fall_ring")
+	assert_bool(is_instance_valid(ring) and ring is MeshInstance3D).override_failure_message("(Q1) a ring while locked").is_true()
+	if not (is_instance_valid(ring) and ring is MeshInstance3D):
+		return
+	var fell: ModelInstance = att.models[0]
+	var at: Vector3 = (ring as MeshInstance3D).global_position
+	assert_float(Vector2(at.x, at.z).distance_to(Vector2(fell.node.global_position.x, fell.node.global_position.z))) \
+		.override_failure_message("round the model that fell").is_less(0.001)
+	var want := SoloController.model_base_radius_m(fell) + INCH
+	var torus := (ring as MeshInstance3D).mesh as TorusMesh
+	assert_float((torus.inner_radius + torus.outer_radius) / 2.0).override_failure_message("base + 1 in").is_equal_approx(want, 0.001)
+	_close_up(att)
+	await _press_end(att)
+	assert_bool(s.has("fall_ring")).override_failure_message("lifted: the ring goes").is_false()
+	assert_bool(not is_instance_valid(ring) or (ring as Node).is_queued_for_deletion()).override_failure_message("freed").is_true()
