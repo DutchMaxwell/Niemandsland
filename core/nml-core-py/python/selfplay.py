@@ -615,8 +615,8 @@ def bearers_sidecar(list_path, player: int) -> dict[str, dict[str, int]]:
 
 
 def named_bearers(list_p1, list_p2, rules_epoch: int) -> dict[str, dict[str, int]]:
-    """K3: both seats' named bearers, only from `PENDING_EPOCH_TWO_BEARERS`; below it {} - the core's last slot, as recorded."""
-    if rules_epoch < nml_core.PENDING_EPOCH_TWO_BEARERS:
+    """K3: both seats' named bearers, only from `EPOCH_104_TWO_BEARERS`; below it {} - the core's last slot, as recorded."""
+    if rules_epoch < nml_core.EPOCH_104_TWO_BEARERS:
         return {}
     return {**bearers_sidecar(list_p1, 1), **bearers_sidecar(list_p2, 2)}
 

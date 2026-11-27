@@ -7993,10 +7993,10 @@ fn bearer_dead(state: &State, u: usize) -> bool {
     matches!(state.cmd_bearer.get(u), Some(None))
 }
 
-/// KIT-BEARER-NAME (lead ruling 26.11., `PENDING_EPOCH_TWO_BEARERS`): the Musician dies with the model that carries it,
+/// KIT-BEARER-NAME (lead ruling 26.11., `EPOCH_104_TWO_BEARERS`): the Musician dies with the model that carries it,
 /// which may not be the Banner's; below the placeholder it rides with the one bearer (`bearer_dead`), as recorded.
 fn musician_dead(state: &State, u: usize, rules_epoch: u32) -> bool {
-    if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_TWO_BEARERS) { matches!(state.musician_bearer(u), Some(None)) } else { bearer_dead(state, u) }
+    if rule_on(rules_epoch, crate::acts::EPOCH_104_TWO_BEARERS) { matches!(state.musician_bearer(u), Some(None)) } else { bearer_dead(state, u) }
 }
 
 /// Ruling D16: the friendly command-group unit with `rule` whose profile picked unit `i` (`Profile::command_picks`).
