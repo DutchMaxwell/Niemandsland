@@ -133,6 +133,9 @@ func test_a_generated_board_is_a_way_on_4_by_4_for_its_system(do_skip := not Cla
 	assert_bool(layout.call("choose", "board")).is_true()
 	assert_str(layout.call("label")).is_equal("Generated board")
 	var first: Dictionary = layout.get("board")
+	assert_dict(first).override_failure_message("no board record (does the core name its boards?)").is_not_empty()
+	if first.is_empty():
+		return
 	assert_str(str(first.get("id", ""))).is_equal("tiefwerk")
 	assert_int(int(layout.get("editor").deployment_type)).is_equal(1)
 	layout.call("generate")
