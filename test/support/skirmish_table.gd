@@ -1,0 +1,184 @@
+class_name SkirmishTable
+extends RefCounted
+## Feature-test facade for the skirmish systems (gff / aofs) on the real table: one booted main.tscn in a seat, units
+## built over ParityTable, the battle log tapped, the card's doors pressed, a pending rules epoch pinned on record.
+## No rule logic lives here: a feature test asserts what a player sees, this file only sets the table up.
+##
+## Seats: "H" hot-seat (two humans, no AI seat), "S" human (slot 1) vs AI (slot 2), "A" both slots AI,
+## "O" an agreed Automatic online room with the transport swapped for `WireNet` (frames land in `net.wire`).
+
+const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
+const ParityTable := preload("res://test/parity/parity_table.gd")
+const INCH := 0.0254
+
+## Every epoch a feature test pinned through `need_epoch` (the shipped-epoch gate reads it).
+static var pins: Array[int] = []
+
+
+## The REAL NetworkManager with its transport swapped out (as core_activation_mp_test.gd): every frame lands in `wire`.
+class WireNet extends "res://scripts/network_manager.gd":
+	var active := true
+	var wire: Array = []
+	func is_multiplayer_active() -> bool:
+		return active
+	func _validate_rpc_ready(_context: String = "") -> bool:
+		return active
+	func send_command(type: String, payload: Variant = {}, target_peer: int = 0) -> bool:
+		wire.append({"t": type, "p": payload, "to": target_peer})
+		return true
+	func slot_has_human_peer(_slot: int) -> bool:
+		return false
+	func get_my_peer_id() -> int:
+		return 1
+	func get_my_player_slot() -> int:
+		return 1
+
+
+var main: Node
+var runner: Object
+var lines: Array = []
+var net: WireNet
+var _root_before: Array
+var _epoch_before: int
+var _real_net: Node
+var _tree: SceneTree
+
+
+## Boot main.tscn for `suite` in `seat`: PLAYING, round 1, instant dice, fast pacing, auto saves, the lesson paused, the log tapped.
+static func boot(suite: Node, seat: String) -> SkirmishTable:
+	var t := SkirmishTable.new()
+	t._tree = suite.get_tree()
+	t._epoch_before = AiActRecorder.rules_epoch
+	E2EBoot.arm_harness_mode()
+	t._root_before = E2EBoot.root_children(t._tree)
+	t.runner = suite.scene_runner(E2EBoot.MAIN_SCENE)
+	t.main = t.runner.scene()
+	await t.runner.simulate_frames(4)
+	t._real_net = t.main.network_manager
+	t.main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
+	t.main.opr_army_manager.current_round = 1
+	CoreActivation._env = 1
+	match seat:
+		"H":
+			CoreActivation._hotseat_env = 1
+			t.main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
+			t.main.solo_ai_slots = {}
+			SoloHarness.controller(t.main)
+		"S":
+			SoloHarness.start(t.main, [2], 1)
+		"A":
+			SoloHarness.start(t.main, [1, 2], 1)
+		"O":
+			t.main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
+			t.main.solo_ai_slots = {}
+			t.net = WireNet.new()
+			t.net.army_manager = t.main.opr_army_manager
+			t.main.network_manager = t.net
+			t.main.radial_menu_controller.network_manager = t.net
+			SoloHarness.controller(t.main)
+			t.main._apply_turn_token(1)
+	SoloHarness.instant(t.main)
+	SoloHarness.fast(t.main)
+	SoloHarness.auto_saves(t.main)
+	SoloHarness.lesson_paused(t.main)
+	t.main.battle_log.entry_added.connect(t._tap)
+	return t
+
+
+## A unit of `sys` ("gff" | "aofs") for `player`: `models` in a row 1.2 in apart along z from (x_in, z_in), Quality 4,
+## Defense 4, `tough` per model, `weapon` (ParityTable shape; {} = a 24 in rifle, one attack per model), `rules`.
+func unit(sys: String, player: int, name: String, models: int, tough: int, x_in: float, z_in: float,
+		weapon: Dictionary = {}, rules: Array = []) -> GameUnit:
+	var w := weapon if not weapon.is_empty() else {"name": "Rifle", "range_in": 24, "attacks": 1, "count": models, "rules": []}
+	var u := ParityTable._make_unit(main, {"player": player, "name": name, "models": models, "x_in": x_in,
+		"z_step_in": 1.2, "quality": 4, "defense": 4, "tough": tough, "game_system": sys,
+		"faction_folder": "robot_legions", "rules": rules}, w)
+	for i in u.models.size():
+		var mi := u.models[i] as ModelInstance
+		mi.model_index = i
+		mi.node.global_position += Vector3(0, 0, z_in * INCH)
+		mi.node.set_meta("network_id", 900 + 10 * player + main.opr_army_manager.game_units.size() * 4 + i)
+		mi.node.set_meta("model_instance", mi)
+	return u
+
+
+func _tap(e: Dictionary) -> void:
+	lines.append(str(e["text"]))
+
+
+## How many logged lines begin with `prefix`.
+func count(prefix: String) -> int:
+	return lines.filter(func(l: String) -> bool: return l.begins_with(prefix)).size()
+
+
+## The card of `gu` shows the button `text` and its controller door runs (the button's own path: card_face ->
+## unit_dock._card_action -> radial_menu_controller). False when the card does not show it (nothing runs then).
+func press(gu: GameUnit, text: String) -> bool:
+	main.unit_dock.present_unit(gu)
+	var shown := false
+	for b in main.unit_dock.find_children("*", "Button", true, false):
+		if (b as Button).text == text and (b as Button).is_visible_in_tree() and not b.is_queued_for_deletion():
+			shown = true
+	if not shown:
+		return false
+	var radial: Node = main.radial_menu_controller
+	match text:
+		"End activation":
+			await radial.card_end_activation(gu)
+		"Place for me":
+			radial.card_place_for_me(gu)
+		"Cancel":
+			radial.card_cancel_activation(gu)
+		_:
+			return false
+	return true
+
+
+## The card's Activate (the committed start). True when the activation is open afterwards.
+func start(gu: GameUnit) -> bool:
+	return await E2EBoot.start_activation(main, gu)
+
+
+## The card's End activation.
+func end(gu: GameUnit) -> void:
+	await main.radial_menu_controller.card_end_activation(gu)
+
+
+## A player's drag of `model` to `to` (world metres) over `inches`, through the drop door.
+func drop(model: ModelInstance, to: Vector3, inches: float) -> void:
+	var from: Vector3 = model.node.global_position
+	model.node.global_position = to
+	await SoloHarness.drop(main, [{"node": model.node, "inches": inches, "from_raw": from,
+		"path": PackedVector2Array([Vector2(from.x, from.z), Vector2(to.x, to.z)])}])
+
+
+## Pin the table to the pending rules epoch `n` and record the pin (R-FT1); teardown restores the shipped epoch.
+func need_epoch(n: int) -> void:
+	AiActRecorder.rules_epoch = n
+	if not pins.has(n):
+		pins.append(n)
+
+
+## Undo everything boot did: the tap, the core sessions, the env switches, the epoch, the transport, stray nodes.
+func teardown() -> void:
+	if main == null:
+		return
+	if main.battle_log.entry_added.is_connected(_tap):
+		main.battle_log.entry_added.disconnect(_tap)
+	CoreActivation.reset_all(main)
+	CoreActivation._env = -1
+	CoreActivation._hotseat_env = -1
+	AiActRecorder.rules_epoch = _epoch_before
+	SoloController.mission_scoring = "end"
+	SoloController.mission_markers = []
+	SoloController.mission_vp = [0, 0]
+	SoloController.mission_vp_memo = {}
+	SoloController.mission_vp_flavour = {}
+	if net != null:
+		main.network_manager = _real_net
+		main.radial_menu_controller.network_manager = _real_net
+		net.free()
+		net = null
+	E2EBoot.free_stray_root_nodes(_tree, _root_before)
+	main = null
+	runner = null
