@@ -1,10 +1,10 @@
 // ruintown_soil.gdshaderinc - the town's ground as a MATERIAL (LOOK5 R20, Lane S v2 step S4: inert, called nowhere yet).
 // Four soil layers in three texture arrays (layer 0 bare, 1 mud, 2 grass, 3 verge / wet): albedo, tangent normal, and ORH
 // (R ambient occlusion, G roughness, B height). COLOUR = the REAL albedo with a SCALAR gain: each set keeps its hue and its inner
-// contrast, only its average brightness is pinned - to SOIL_RANK x the board's reference earth (the caller multiplies by it), with a
-// soft ceiling so a pale stone never outshines a base ring (<= 1.6 x the reference). One textureGrad per map and layer (explicit
+// contrast, only its average brightness is pinned - to SOIL_RANK x the board's reference earth (the caller multiplies by it); no
+// ceiling (S6 v3: it squashed the bare mean, the readability gate guards the top). One textureGrad per map and layer (explicit
 // gradients: the per-layer tile changes at a layer seam), only the two heaviest layers are read, blended by height inside
-// SOIL_BAND with a contact shadow on their shared rim. Needs nothing from the board shader.
+// SOIL_BAND with a contact shadow on their shared rim (only where the weights hand over within ~1 in, never on an evenly mixed field). Needs nothing from the board shader.
 
 uniform sampler2DArray soil_alb : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2DArray soil_nrm : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -19,7 +19,7 @@ const vec4 SOIL_RANK = vec4(1.15, 0.92, 0.85, 0.75);   // bare, mud, grass, verg
 const vec4 SOIL_SCALE = vec4(1.0, 0.75, 1.2, 1.0);   // uv multipliers: bare 6 in, mud 8 in, grass 5 in, verge 6 in (periods never line up)
 const float SOIL_EXPOSURE = 1.0;   // the one brightness knob of all four
 const float SOIL_BAND = 0.10;   // the height-blend window
-const float SOIL_NRM_GAIN = 1.8;   // the normal map's slope, before the normalise
+const float SOIL_NRM_GAIN = 1.0;   // the normal map's slope, before the normalise
 const vec3 SOIL_LUMA = vec3(0.2126, 0.7152, 0.0722);
 
 struct SoilSample {
@@ -30,11 +30,6 @@ struct SoilSample {
 	float h;
 	vec2 k;   // the weights of the (up to) two layers read
 };
-
-// The soft ceiling on luma: 1 stays 1, nothing goes above 1.6.
-float soil_ceiling(float l) {
-	return l <= 1.0 ? l : 1.0 + (l - 1.0) / (1.0 + (l - 1.0) / 0.6);
-}
 
 SoilSample soil_layer(float i, vec2 xz_in, bool want_n) {
 	int ii = int(i + 0.5);
@@ -47,7 +42,7 @@ SoilSample soil_layer(float i, vec2 xz_in, bool want_n) {
 	float la = max(dot(a, SOIL_LUMA), 0.0005);
 	float l = la * SOIL_RANK[ii] / max(dot(soil_mean[ii], SOIL_LUMA), 0.0005) * SOIL_EXPOSURE;
 	SoilSample r;
-	r.c = a * (soil_ceiling(l) / la);   // a scalar gain: the set's hue and grain survive
+	r.c = a * (l / la);   // a scalar gain: the set's hue and grain survive
 	r.n = vec3(0.0, 0.0, 1.0);
 	if (want_n) {
 		vec3 n = textureGrad(soil_nrm, vec3(uv, i), gx, gy).rgb * 2.0 - 1.0;
@@ -79,6 +74,7 @@ SoilSample soil_blend(vec4 w, vec2 xz_in) {
 			w1 = w[j];
 		}
 	}
+	float rim = smoothstep(0.5, 1.5, fwidth(w0 - w1) / max(fwidth(xz_in.x) + fwidth(xz_in.y), 0.0001));   // the weights' hand-over per inch: a rim, not a mixed field
 	SoilSample a = soil_layer(i0, xz_in, true);
 	if (w1 < 0.02) {   // one layer only: the second is not read
 		return a;
@@ -90,7 +86,7 @@ SoilSample soil_blend(vec4 w, vec2 xz_in) {
 	vec2 k = max(vec2(s0, s1) - (best - SOIL_BAND), vec2(0.0));
 	k /= max(k.x + k.y, 0.0001);
 	SoilSample r;
-	r.c = (a.c * k.x + b.c * k.y) * (1.0 - 0.35 * 4.0 * k.x * k.y);   // a contact shadow on the shared rim
+	r.c = (a.c * k.x + b.c * k.y) * (1.0 - 0.35 * rim * 4.0 * k.x * k.y);   // a contact shadow on the shared rim
 	r.n = normalize(a.n * k.x + b.n * k.y);
 	r.rough = a.rough * k.x + b.rough * k.y;
 	r.ao = a.ao * k.x + b.ao * k.y;
