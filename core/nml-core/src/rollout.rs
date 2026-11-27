@@ -530,7 +530,7 @@ impl<'a> Rollout<'a> {
         if (mode == 1 && opener_seat) || (mode == 2 && !opener_seat) {
             let last = &ends[ends.len() - 1];
             let incoming = self.end_threat(last, player);
-            let s = score_with_variant(last, self.statics(), player, &incoming, self.policy.fit, variant, by_points);
+            let s = score_with_variant(last, self.statics(), player, &incoming, self.policy.fit, variant, by_points, false);
             return leaf(ends.len() - 1, s);
         }
         let dd = self.depth_discount();
@@ -545,7 +545,7 @@ impl<'a> Rollout<'a> {
         let mut dw = 1.0f64;
         for (k, end) in ends.iter().enumerate() {
             let incoming = self.end_threat(end, player);
-            let s = score_with_variant(end, self.statics(), player, &incoming, self.policy.fit, variant, by_points);
+            let s = score_with_variant(end, self.statics(), player, &incoming, self.policy.fit, variant, by_points, false);
             total += dw * leaf(k, s);
             weights += dw;
             dw *= dd;
