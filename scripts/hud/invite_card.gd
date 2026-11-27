@@ -15,6 +15,11 @@ var _code := ""
 var _code_label: Label
 var _caption: Label
 var _copy: Button
+var _count: Label
+var _players: VBoxContainer
+var _waiting: PanelContainer
+var _ready: Button
+var _main: Node
 
 
 func _init() -> void:
@@ -56,15 +61,84 @@ func _init() -> void:
 	_copy.pressed.connect(_on_copy)
 	code_row.add_child(_copy)
 	body.add_child(HouseStyle.card(code_row))
+	_count = _text("", HouseStyle.MENU_FONT_EYEBROW, HouseStyle.eyebrow_font(), HouseStyle.MUTED)
+	_players = VBoxContainer.new()
+	_waiting = HouseStyle.card(_text("Waiting for a player …", HouseStyle.MENU_FONT_BODY, HouseStyle.font(400),
+		HouseStyle.MUTED))
+	for part: Control in [_count, _players, _waiting]:
+		part.visible = false   # setup(main) shows the seats
+		body.add_child(part)
+	var buttons := HBoxContainer.new()
 	var keep := HouseStyle.button("Keep setting up", HouseStyle.BUTTON, HouseStyle.MENU_H_ACTION)
 	keep.name = "KeepSettingUp"
-	keep.focus_mode = FOCUS_ALL
 	keep.pressed.connect(close)
-	body.add_child(keep)
+	_ready = HouseStyle.button("Ready", HouseStyle.PRIMARY, HouseStyle.MENU_H_ACTION)
+	_ready.name = "ReadyButton"
+	_ready.visible = false
+	for b: Button in [keep, _ready]:
+		b.focus_mode = FOCUS_ALL
+		buttons.add_child(b)
+	body.add_child(buttons)
 	_caption = _text("", HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400), HouseStyle.MUTED)
 	_caption.autowrap_mode = TextServer.AUTOWRAP_WORD
 	body.add_child(_caption)
 	visible = false
+
+
+## The seats from the game's own sources (`main`: network_manager, _peer_display_name, _get_player_color,
+## _on_start_game_pressed), refreshed on the five roster signals. Ready is the game menu's own Ready action.
+func setup(main: Node) -> void:
+	_main = main
+	var nm: Node = main.network_manager
+	for signal_name: StringName in [&"player_connected", &"player_disconnected", &"remote_player_name_updated",
+			&"slot_table_synced", &"ready_state_changed"]:
+		nm.connect(signal_name, func(_a: Variant = null, _b: Variant = null, _c: Variant = null) -> void: _refresh())
+	_ready.pressed.connect(func() -> void:
+		_main._on_start_game_pressed()
+		_refresh())
+	for part: Control in [_count, _players, _ready]:
+		part.visible = true
+	_refresh()
+
+
+## One 52 px row per player (swatch, name, "(you, host)" / "(you)" / "(host)", the ready tag where this client
+## knows it: the host for every seat, a guest for its own), then the dashed row while seats are free.
+func _refresh() -> void:
+	var nm: Node = _main.network_manager
+	var me: int = nm.get_my_peer_id()
+	var ids: Array[int] = [me]
+	for id: int in nm.connected_peers:
+		if not ids.has(id):
+			ids.append(id)
+	ids.sort()
+	for row: Node in _players.get_children():
+		_players.remove_child(row)
+		row.queue_free()
+	for id in ids:
+		var line := HBoxContainer.new()
+		line.add_theme_constant_override(&"separation", 12)
+		var swatch := ColorRect.new()
+		swatch.color = _main._get_player_color(id)
+		swatch.custom_minimum_size = Vector2(14, 14)
+		swatch.size_flags_vertical = SIZE_SHRINK_CENTER
+		line.add_child(swatch)
+		line.add_child(_text(_main._peer_display_name(id), HouseStyle.MENU_FONT_BODY, HouseStyle.font(500), HouseStyle.INK))
+		var suffix := ("(you, host)" if nm.is_host else "(you)") if id == me else ("(host)" if id == 1 else "")
+		var who := _text(suffix, HouseStyle.MENU_FONT_BODY, HouseStyle.font(400), HouseStyle.MUTED)
+		who.size_flags_horizontal = SIZE_EXPAND_FILL
+		line.add_child(who)
+		if nm.is_host or id == me:
+			var ready: bool = nm.is_slot_ready(1 if id == me else nm.slot_for_peer(id)) if nm.is_host else nm.is_local_ready()
+			var tag := _text("Ready" if ready else "Not ready", 12, HouseStyle.mono(), HouseStyle.GOLD if ready else HouseStyle.MUTED)
+			tag.uppercase = true
+			line.add_child(tag)
+		var row := HouseStyle.card(line)
+		row.name = "Player%d" % id
+		row.custom_minimum_size.y = 52
+		_players.add_child(row)
+	_count.text = "AT THE TABLE · %d / %d" % [ids.size(), InternetLobby.MAX_ROOM_PLAYERS]
+	_waiting.visible = ids.size() < InternetLobby.MAX_ROOM_PLAYERS
+	_ready.text = "Cancel Ready" if nm.is_local_ready() else "Ready"
 
 
 ## Shows the card for `code` ("ABC123" reads "ABC-123"); `caption` is the session's own line.

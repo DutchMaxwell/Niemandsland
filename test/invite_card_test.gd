@@ -72,3 +72,68 @@ func test_caption_scrim_click_and_first_focus() -> void:
 	click.pressed = true
 	(card.get_child(0) as Control).gui_input.emit(click)
 	assert_bool(card.visible).is_false()
+
+
+class StubMain extends Node:
+	var network_manager: Node
+	var starts := 0
+	func _peer_display_name(peer_id: int) -> String:
+		return "Player %d" % peer_id
+	func _get_player_color(_peer_id: int) -> Color:
+		return HouseStyle.ACCENT
+	func _on_start_game_pressed() -> void:
+		starts += 1
+
+
+func _hosted_card(host: bool) -> Array:
+	var nm: Node = auto_free(load("res://scripts/network_manager.gd").new())
+	add_child(nm)
+	nm.is_host = host
+	var main: StubMain = auto_free(StubMain.new())
+	main.network_manager = nm
+	add_child(main)
+	var card := await _card()
+	if card == null or not card.has_method("setup"):
+		fail("no players on the card")
+		return []
+	card.call("setup", main)
+	return [card, nm, main]
+
+
+func _player_rows(card: Control) -> Array:
+	return card.find_children("Player*", "PanelContainer", true, false)
+
+
+## Step 49.3: the players at the table and Ready (red before: no setup).
+func test_the_host_sees_the_seats_and_their_ready_tags() -> void:
+	var parts := await _hosted_card(true)
+	if parts.is_empty():
+		return
+	var card: Control = parts[0]
+	var nm: Node = parts[1]
+	assert_int(_player_rows(card).size()).is_equal(1)
+	assert_array(_texts(card)).contains(["(you, host)", "AT THE TABLE · 1 / 8", "Waiting for a player …"])
+	nm.connected_peers.append(10)
+	nm.validated_peers[10] = true
+	nm.peer_to_slot[10] = 2
+	nm.player_connected.emit(10)
+	assert_int(_player_rows(card).size()).is_equal(2)
+	nm._host_record_ready(2, true)
+	assert_array(_texts(_player_rows(card)[1])).contains(["Ready"])
+	assert_array(_texts(_player_rows(card)[0])).contains(["Not ready"])
+
+
+func test_a_guest_sees_a_tag_on_its_own_row_only_and_ready_calls_the_game() -> void:
+	var parts := await _hosted_card(false)
+	if parts.is_empty():
+		return
+	var card: Control = parts[0]
+	var nm: Node = parts[1]
+	nm.connected_peers.append(5)   # another guest (the offline peer is id 1 = this client)
+	nm.player_connected.emit(5)
+	var rows := _player_rows(card)
+	assert_int(rows.size()).is_equal(2)
+	var tags := rows.map(func(r: Node) -> bool: return _texts(r).has("Not ready") or _texts(r).has("Ready"))
+	assert_array(tags).is_equal([true, false])   # own row first; another player's flag is unknown to a guest
+	(card.find_child("ReadyButton", true, false) as Button).pressed.emit()
+	assert_int((parts[2] as StubMain).starts).is_equal(1)
