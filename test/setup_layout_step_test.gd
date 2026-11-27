@@ -132,3 +132,26 @@ func test_generate_again_mirror_and_the_editor() -> void:
 	assert_bool(_layout.editor.visible).is_false()
 	assert_str(_layout.label()).is_equal("Edited layout")
 	assert_int(_layout.facts().pieces).is_equal(pieces)
+
+
+## Step 65.9: the deployment zones and the mission objectives on step 04, and the key legend (red before: none).
+func test_zones_objectives_and_the_key_legend() -> void:
+	var step := _step(Vector2(6, 4))
+	if step == null:
+		return
+	var front := step.find_child("ZoneFrontLine", true, false) as Button
+	assert_object(front).override_failure_message("no zones card").is_not_null()
+	if front == null:
+		return
+	front.pressed.emit()
+	assert_int(_layout.editor.deployment_type).is_equal(1)
+	var texts: Array = step.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	assert_array(texts).contains(["Empty table · Front Line (12\")", "No objectives placed"])
+	_layout.editor.mission_objectives.append(Vector2(12, 12))
+	_layout.editor.mission_objectives.append(Vector2(60, 36))
+	_layout.changed.emit()
+	texts = step.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	assert_array(texts).contains(["2 objectives placed", "generate again", "create table"])
+	(step.find_child("DeployObjectives", true, false) as Button).pressed.emit()
+	assert_bool(_layout.editor.visible).is_true()
+	assert_bool(_layout.editor.objectives_editing).is_true()

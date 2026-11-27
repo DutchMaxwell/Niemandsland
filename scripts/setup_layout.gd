@@ -31,9 +31,15 @@ func _init() -> void:
 
 ## Today's layout editor, full-window over the setup with whatever the chosen way laid out; its system row stays
 ## locked. Its Close returns to step 04 and the way reads "Edited layout".
-func open_editor() -> void:
+## `mode` "deployment" opens its Deployment tab (custom zones are drawn there), "objectives" its objectives mode.
+func open_editor(mode := "") -> void:
 	editor.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	editor.show()
+	if mode == "deployment":
+		(editor.find_child("TabDeploymentButton", true, false) as Button).pressed.emit()
+	elif mode == "objectives":
+		(editor.find_child("TabObjectivesButton", true, false) as Button).pressed.emit()
+		editor._objectives_toggle_btn.button_pressed = true
 
 
 func _on_editor_closed() -> void:
