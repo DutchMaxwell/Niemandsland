@@ -167,6 +167,12 @@ func import_list(path: String, player: int) -> OPRApiClient.OPRArmy:
 	return army
 
 
+## A whole AI-vs-AI game on this table through the table's own both-AI loop, `opener` taking round 1's first turn.
+func run_ai_game(opener := 1) -> void:
+	await main._solo_run_both_ai_game(opener)
+	await E2EBoot.settle(_tree)
+
+
 ## The game-over summary's text as the player reads it, or "" while none stands.
 func summary_text() -> String:
 	for c in main.get_children():
