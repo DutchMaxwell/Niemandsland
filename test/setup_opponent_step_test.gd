@@ -138,3 +138,11 @@ func test_the_page_fits_a_720p_window() -> void:
 				"%s at %s" % [control.name, control.get_global_rect()]).is_true()
 	assert_float((step.get("_keys") as Control).get_global_rect().position.y).is_greater_equal(
 		(step.get("left") as Control).get_global_rect().end.y)
+
+
+## The chosen card is as light as on sheet 03b (#253035), not the 10 % accent wash of a hovered row (red before).
+func test_the_chosen_card_has_the_sheets_fill() -> void:
+	var step := _step()
+	var box := _card(step, "solo").get_theme_stylebox(&"normal") as StyleBoxFlat
+	assert_str(box.bg_color.to_html(false)).is_equal("253035")
+	assert_bool(box.draw_center).override_failure_message("the fill is not drawn").is_true()
