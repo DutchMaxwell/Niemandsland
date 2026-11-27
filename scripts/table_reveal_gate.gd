@@ -74,9 +74,19 @@ func _watch(main: Node, mode: String) -> void:
 			_table.table_resized.connect(
 				func(_feet: Vector2) -> void:
 					_start_cap()
-					_arrived(),
+					if PendingLayout.has_pending():
+						_lay_out()
+					else:
+						_arrived(),
 				CONNECT_ONE_SHOT
 			)
+
+
+## The setup's layout (step 04), one frame after the resize has cleared the editor; then the table stands.
+func _lay_out() -> void:
+	await get_tree().process_frame
+	PendingLayout.apply(_main)
+	_arrived()
 
 
 func _start_cap() -> void:

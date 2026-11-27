@@ -147,3 +147,16 @@ func test_a_join_past_the_cap_opens_with_one_line_of_notice() -> void:
 		return
 	gate._reveal(true)
 	assert_array(_main.toasts).is_equal([gate.HOST_LATE])
+
+
+## Step 65.1: only a new table takes the setup's layout; a load leaves a pending one alone (red before: the
+## gate knew no layout - this case stays green, its partner is e2e_setup_layout_handover_test).
+func test_a_load_applies_no_pending_layout() -> void:
+	ProjectSettings.set_setting("niemandsland/pending_table_layout", {"theme": "ruined_borderland"})
+	var gate := _start("load")
+	if gate == null:
+		return
+	_main.save_manager.load_completed.emit(30)
+	var left: Variant = ProjectSettings.get_setting("niemandsland/pending_table_layout", null)
+	ProjectSettings.set_setting("niemandsland/pending_table_layout", null)
+	assert_dict(left).is_equal({"theme": "ruined_borderland"})
