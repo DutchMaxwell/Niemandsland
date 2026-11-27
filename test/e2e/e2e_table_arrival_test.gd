@@ -72,3 +72,35 @@ func test_a_guest_gets_the_card_only_from_the_chip() -> void:
 	await _runner.simulate_frames(2)
 	card = _invite()
 	assert_bool(card != null and card.visible).override_failure_message("the chip did not open it").is_true()
+
+
+func _arrival() -> Control:
+	var cards := _main.find_children("*", "ArrivalCard", true, false)
+	return null if cards.is_empty() else cards[0] as Control
+
+
+## Step 49.6: a new, empty table greets the player with the arrival card; a loaded game does not; an army moves it
+## on; leaving deployment takes it away (red before: no card).
+func test_a_new_empty_table_shows_the_arrival_card_and_follows_the_armies() -> void:
+	if not _start("new"):
+		return
+	await _runner.simulate_frames(10, 100)   # it stands 400 ms after the HUD has arrived
+	var card := _arrival()
+	assert_object(card).override_failure_message("no arrival card on a new table").is_not_null()
+	if card == null:
+		return
+	assert_bool(card.is_visible_in_tree()).is_true()
+	assert_str(String(card.call("state", 0))).is_equal("now")
+	_main.opr_army_manager.armies[1] = OPRApiClient.OPRArmy.new()
+	_main.opr_army_manager.army_spawned.emit(_main.opr_army_manager.armies[1], [] as Array[Node3D])
+	assert_str(String(card.call("state", 1))).is_equal("now")
+	_main.opr_army_manager.set_game_phase(OPRArmyManager.GamePhase.PLAYING)
+	await _runner.simulate_frames(2)
+	assert_bool(is_instance_valid(card) and card.is_inside_tree()).override_failure_message("the card outlived deployment").is_false()
+
+
+func test_a_loaded_game_gets_no_arrival_card() -> void:
+	if not _start("load"):
+		return
+	await _runner.simulate_frames(10, 100)
+	assert_object(_arrival()).is_null()
