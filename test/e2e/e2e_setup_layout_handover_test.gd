@@ -65,3 +65,21 @@ func test_front_line_from_the_setup_reaches_the_table() -> void:
 	ProjectSettings.set_setting(LAYOUT_KEY, {"path": PENDING})
 	var main := await _boot()
 	assert_int(int(main.map_layout_editor.deployment_type)).is_equal(1)
+
+
+## GEN-4: a generated board chosen in the setup stands on the table after the reveal - through the release door, with
+## no developer flag - and the rules get its ledges. Red before the step: the "board" choice was ignored.
+@warning_ignore('unused_parameter')
+func test_a_generated_board_from_the_setup_stands_at_the_table(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
+	ProjectSettings.set_setting(SETUP_KEY, {"size": Vector2(4, 4), "biome": "urban_ruins"})
+	ProjectSettings.set_setting(LAYOUT_KEY, {"board": {"id": "tiefwerk", "theme": "deepworks", "seed": 42}})
+	var main := await _boot()
+	var board: Dictionary = main.generated_board()
+	assert_int(int(board.get("seed", -1))).is_equal(42)
+	assert_str(str(board.get("id", ""))).is_equal("tiefwerk")
+	assert_bool(AiActRecorder.tiers_of_board(board).has("tiers")).override_failure_message("the core gets no ledges").is_true()
+	assert_object(ProjectSettings.get_setting(LAYOUT_KEY, null)).is_null()
+	# the board leaves while the table is alive: TableBiomePresenter.request_rebuild asks get_tree() after teardown
+	(main.get("_board_look") as Node).queue_free()
+	await get_tree().process_frame
