@@ -1030,6 +1030,28 @@ pub fn blast_split(hits: i64, x: i64, target_models: i64, neighbour_models: &[i6
     one.iter().map(|n| n * hits.max(0)).collect()
 }
 
+/// [`blast_split`] at `rules_epoch`: from `PENDING_EPOCH_BLAST_EVEN` (ruling D-29-R1) the whole attack's hits split evenly -
+/// every unit the same share up to its room (`hits` x its models, as a hit's X never put more than one hit per model on a
+/// unit), what a full unit cannot take shared among the rest, the remainder one each in unit order (target first). The total
+/// stays `hits x min(X, all models)`, so a single hit or a lone target lands exactly as before; below the epoch, `blast_split`.
+pub fn blast_split_at(hits: i64, x: i64, target_models: i64, neighbour_models: &[i64], rules_epoch: u32) -> Vec<i64> {
+    if !rule_on(rules_epoch, crate::acts::PENDING_EPOCH_BLAST_EVEN) {
+        return blast_split(hits, x, target_models, neighbour_models);
+    }
+    let caps: Vec<i64> = std::iter::once(target_models.max(1)).chain(neighbour_models.iter().map(|m| (*m).max(0))).map(|c| c * hits.max(0)).collect();
+    let total = hits.max(0) * x.max(1).min(caps.iter().sum::<i64>() / hits.max(1));
+    let level = (0..=caps.iter().copied().max().unwrap_or(0)).take_while(|&l| caps.iter().map(|c| (*c).min(l)).sum::<i64>() <= total).last().unwrap_or(0);
+    let mut out: Vec<i64> = caps.iter().map(|c| (*c).min(level)).collect();
+    let mut left = total - out.iter().sum::<i64>();
+    for (n, c) in out.iter_mut().zip(&caps) {
+        if left > 0 && *n < *c {
+            *n += 1;
+            left -= 1;
+        }
+    }
+    out
+}
+
 /// The table's `blast_log_text`: names Blast(X) and, when the model count clamps the multiplier, the cap.
 fn blast_log(x: i64, hits: i64, boosted: i64, models: i64, stale: bool) -> String {
     let mult = boosted / hits.max(1);
@@ -2398,7 +2420,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         // (main.gd `_solo_hits`, TC-023) and the save reads the pick's own square.
         if hits > 0 && p.blast > 1 && !blast_spread.is_empty() && !unit_of_one {
             let cap = def.blast_models.unwrap_or(def.models).max(1);
-            let split = blast_split(hits, p.blast, cap, blast_spread);
+            let split = blast_split_at(hits, p.blast, cap, blast_spread, att.rules_epoch);
             let shooter = shooters.iter().position(|s| std::ptr::eq(s, sh)).unwrap_or(0);
             out.blast_spill.push(BlastSpill { shooter, profile: pi, hits: split[1..].to_vec() });
             let (kept, spread) = (split[0], split[1..].iter().sum::<i64>());
@@ -3665,7 +3687,7 @@ pub fn resolve_melee_leg_wipe(
                 hits += sixes(trig).min(p.sergeant_attacks);
             }
             if hits > 0 && p.blast > 1 && !blast_spread.is_empty() && !(tray_exact && p.takedown) {
-                let split = blast_split(hits, p.blast, def.blast_models.unwrap_or(def.models).max(1), blast_spread);
+                let split = blast_split_at(hits, p.blast, def.blast_models.unwrap_or(def.models).max(1), blast_spread, sh.att.rules_epoch);
                 out.blast_spill.push(BlastSpill { shooter: si, profile: pi, hits: split[1..].to_vec() });
                 let (kept, spread) = (split[0], split[1..].iter().sum::<i64>());
                 let line = format!("Blast({}): {hits} hit{} -> {kept} on {def_owner}, {spread} on units within reach, {} lost",

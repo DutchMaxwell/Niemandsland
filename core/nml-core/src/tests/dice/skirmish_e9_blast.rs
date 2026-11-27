@@ -96,3 +96,46 @@ fn a_fixed_hits_weapon_rolls_only_the_saves() {
     assert_eq!((r.rolls[0].kind, r.rolls[0].count, r.rolls[0].target), ("defense", 3, 4), "{:?}", r.rolls);
     assert_eq!(r.wounds, 2, "two saves fail (1, 2); Rending reads no attack faces");
 }
+
+/// Ruling D-29-R1 (plan step 29a): from `PENDING_EPOCH_BLAST_EVEN` the WHOLE attack's hits split evenly - 2 hits of Blast(3)
+/// over two units with room are 3 + 3, not 4 + 2 (each original hit's remainder on the target); one epoch below, as before.
+#[test]
+fn d29_r1_the_whole_attack_splits_evenly_from_its_epoch() {
+    use crate::acts::PENDING_EPOCH_BLAST_EVEN as E;
+    use crate::dice::blast_split_at;
+    assert_eq!(blast_split_at(2, 3, 5, &[5], E), vec![3, 3]);
+    assert_eq!(blast_split_at(2, 3, 5, &[5], E - 1), vec![4, 2], "a record below the epoch replays as recorded");
+    assert_eq!(blast_split_at(2, 4, 5, &[5, 5], E), vec![3, 3, 2], "the remainder one each, target first");
+    assert_eq!(blast_split_at(2, 4, 1, &[5], E), vec![2, 6], "a full unit's share goes to the rest");
+    assert_eq!(blast_split_at(3, 6, 2, &[1, 1, 1], E), vec![6, 3, 3, 3], "the book example: room caps every unit");
+    for hits in 0..=1 {
+        for x in 1..=6 {
+            for (t, n) in [(1, vec![]), (3, vec![3]), (2, vec![1, 1, 1]), (5, vec![2, 4])] {
+                assert_eq!(blast_split_at(hits, x, t, &n, E), blast_split(hits, x, t, &n), "one hit is unchanged: {hits} {x} {t} {n:?}");
+            }
+        }
+    }
+    for x in 1..=6 {
+        for models in 1..=6 {
+            assert_eq!(blast_split_at(3, x, models, &[], E), vec![3 * x.clamp(1, models)], "no neighbours: the plain multiply");
+        }
+    }
+}
+
+/// The shooting volley reads the attacker's epoch: two Blast(3) hits on a 5-model unit beside a 5-model neighbour keep 3
+/// on the target from `PENDING_EPOCH_BLAST_EVEN`, 4 one epoch below.
+#[test]
+fn d29_r1_the_volley_splits_by_the_record_epoch() {
+    let def = Ctx { quality: 4, defense: 4, models: 5, ..Default::default() };
+    let guns = [blast_gun(3, 2)];
+    let kept = |epoch: u32| {
+        let att = Ctx { quality: 4, rules_epoch: epoch, ..Default::default() };
+        let sh = [Shooter { profiles: &guns, keep: &[0], attacks: &[2], att: &att, owner: "Gunner" }];
+        let mut tray = Tray::supplied(vec![vec![5, 5], vec![1; 6]]);
+        let r = resolve_volley_with_pick_label(&sh, &def, "Squad", 12.0, 12.0, true, true, true, true, true, true,
+            &|_| (false, "trooper".into(), 0), &|_, _| None, None, None, &[5], &mut tray);
+        (r.rolls[1].count, r.blast_spill[0].hits.clone())
+    };
+    assert_eq!(kept(crate::acts::PENDING_EPOCH_BLAST_EVEN), (3, vec![3]));
+    assert_eq!(kept(crate::acts::PENDING_EPOCH_BLAST_EVEN - 1), (4, vec![2]));
+}
