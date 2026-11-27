@@ -45,7 +45,7 @@ func test_a_saved_board_is_on_the_table_after_the_load(do_skip := not ClassDB.cl
 	assert_bool(_main.apply_generated_board(BOARD)).is_true()
 	assert_int(_main.save_manager.save_game(SAVE_PATH)).is_equal(OK)
 	await _drop_board()
-	await _main._on_load_file_selected(SAVE_PATH)
+	await _main.save_manager.load_game(SAVE_PATH)
 	await get_tree().process_frame
 	var board: Dictionary = _main.generated_board()
 	assert_str(GeneratedBoard.code(board)).is_equal("TW-1-42")
@@ -60,6 +60,6 @@ func test_a_save_without_a_board_loads_flat(do_skip := not ClassDB.class_exists(
 	var table_block: Dictionary = (JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH)) as Dictionary).get("table", {})
 	assert_bool(table_block.has("generated_board")).override_failure_message("a flat table wrote a board key").is_false()
 	assert_bool(_main.apply_generated_board(BOARD)).is_true()
-	await _main._on_load_file_selected(SAVE_PATH)
+	await _main.save_manager.load_game(SAVE_PATH)
 	await get_tree().process_frame
 	assert_dict(_main.generated_board()).is_empty()
