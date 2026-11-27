@@ -1082,6 +1082,13 @@ func card_cancel_activation(unit: GameUnit) -> void:
 		main_node.call("core_activation_cancel", unit)
 
 
+## Plan step 27c-3: the card's "Place for me" after a fall - the core's 1 in placer (CoreActivation.place_for_me).
+func card_place_for_me(unit: GameUnit) -> void:
+	var main_node := get_node_or_null("/root/Main")
+	if unit != null and main_node != null:
+		CoreActivation.place_for_me(main_node, unit)
+
+
 func card_toggle_fatigued(unit: GameUnit, manual: bool = false) -> void:
 	if unit != null:
 		_toggle_fatigued({"game_unit": unit}, manual)

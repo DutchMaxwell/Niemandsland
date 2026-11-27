@@ -454,6 +454,7 @@ func _card_data(unit: GameUnit) -> Dictionary:
 		# One-core P3 step 36: an open activation shows "End activation", and "Cancel" until the first die.
 		"activation_open": CoreActivation.session_open(unit.unit_id),
 		"can_cancel": CoreActivation.can_cancel(unit.unit_id),
+		"can_place_for_me": CoreActivation.fall_pending(unit.unit_id),
 		"fatigued": unit.is_fatigued,
 		"shaken": unit.is_shaken,
 		"caster": unit.is_caster(),
@@ -829,6 +830,9 @@ func _card_action(kind: String) -> void:
 		"cancel_activation":
 			if radial_menu_controller != null:
 				radial_menu_controller.card_cancel_activation(unit)
+		"place_for_me":
+			if radial_menu_controller != null:
+				radial_menu_controller.card_place_for_me(unit)
 		"fatigued":
 			if radial_menu_controller != null:
 				radial_menu_controller.card_toggle_fatigued(unit, true)

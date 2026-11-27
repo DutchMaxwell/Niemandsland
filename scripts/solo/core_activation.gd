@@ -460,6 +460,10 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 					and fall_replace_needed(main, unit, landed["moved_self"]):
 				_sessions[unit.unit_id]["fall_replace"] = landed["moved_self"]
 				_sessions[unit.unit_id]["fall_ring"] = _fall_ring(main, landed["moved_self"])
+				_refresh_card(main)   # the card shows "Place for me"
+			elif ai and landed.get("moved_self") != null \
+					and lines.any(func(l: Dictionary) -> bool: return str(l.get("rule", "")) == "fall"):
+				regroup(main, unit, landed["moved_self"])   # 27c-3 (D-27c Q3): an AI unit always takes the core placer
 			if not cx.is_empty():
 				await _cast_finish(main, cx)
 			await land_delta(main, _tokens_the_core_changed(core, h, r.get("delta", [])), start_models, landed,
@@ -2655,6 +2659,40 @@ static func _free_fall_ring(s: Dictionary) -> void:
 	if is_instance_valid(ring) and ring is Node:   # validity first: `is` on a freed instance raises
 		(ring as Node).queue_free()
 	s.erase("fall_ring")
+
+
+## Plan step 27c-3 (D-27c Q2/Q3): the core's 1 in placer ("Place for me", ruling D14) for `gu` round its model `fell`, on the
+## board as it stands: the positions land as a move (broadcast, as a push's) and the core's line is logged. False when the
+## core had no answer; a placement nobody needed moves nothing and says nothing.
+static func regroup(main, gu: GameUnit, fell: ModelInstance) -> bool:
+	var alive := gu.get_alive_models()
+	var slot := alive.find(fell)
+	var h := capture(main) if slot >= 0 else 0
+	if h == 0:
+		return false
+	var core: Object = (main.solo_controller as SoloController)._core_node_ready()
+	var r: Dictionary = core.regroup_around(h, gu.unit_id, slot)
+	core.release(h)
+	if not bool(r.get("ok", false)):
+		push_error("regroup: the core refused %s: %s" % [gu.get_name(), r.get("reason", "")])
+		return false
+	main.solo_controller._apply_model_positions(alive, r["positions"])
+	if not str(r["line"]).is_empty():
+		main._log_rule_event(BattleLog.Category.MOVEMENT, "%s: %s" % [gu.get_name(), r["line"]], main._solo_is_ai_unit(gu))
+	return true
+
+
+## The "Place for me" button of `gu`'s fall lock: the core places the others; the lock lifts at the next End.
+static func place_for_me(main, gu: GameUnit) -> void:
+	if fall_pending(gu.unit_id):
+		regroup(main, gu, _sessions[gu.unit_id]["fall_replace"])
+		_refresh_card(main)
+
+
+## Does `unit_id`'s open activation wait for the others to stand within 1 in of a model that fell (27c-2a)? Only the table
+## that runs the activation holds a session, so only the owner sees the lock and the button.
+static func fall_pending(unit_id: String) -> bool:
+	return _sessions.has(unit_id) and (_sessions[unit_id] as Dictionary).has("fall_replace")
 
 
 ## Does a model of `gu` stand more than 1 in from its model `fell`, on the board as it stands now (a fresh capture: the

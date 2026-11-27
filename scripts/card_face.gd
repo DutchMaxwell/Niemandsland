@@ -96,6 +96,10 @@ static func build_presented(data: Dictionary, on_action: Callable = Callable(), 
 		var done := HouseStyle.button("End activation", HouseStyle.PRIMARY)
 		done.pressed.connect(func() -> void: on_action.call("end_activation"))
 		col.add_child(done)
+		if bool(data.get("can_place_for_me", false)):   # 27c-3: a model fell, the others stand more than 1 in off
+			var place := HouseStyle.button("Place for me")
+			place.pressed.connect(func() -> void: on_action.call("place_for_me"))
+			col.add_child(place)
 		if bool(data.get("can_cancel", false)):
 			var back := HouseStyle.button("Cancel")
 			back.pressed.connect(func() -> void: on_action.call("cancel_activation"))
