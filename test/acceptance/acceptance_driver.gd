@@ -161,10 +161,7 @@ func _import(p: int, ai := false) -> bool:   # Import OPR Army... -> share link 
 		return false
 	_type("Paste a share link", LISTS[p])
 	await _press("Load army")
-	var opt := _first("OptionButton", func(x: OptionButton) -> bool: return x.get_item_text(0).begins_with("Player 1")) as OptionButton
-	if opt != null:
-		opt.select(opt.get_item_index(p + 1))
-		opt.item_selected.emit(opt.selected)
+	await _press("Player %d (" % (p + 1), 10.0, true, false)   # the Assign player segment pair
 	var tick := _first("CheckBox", func(x: CheckBox) -> bool: return x.text.begins_with("AI-controlled")) as CheckBox
 	if tick != null:
 		tick.button_pressed = ai
