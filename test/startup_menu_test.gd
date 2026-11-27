@@ -4,12 +4,20 @@ extends GdUnitTestSuite
 var _runner: GdUnitSceneRunner
 var _menu: Control
 
+var _menu_cfg: Variant = null   # the profile's menu config: a Create table remembers the opponent there
+
+
 func before_test() -> void:
+	_menu_cfg = FileAccess.get_file_as_string(SetupOpponent.MENU_CFG) if FileAccess.file_exists(SetupOpponent.MENU_CFG) else null
 	_runner = scene_runner("res://scenes/startup_menu.tscn")
 	_menu = _runner.scene()
 	_menu.setup_lists = false   # the setup never asks the CDN for NACHTMAHR's lists here
 
 func after_test() -> void:
+	if _menu_cfg == null:
+		DirAccess.remove_absolute(SetupOpponent.MENU_CFG)
+	else:
+		FileAccess.open(SetupOpponent.MENU_CFG, FileAccess.WRITE).store_string(_menu_cfg)
 	_menu = null
 	_runner = null
 
@@ -508,3 +516,15 @@ func test_the_online_card_locks_automatic_rules() -> void:
 	assert_int(dialog.selected_rules).is_equal(RulesAutomation.Level.MANUAL)
 	assert_bool(dialog.online).is_true()
 	dialog._on_close()
+
+
+## Spec 97 (step 97.12): Create table remembers the opponent; the next setup opens on it (a hub start does not).
+func test_the_next_setup_opens_on_the_remembered_opponent() -> void:
+	await _create_with("local")
+	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	probe.set_script(MenuTransitionProbe)
+	add_child(probe)
+	probe.setup_lists = false
+	probe._show_table_setup()
+	assert_str(probe._table_setup.opponent.who).is_equal("local")
+	probe._table_setup._on_close()
