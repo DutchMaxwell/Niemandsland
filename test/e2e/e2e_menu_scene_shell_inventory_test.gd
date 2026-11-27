@@ -45,6 +45,7 @@ func before_test() -> void:
 	_menu = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
 	_menu.set_script(MenuTransitionProbe)
 	add_child(_menu)
+	_menu.setup_lists = false   # no CDN request for NACHTMAHR's lists
 	await _frames(2)
 	_view = _menu.view
 

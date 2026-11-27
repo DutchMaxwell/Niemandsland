@@ -26,6 +26,8 @@ var _transitioning := false
 var continue_btn: Button
 var start_battle_btn: Button
 var online_hub_lists := true   # false: the online hub asks the relay only on refresh (tests)
+var setup_lists := true   # false: the setup never asks the CDN for NACHTMAHR's lists (tests)
+var _ai_lists: AiLists
 var load_battle_btn: Button
 var report_problem_btn: Button
 var credits_btn: Button
@@ -228,6 +230,10 @@ func _show_table_setup(host_settings: Dictionary = {}) -> void:
 	_table_setup.selected_system = GameSystem.default_pick()   # the last pick; the dialog applies it in _ready
 	add_child(_table_setup)
 	_table_setup.set_biomes(MenuDiorama.Battlefield.BIOMES,diorama.biome)
+	if not host_settings.is_empty():
+		_table_setup.opponent.choose_who("online")   # from the hub: the online room
+	if setup_lists:
+		_load_setup_lists(_table_setup.opponent)
 	_table_setup.size_chosen.connect(_on_table_setup_chosen.bind(host_settings))
 	_table_setup.cancelled.connect(_on_table_setup_cancelled)
 	view.hide()
@@ -253,11 +259,15 @@ func _fade_setup(dialog: Window, from: float, to: float, free_after := false) ->
 func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> void:
 	ProjectSettings.set_setting("niemandsland/pending_table_setup",{"size":size_feet,"biome":_table_setup.selected_biome,"rules":_table_setup.selected_rules,"system":_table_setup.selected_system})
 	GameSystem.remember_pick(_table_setup.selected_system)
-	if RulesAutomation.ui_enabled() and not _table_setup.online:
+	if RulesAutomation.ui_enabled() and not _table_setup.online:   # the card, not the opener
 		RulesAutomation.remember_pick(_table_setup.selected_rules)
-	for key in host_settings:
-		ProjectSettings.set_setting(key,host_settings[key])
+	if _table_setup.opponent.who == "online":   # the hub's settings, or a private room under the saved name
+		if host_settings.is_empty():
+			host_settings = OnlineHub.host_settings(PlayerIdentity.load_saved_name(), InternetLobby.DEFAULT_RELAY_URL, false)
+		for key in host_settings:
+			ProjectSettings.set_setting(key,host_settings[key])
 	_table_setup.layout.commit()   # the chosen layout travels to the table (PendingLayout)
+	_table_setup.opponent.commit()   # and who is at the table (PendingOpponent)
 	var setup := _table_setup
 	_table_setup = null
 	await _commit_beat(setup._create)
@@ -265,6 +275,15 @@ func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> vo
 		setup.hide()
 	_fade_setup(setup, 1.0, 0.0, true)   # fades out under the loading picture's fade-in
 	_transition_to_game()
+
+
+## NACHTMAHR's list index for step 04 of the setup (bundle, CDN, cache); the Solo card waits for it.
+func _load_setup_lists(opponent: SetupOpponent) -> void:
+	if _ai_lists == null:
+		_ai_lists = AiLists.new()
+		add_child(_ai_lists)
+	opponent.loading = true
+	opponent.set_manifest(await _ai_lists.manifest())
 
 
 func _on_table_setup_cancelled() -> void:

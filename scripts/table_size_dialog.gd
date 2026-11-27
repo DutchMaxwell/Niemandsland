@@ -71,7 +71,11 @@ var _hero: Control
 var _margin: MarginContainer
 var _cards: Array[TextureRect] = []
 var _valid := true
-var online := false   # set before add_child: a Create-room dialog locks the rules pick to Manual
+var online := false:   # an online room locks the rules pick to Manual; it follows the card of step 04
+	set(value):
+		online = value
+		if online and selected_rules == RulesAutomation.Level.AUTOMATIC:
+			selected_rules = RulesAutomation.default_pick(true)
 var layout_step := false   # set before add_child: the menu's setup has step 04 (the table's chooser does not)
 var layout: SetupLayout
 var _step04: Control   # the inner page: who is at the table (step 04) or the layout (step 05)
@@ -441,6 +445,7 @@ func _add_opponent_row(column: VBoxContainer) -> void:
 	row.add_child(line)
 	column.add_child(row)
 	opponent.changed.connect(func() -> void:
+		online = opponent.who == "online"
 		_opponent_name.text = opponent.label()
 		if _summary.has("Opponent"):
 			_summary.Opponent.text = opponent.label())

@@ -7,6 +7,7 @@ var _menu: Control
 func before_test() -> void:
 	_runner = scene_runner("res://scenes/startup_menu.tscn")
 	_menu = _runner.scene()
+	_menu.setup_lists = false   # the setup never asks the CDN for NACHTMAHR's lists here
 
 func after_test() -> void:
 	_menu = null
@@ -174,6 +175,7 @@ func test_host_creation_commits_selected_table_and_network_settings_together() -
 	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
 	probe.set_script(MenuTransitionProbe)
 	add_child(probe)
+	probe.setup_lists = false
 	probe.online_hub_lists = false
 	probe._open_online_hub()
 	var hub: OnlineHub = probe.view.page_open
@@ -203,6 +205,7 @@ func test_grassland_card_hands_main_a_table_biome_id() -> void:
 	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
 	probe.set_script(MenuTransitionProbe)
 	add_child(probe)
+	probe.setup_lists = false
 	probe._on_start_battle_pressed()
 	var card: Button = null
 	for key in probe._table_setup._biome_buttons:
@@ -314,6 +317,7 @@ func test_the_table_setup_fades_in_and_out() -> void:
 	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
 	probe.set_script(MenuTransitionProbe)
 	add_child(probe)
+	probe.setup_lists = false
 	probe._on_start_battle_pressed()
 	var dialog: Window = probe._table_setup
 	var content := dialog.get_child(0) as Control
@@ -408,6 +412,7 @@ func test_create_table_commits_with_a_sweep_before_the_screen_changes() -> void:
 	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
 	probe.set_script(MenuTransitionProbe)
 	add_child(probe)
+	probe.setup_lists = false
 	probe._on_start_battle_pressed()
 	var create: Button = probe._table_setup._create
 	probe._table_setup._confirm()
@@ -416,3 +421,90 @@ func test_create_table_commits_with_a_sweep_before_the_screen_changes() -> void:
 	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.1).timeout
 	assert_bool(probe.entered_game).is_true()
 	assert_bool(UiFeedback.has_method("play_commit")).override_failure_message("no commit tone").is_true()
+
+
+## Spec 97 (step 97.11): Create table carries who is at the table. Solo stores NACHTMAHR's list and no online key;
+## the online room from "Start battle" is a private room under the saved name; a hub start switched to Solo is no
+## room; the online card locks the Automatic rules pick (red before: no opponent in the setup's hand-over).
+const OPP_KEY := "niemandsland/pending_table_opponent"
+const HOST_KEYS := ["niemandsland/pending_internet_lobby", "niemandsland/internet_is_host",
+	"niemandsland/internet_relay_url", "niemandsland/player_name", "niemandsland/internet_public"]
+const MANIFEST := {"alien_hives": {"name": "Alien Hives", "lists": [{"points": 3000, "file": "alien_hives_3000.json"}]}}
+
+
+func _create_with(who: String, host_settings: Dictionary = {}) -> Dictionary:
+	var keys: Array = HOST_KEYS + [OPP_KEY, "niemandsland/pending_table_setup", "niemandsland/pending_table_layout"]
+	var previous := {}
+	for key: String in keys:
+		previous[key] = ProjectSettings.get_setting(key, null)
+		ProjectSettings.set_setting(key, null)
+	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	probe.set_script(MenuTransitionProbe)
+	add_child(probe)
+	probe.setup_lists = false
+	probe._show_table_setup(host_settings)
+	var opponent: SetupOpponent = probe._table_setup.get("opponent")
+	if opponent == null:
+		for key: String in keys:
+			ProjectSettings.set_setting(key, previous[key])
+		return {}
+	opponent.set_manifest(MANIFEST)
+	opponent.choose_who(who)
+	probe._table_setup._confirm()
+	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.1).timeout
+	var result := {}
+	for key: String in keys:
+		result[key] = ProjectSettings.get_setting(key, null)
+		ProjectSettings.set_setting(key, previous[key])
+	return result
+
+
+func test_solo_hands_nachtmahrs_list_over_and_no_room() -> void:
+	var result := await _create_with("solo")
+	assert_dict(result).override_failure_message("no opponent in the setup").is_not_empty()
+	if result.is_empty():
+		return
+	assert_dict(result[OPP_KEY]).is_equal({"who": "solo", "file": "alien_hives_3000.json", "slot": 2,
+		"label": "NACHTMAHR · Alien Hives · 3000"})
+	assert_object(result["niemandsland/pending_internet_lobby"]).is_null()
+
+
+func test_an_online_room_from_start_battle_is_private_under_the_saved_name() -> void:
+	var result := await _create_with("online")
+	if result.is_empty():
+		fail("no opponent in the setup")
+		return
+	assert_bool(result["niemandsland/pending_internet_lobby"]).is_true()
+	assert_bool(result["niemandsland/internet_is_host"]).is_true()
+	assert_bool(result["niemandsland/internet_public"]).is_false()
+	assert_str(str(result["niemandsland/internet_relay_url"])).is_equal(InternetLobby.DEFAULT_RELAY_URL)
+	assert_str(str(result["niemandsland/player_name"])).is_equal(PlayerIdentity.load_saved_name())
+	assert_str(str(result[OPP_KEY].who)).is_equal("online")
+
+
+func test_a_hub_start_switched_to_solo_opens_no_room() -> void:
+	var hub := OnlineHub.host_settings("Ashfall", InternetLobby.DEFAULT_RELAY_URL, true)
+	var result := await _create_with("solo", hub)
+	if result.is_empty():
+		fail("no opponent in the setup")
+		return
+	for key: String in HOST_KEYS:
+		assert_object(result[key]).override_failure_message(key).is_null()
+
+
+func test_the_online_card_locks_automatic_rules() -> void:
+	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	probe.set_script(MenuTransitionProbe)
+	add_child(probe)
+	probe.setup_lists = false
+	probe._show_table_setup()
+	var dialog: TableSizeDialog = probe._table_setup
+	dialog.selected_rules = RulesAutomation.Level.AUTOMATIC
+	var opponent: SetupOpponent = dialog.get("opponent")
+	if opponent == null:
+		fail("no opponent in the setup")
+		return
+	opponent.choose_who("online")
+	assert_int(dialog.selected_rules).is_equal(RulesAutomation.Level.MANUAL)
+	assert_bool(dialog.online).is_true()
+	dialog._on_close()
