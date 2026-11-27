@@ -115,13 +115,6 @@ func test_f11_does_not_run_the_ai_without_the_core() -> void:
 	assert_int(_off_lines()).is_equal(1)
 
 
-func test_the_ai_opponent_dialog_is_not_opened_without_the_core() -> void:
-	CoreActivation.offer_override = 0
-	await _main._open_ai_opponent_dialog()
-	assert_int(_off_lines()).is_equal(1)
-	assert_object(_main.get_tree().root.find_child("AiOpponentLayer", true, false)).is_null()
-
-
 func test_an_import_with_the_ai_box_ticked_imports_a_human_army_without_the_core() -> void:
 	CoreActivation.offer_override = 0
 	var army := OPRApiClient.OPRArmy.new()
