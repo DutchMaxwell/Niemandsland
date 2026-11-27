@@ -33,6 +33,7 @@ func _menu() -> Control:
 	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
 	probe.set_script(MenuTransitionProbe)
 	add_child(probe)
+	probe.setup_lists = false   # no CDN request for NACHTMAHR's lists
 	return probe
 
 

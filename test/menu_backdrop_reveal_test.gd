@@ -26,6 +26,7 @@ func test_live_backdrop_stays_covered_until_built_then_fades_in(timeout := 24000
 	var built := [false]
 	diorama.diorama_ready.connect(func() -> void: built[0] = true)
 	add_child(menu)
+	menu.setup_lists = false   # no CDN request for NACHTMAHR's lists
 	await get_tree().process_frame
 	assert_float(_cover(diorama)) \
 		.override_failure_message("the live backdrop is not covered while it builds").is_equal(1.0)

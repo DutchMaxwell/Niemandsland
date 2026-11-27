@@ -303,12 +303,18 @@ func _on_prepare() -> void:
 	var player_name := PlayerIdentity.sanitize(name_field.text)
 	PlayerIdentity.save_name(player_name)
 	_drop_lobby()
-	host_requested.emit({
+	host_requested.emit(host_settings(player_name, url if not url.is_empty() else InternetLobby.DEFAULT_RELAY_URL,
+		public_check.button_pressed))
+
+
+## The settings that make the next table an online room hosted by this player.
+static func host_settings(player_name: String, relay_url: String, public: bool) -> Dictionary:
+	return {
 		"niemandsland/pending_internet_lobby": true,
 		"niemandsland/internet_is_host": true,
-		"niemandsland/internet_relay_url": url if not url.is_empty() else InternetLobby.DEFAULT_RELAY_URL,
+		"niemandsland/internet_relay_url": relay_url,
 		"niemandsland/player_name": player_name,
-		"niemandsland/internet_public": public_check.button_pressed})
+		"niemandsland/internet_public": public}
 
 
 ## The create block's two gold corner brackets (top left, bottom right), as on the menu's Continue card.
