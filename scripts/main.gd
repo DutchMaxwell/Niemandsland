@@ -21561,12 +21561,7 @@ func _on_table_revealed() -> void:
 	# Reveal the gameplay UI only now that the table is ready — fade it in gently
 	# so the panels don't pop in.
 	$UI.visible = true
-	var hud := $UI.get_node_or_null("HUD") as Control
-	if hud:
-		hud.modulate.a = 0.0
-		var ui_fade := create_tween()
-		ui_fade.tween_property(hud, "modulate:a", 1.0, HudTokens.DUR_SCREEN) \
-			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	TableArrival.play_hud($UI.get_node_or_null("HUD") as Control)   # piece by piece (storyboard beat D)
 
 	# Restore the player's persisted atmosphere (preset + war-torn/war-sound toggles) —
 	# after the UI reveal, so an atmosphere hiccup can never leave the screen stuck.

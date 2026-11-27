@@ -14,12 +14,38 @@ extends Node
 
 const AUTOMATIC := "Rules automation is on — deploy, ready up, then the game applies the rules it models"
 const AFTER_HUD_S := 0.4
+const HUD_STAGGER_S := 0.06
+const HUD_WITHIN_S := 0.9
+const HUD_REDUCED_S := 0.12
+
+static var _hud_last_piece_ms := 0   # when play_hud starts its last piece (the arrival card follows it)
 const MANUAL := "Multiplayer is manual play — deploy, ready up, then take turns like at a real table (no automation)."
 
 var _main: Node
 var _invite: InviteCard
 var _code_shown := ""
 var _arrival: ArrivalCard
+
+
+## The HUD arrives piece by piece: each visible direct child fades in over DUR_PANEL_IN, 60 ms apart, all inside
+## 900 ms (closer together when there are many). A piece whose alpha is not 1 is driven by its own code and left
+## alone. Reduce Motion: the whole HUD fades once over 120 ms.
+static func play_hud(hud: Control) -> void:
+	if hud == null:
+		return
+	if UiMotion.reduced():
+		hud.modulate.a = 0.0
+		hud.create_tween().tween_property(hud, "modulate:a", 1.0, HUD_REDUCED_S)
+		return
+	hud.modulate.a = 1.0
+	var pieces := hud.get_children().filter(func(c: Node) -> bool:
+		return c is CanvasItem and (c as CanvasItem).visible and is_equal_approx((c as CanvasItem).modulate.a, 1.0))
+	var gap := minf(HUD_STAGGER_S, (HUD_WITHIN_S - HudTokens.DUR_PANEL_IN) / maxf(1.0, pieces.size() - 1))
+	var tween := hud.create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	for i in pieces.size():
+		(pieces[i] as CanvasItem).modulate.a = 0.0
+		tween.tween_property(pieces[i], "modulate:a", 1.0, HudTokens.DUR_PANEL_IN).set_delay(i * gap)
+	_hud_last_piece_ms = Time.get_ticks_msec() + int(gap * maxf(0.0, pieces.size() - 1) * 1000.0)
 
 
 static func start(main: Node, mode: String) -> TableArrival:
@@ -52,7 +78,8 @@ func _watch(main: Node, mode: String) -> void:
 		if UiMotion.reduced():
 			_show_arrival()
 		else:
-			get_tree().create_timer(AFTER_HUD_S).timeout.connect(_show_arrival)
+			var wait := AFTER_HUD_S + maxf(0.0, (_hud_last_piece_ms - Time.get_ticks_msec()) / 1000.0)
+			get_tree().create_timer(wait).timeout.connect(_show_arrival)
 
 
 func _on_code(code: String) -> void:
