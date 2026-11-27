@@ -13,7 +13,8 @@ func test_the_board_shader_includes_the_soil_and_the_soil_keeps_each_sets_colour
 	for u in ["uniform sampler2DArray soil_alb", "uniform sampler2DArray soil_nrm", "uniform sampler2DArray soil_orh", "uniform float soil_on = 0.0", "uniform float soil_tile", "uniform vec3 soil_mean[4]"]:
 		assert_bool(inc.contains(u)).override_failure_message("missing: %s" % u).is_true()
 	assert_bool(inc.contains("/ max(soil_mean[")).override_failure_message("v2: no per-channel divide by the set's mean (it greyed every set, attempt 1)").is_false()
-	assert_bool(inc.contains("r.c = a * (soil_ceiling(l) / la);")).is_true()   # a SCALAR gain: the set keeps its hue and grain
+	assert_bool(inc.contains("r.c = a * (l / la);")).is_true()   # a SCALAR gain: the set keeps its hue and grain
+	assert_bool(inc.contains("0.35 * rim * 4.0 * k.x * k.y")).override_failure_message("S6 v3: the contact shadow sits on a rim only, not on a mixed field").is_true()
 	assert_bool(inc.contains("textureGrad(soil_alb")).is_true()   # explicit gradients: no mip line at a layer seam
 	for c in ["uniform float soil_tier = 1.0", "uniform float soil_fill_sat = 0.35", "const vec4 SOIL_RANK = vec4(1.15, 0.92, 0.85, 0.75)", "const float SOIL_BAND = 0.10"]:
 		assert_bool(inc.contains(c)).override_failure_message("missing: %s" % c).is_true()
