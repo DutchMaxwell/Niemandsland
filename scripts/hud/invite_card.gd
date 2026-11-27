@@ -63,8 +63,22 @@ func _init() -> void:
 	body.add_child(HouseStyle.card(code_row))
 	_count = _text("", HouseStyle.MENU_FONT_EYEBROW, HouseStyle.eyebrow_font(), HouseStyle.MUTED)
 	_players = VBoxContainer.new()
-	_waiting = HouseStyle.card(_text("Waiting for a player …", HouseStyle.MENU_FONT_BODY, HouseStyle.font(400),
-		HouseStyle.MUTED))
+	_waiting = PanelContainer.new()   # an empty seat: a dashed frame and a dashed ring (sheet 02b .p.empty)
+	_waiting.name = "WaitingSeat"
+	var seat_box := StyleBoxEmpty.new()
+	seat_box.content_margin_left = 40
+	seat_box.content_margin_top = 14
+	seat_box.content_margin_bottom = 14
+	_waiting.add_theme_stylebox_override(&"panel", seat_box)
+	_waiting.add_child(_text("Waiting for a player …", HouseStyle.MENU_FONT_BODY, HouseStyle.font(400), HouseStyle.MUTED))
+	_waiting.draw.connect(func() -> void:
+		var r := Rect2(Vector2.ZERO, _waiting.size).grow(-0.5)
+		for edge: Array in [[r.position, Vector2(r.end.x, r.position.y)], [Vector2(r.end.x, r.position.y), r.end],
+				[r.end, Vector2(r.position.x, r.end.y)], [Vector2(r.position.x, r.end.y), r.position]]:
+			_waiting.draw_dashed_line(edge[0], edge[1], HouseStyle.LINE, 1.0, 5.0)
+		var ring := Vector2(20, _waiting.size.y * 0.5)
+		for i in 8:   # the empty seat's swatch: a dashed 14 px ring
+			_waiting.draw_arc(ring, 7.0, TAU * i / 8.0, TAU * (i + 0.5) / 8.0, 4, HouseStyle.LINE, 1.0))
 	for part: Control in [_count, _players, _waiting]:
 		part.visible = false   # setup(main) shows the seats
 		body.add_child(part)
@@ -131,7 +145,18 @@ func _refresh() -> void:
 			var ready: bool = nm.is_slot_ready(1 if id == me else nm.slot_for_peer(id)) if nm.is_host else nm.is_local_ready()
 			var tag := _text("Ready" if ready else "Not ready", 12, HouseStyle.mono(), HouseStyle.GOLD if ready else HouseStyle.MUTED)
 			tag.uppercase = true
-			line.add_child(tag)
+			var chip := PanelContainer.new()   # a bordered chip (sheet 02b)
+			var rim := StyleBoxFlat.new()
+			rim.bg_color = Color.TRANSPARENT
+			rim.border_color = Color(HouseStyle.GOLD, 0.6) if ready else HouseStyle.LINE
+			rim.set_border_width_all(1)
+			rim.set_corner_radius_all(3)
+			rim.content_margin_left = 8
+			rim.content_margin_right = 8
+			chip.add_theme_stylebox_override(&"panel", rim)
+			chip.size_flags_vertical = SIZE_SHRINK_CENTER
+			chip.add_child(tag)
+			line.add_child(chip)
 		var row := HouseStyle.card(line)
 		row.name = "Player%d" % id
 		row.custom_minimum_size.y = 52
