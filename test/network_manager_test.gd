@@ -218,6 +218,19 @@ func test_all_players_ready_false_until_every_seat_ready() -> void:
 	assert_int(nm.ready_count()).is_equal(1)
 
 
+## The invite card shows a ready tag per seat: the host reads one slot's flag (red before: no reader).
+func test_is_slot_ready_reads_one_seat() -> void:
+	var nm := _make_host()
+	_seat_guest(nm, 10, 2)
+	assert_bool(nm.has_method("is_slot_ready")).override_failure_message("no is_slot_ready").is_true()
+	if not nm.has_method("is_slot_ready"):
+		return
+	assert_bool(nm.call("is_slot_ready", 2)).is_false()
+	nm._host_record_ready(2, true)
+	assert_bool(nm.call("is_slot_ready", 2)).is_true()
+	assert_bool(nm.call("is_slot_ready", 1)).is_false()
+
+
 func test_single_ready_does_not_fire_transition() -> void:
 	var nm := _make_host()
 	_seat_guest(nm, 10, 2)
