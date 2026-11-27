@@ -104,3 +104,44 @@ func test_a_loaded_game_gets_no_arrival_card() -> void:
 		return
 	await _runner.simulate_frames(10, 100)
 	assert_object(_arrival()).is_null()
+
+
+func _pieces() -> Array:
+	var hud := _main.get_node("UI/HUD") as Control
+	return hud.get_children().filter(func(c: Node) -> bool: return c is CanvasItem and (c as CanvasItem).visible)
+
+
+## Step 49.7: the HUD arrives piece by piece - 60 ms in, the first piece is ahead of the last; by 900 ms every
+## piece stands; with Reduce Motion all stand after 120 ms (red before: one block, no play_hud).
+func test_the_hud_arrives_piece_by_piece() -> void:
+	var script: GDScript = load(SCRIPT) if ResourceLoader.exists(SCRIPT) else null
+	assert_bool(script != null and script.has_method("play_hud")).override_failure_message("no play_hud").is_true()
+	if script == null or not script.has_method("play_hud"):
+		return
+	await _runner.simulate_frames(10, 100)   # the boot's own arrival (harness starts reveal too) has settled
+	var hud := _main.get_node("UI/HUD") as Control
+	script.call("play_hud", hud)
+	await _runner.simulate_frames(6, 10)
+	var pieces := _pieces()
+	assert_float((pieces[0] as CanvasItem).modulate.a).is_greater((pieces[-1] as CanvasItem).modulate.a)
+	await _runner.simulate_frames(10, 100)
+	for piece: CanvasItem in _pieces():
+		assert_float(piece.modulate.a).override_failure_message(piece.name).is_equal_approx(1.0, 0.001)
+
+
+func test_with_reduce_motion_the_hud_stands_after_120_ms() -> void:
+	var settings: Node = get_tree().root.get_node_or_null("GraphicsSettings")
+	var script: GDScript = load(SCRIPT) if ResourceLoader.exists(SCRIPT) else null
+	if settings == null or script == null or not script.has_method("play_hud"):
+		fail("no play_hud")
+		return
+	await _runner.simulate_frames(10, 100)   # the boot's own arrival has settled
+	var before: bool = settings.reduce_motion
+	settings.reduce_motion = true
+	var hud := _main.get_node("UI/HUD") as Control
+	script.call("play_hud", hud)
+	await _runner.simulate_frames(4, 50)
+	settings.reduce_motion = before
+	assert_float(hud.modulate.a).is_equal_approx(1.0, 0.001)
+	for piece: CanvasItem in _pieces():
+		assert_float(piece.modulate.a).is_equal_approx(1.0, 0.001)
