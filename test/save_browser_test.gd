@@ -84,3 +84,27 @@ func test_the_close_box_and_esc_close_the_sheet() -> void:
 			browser.get_viewport().push_input(esc)
 		await get_tree().process_frame
 		assert_array(heard).is_equal([how])
+
+
+## Step 48.2b: the fact line of a row is filled after the sheet is open, one save per frame (red before: no line).
+func test_the_fact_line_is_filled_after_the_frames_have_run() -> void:
+	var browser := await _open(DIR)
+	if browser == null:
+		return
+	for _i in 5:
+		await get_tree().process_frame
+	var facts := (browser.get("rows") as Node).get_child(0).find_child("Facts", true, false) as Label
+	assert_object(facts).override_failure_message("no fact line").is_not_null()
+	if facts != null:
+		assert_str(facts.text).is_equal("GRIMDARK FUTURE · ROUND 3 · GRASSLAND · 6 x 4 FT")
+
+
+func test_an_empty_folder_says_so() -> void:
+	var browser := await _open("user://save_browser_empty")
+	if browser == null:
+		return
+	var texts: Array = []
+	for label: Label in browser.find_children("*", "Label", true, false):
+		if label.is_visible_in_tree():
+			texts.append(label.text)
+	assert_array(texts).contains(["No saved games yet.", "Games you save at the table appear here."])

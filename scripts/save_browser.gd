@@ -1,7 +1,8 @@
 class_name SaveBrowser
 extends Control
 ## "Load game": one sheet over the dimmed menu that lists the saves of the save folder, newest first, each with
-## its name, its date and a Load button.
+## its name, its date and a Load button. The fact lines (system, round, biome, size) are read one file per frame
+## after the sheet is open, so fifty saves do not freeze the opening.
 
 signal load_requested(path: String, button: Button)
 signal closed
@@ -12,6 +13,10 @@ const FONT_NAME := 22
 const MenuView = preload("res://scripts/startup_menu_view.gd")
 
 var rows: VBoxContainer
+var empty_note: VBoxContainer
+var _facts: Array[Label] = []
+var _saves: Array[Dictionary] = []
+var _next := 0
 
 
 ## Builds the sheet over `host` for the saves of `dir` (default: the save folder).
@@ -34,8 +39,20 @@ func open(host: Node, dir := "") -> void:
 	rows.size_flags_horizontal = SIZE_EXPAND_FILL
 	rows.add_theme_constant_override(&"separation", HouseStyle.GAP_SECTION)
 	scroll.add_child(rows)
-	for info: Dictionary in SaveManager.list_saves(dir):
+	var saves := SaveManager.list_saves(dir)
+	for info: Dictionary in saves:
 		rows.add_child(_row(info))
+	empty_note = VBoxContainer.new()
+	empty_note.size_flags_vertical = SIZE_EXPAND_FILL
+	empty_note.alignment = BoxContainer.ALIGNMENT_CENTER
+	empty_note.visible = saves.is_empty()
+	for line: Array in [["No saved games yet.", HouseStyle.BODY],
+			["Games you save at the table appear here.", HouseStyle.CAPTION]]:
+		var label := HouseStyle.label(line[0], line[1])
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		empty_note.add_child(label)
+	body.add_child(empty_note)
+	_saves = saves
 	host.add_child(self)
 
 
@@ -64,6 +81,10 @@ func _row(info: Dictionary) -> PanelContainer:
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title.clip_text = true
 	words.add_child(title)
+	var facts := _text("", HouseStyle.CAPTION, HouseStyle.MENU_FONT_EYEBROW, HouseStyle.mono())
+	facts.name = "Facts"
+	words.add_child(facts)
+	_facts.append(facts)
 	line.add_child(_text(_date(int(info.modified_unix)), HouseStyle.CAPTION, 16))
 	var button := HouseStyle.button("Load", HouseStyle.BUTTON, HouseStyle.MENU_H_ACTION)
 	button.focus_mode = FOCUS_ALL
@@ -73,6 +94,15 @@ func _row(info: Dictionary) -> PanelContainer:
 	button.pressed.connect(func() -> void: load_requested.emit(str(info.path), button))
 	line.add_child(button)
 	return row
+
+
+## One save per frame: its facts as one upper-case mono line ("GRIMDARK FUTURE · ROUND 1 · GRASSLAND · 6 x 4 FT").
+func _process(_delta: float) -> void:
+	if _next >= _saves.size():
+		set_process(false)
+		return
+	_facts[_next].text = " · ".join(MenuView.facts_lines(SaveManager.save_facts(str(_saves[_next].path))))
+	_next += 1
 
 
 ## "26 Nov 2026 · 07:31" in local time (the unix time is UTC).
