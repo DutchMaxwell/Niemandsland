@@ -12,6 +12,7 @@ func _hub() -> Control:
 	host.size = Vector2(1920, 1080)
 	add_child(host)
 	var hub: Control = (load(SCRIPT) as GDScript).new()
+	hub.set("lists_on_open", false)   # no request to the production relay from a test
 	host.add_child(hub)
 	hub.size = host.size
 	await get_tree().process_frame
@@ -125,7 +126,7 @@ func test_the_public_list_shows_one_row_per_room_and_the_count() -> void:
 	assert_bool(hub.has_method("_on_rooms")).override_failure_message("no public list").is_true()
 	if not hub.has_method("_on_rooms"):
 		return
-	hub.call("_on_rooms", [{"code": "ABC123", "players": 1}, {"code": "KLM456", "players": 2}])
+	hub.call("_on_rooms", [{"code": "ABC123", "players": 1}, {"code": "KLM456", "players": 2}], hub.get("_gen"))
 	var rows := _rows(hub)
 	assert_int(rows.size()).is_equal(2)
 	assert_str((hub.get("count_label") as Label).text).is_equal("2 games online")
@@ -133,10 +134,37 @@ func test_the_public_list_shows_one_row_per_room_and_the_count() -> void:
 	assert_int(pips.size()).is_equal(8)
 	assert_int(pips.filter(func(p: Panel) -> bool: return bool(p.get_meta("filled", false))).size()).is_equal(1)
 	assert_array(_texts_of(rows[0])).contains(["ABC-123", "1 / 8 players"])
-	hub.call("_on_rooms", [])
+	hub.call("_on_rooms", [], hub.get("_gen"))
 	assert_int(_rows(hub).size()).is_equal(0)
 	assert_str((hub.get("status_label") as Label).text).is_equal("0 games online right now.")
 
 
 func _texts_of(node: Node) -> Array:
 	return node.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+
+
+
+## Step 47.3b: one request kind from a fresh listing lobby; a reply of an older request changes nothing; a failure
+## shows the relay's reason; the listing lobby goes with the page (red before: no refresh).
+func test_requests_generations_and_clean_up() -> void:
+	var hub := await _hub()
+	if hub == null:
+		return
+	assert_bool(hub.has_method("refresh")).override_failure_message("no requests").is_true()
+	if not hub.has_method("refresh"):
+		return
+	(hub.get("relay_field") as LineEdit).text = "ws://127.0.0.1:9"   # a closed local port, never the real relay
+	hub.call("refresh")
+	var old: int = hub.get("_gen")
+	hub.call("refresh")
+	hub.call("_on_rooms", [{"code": "ABC123", "players": 1}], old)
+	assert_int(_rows(hub).size()).is_equal(0)
+	assert_str((hub.get("status_label") as Label).text).is_equal("Loading rooms…")
+	hub.call("_on_failed", "relay says no", hub.get("_gen"))
+	assert_str((hub.get("status_label") as Label).text).is_equal("relay says no")
+	var lobby: Node = hub.get("_lobby")
+	assert_object(lobby).is_not_null()
+	hub.get_parent().remove_child(hub)
+	await get_tree().process_frame
+	assert_bool(is_instance_valid(lobby)).override_failure_message("the listing lobby outlived the page").is_false()
+	hub.free()
