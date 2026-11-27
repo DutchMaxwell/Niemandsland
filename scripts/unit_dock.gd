@@ -456,7 +456,7 @@ func _card_data(unit: GameUnit) -> Dictionary:
 		"can_cancel": CoreActivation.can_cancel(unit.unit_id),
 		"can_place_for_me": CoreActivation.fall_pending(unit.unit_id),
 		"command_picks": "Done picking" if CommandPicks.picking == unit else ("Command picks" \
-			if CommandPicks.refusal(get_tree().root.get_node_or_null("Main"), unit).is_empty() else ""),
+			if is_inside_tree() and CommandPicks.refusal(get_node_or_null("/root/Main"), unit).is_empty() else ""),
 		"fatigued": unit.is_fatigued,
 		"shaken": unit.is_shaken,
 		"caster": unit.is_caster(),

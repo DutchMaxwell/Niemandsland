@@ -12,7 +12,7 @@ const MAX_PICKS := 2
 static func refusal(main, owner_unit: GameUnit) -> String:
 	if owner_unit == null or not BattleSim.carries_command(owner_unit):
 		return "only an AoF: Skirmish command group picks the units its command reaches"
-	if main.opr_army_manager == null or not main.opr_army_manager.is_deployment_phase():
+	if main == null or main.opr_army_manager == null or not main.opr_army_manager.is_deployment_phase():
 		return "command picks are chosen at deployment and stay for the battle"
 	if main._solo_is_ai_unit(owner_unit) or not main._solo_i_own_unit(owner_unit):
 		return "only %s's owner picks its command" % owner_unit.get_name()
