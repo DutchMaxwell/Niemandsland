@@ -12,6 +12,7 @@ const WAYS := [
 	["theme", "Ruined Borderland", "", &"table"],
 	["file", "Load a layout", "Open a layout file you saved in the layout editor.", &"folder"]]
 const STEPS := ["Game system", "Biome", "Table size"]
+const REFRESH := "<path d='M20 12a8 8 0 1 1-2.3-5.6M20 4v4.5h-4.5'/>"
 const CROSS := "<path d='M7 7l10 10M17 7L7 17'/>"
 const DEPLOYMENT := ["", " · Front Line (12\")", " · Custom Zones"]
 const TICK := "<path d='M5 12.5l4.5 4.5L19 7.5'/>"
@@ -26,6 +27,8 @@ var _legend: HBoxContainer
 var _facts: Label
 var _lines: VBoxContainer
 var _layout_row: Label
+var _again: Button
+var _mirror: CheckButton
 
 
 func setup(layout: SetupLayout, values: Array) -> void:
@@ -79,6 +82,7 @@ func setup(layout: SetupLayout, values: Array) -> void:
 		var caption: String = way[2] if way[0] != "theme" else "A ready-made table: %s, %d pieces." % [
 			theme_info.mood.to_lower(), theme_info.pieces.size()]
 		ways.add_child(_way_card(way[0], way[1], caption, way[3]))
+	left.add_child(_tools())
 	_note = _text("", 15, HouseStyle.font(400), HouseStyle.WARN)
 	left.add_child(_note)
 	_file = FileDialog.new()
@@ -91,6 +95,46 @@ func setup(layout: SetupLayout, values: Array) -> void:
 	_build_rail(values)
 	_layout.changed.connect(_refresh)
 	_refresh()
+
+
+## The tools card: Generate again and the mirror (the generated way only), and the layout editor.
+func _tools() -> PanelContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override(&"separation", 14)
+	_again = HouseStyle.button("Generate again", HouseStyle.BUTTON, HouseStyle.MENU_H_ACTION)
+	_again.name = "GenerateAgain"
+	_again.icon = HouseStyle.svg_icon(MenuView.ICON_SVG % REFRESH)
+	_again.add_theme_constant_override(&"icon_max_width", 16)
+	_again.size_flags_horizontal = SIZE_SHRINK_BEGIN
+	_again.pressed.connect(_layout.generate)
+	row.add_child(_again)
+	_mirror = CheckButton.new()
+	_mirror.name = "Mirror"
+	_mirror.text = "Point Symmetry (Mirror)"
+	_mirror.toggled.connect(_layout.set_mirror)
+	row.add_child(_mirror)
+	var air := Control.new()
+	air.size_flags_horizontal = SIZE_EXPAND_FILL
+	row.add_child(air)
+	var edit := HouseStyle.button("Edit in the layout editor", HouseStyle.BUTTON, HouseStyle.MENU_H_ACTION)
+	edit.name = "EditInEditor"
+	edit.icon = MenuView._icon(&"go")
+	edit.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	edit.add_theme_constant_override(&"icon_max_width", 14)
+	edit.size_flags_horizontal = SIZE_SHRINK_END
+	edit.pressed.connect(_layout.open_editor)
+	row.add_child(edit)
+	for b: BaseButton in [_again, _mirror, edit]:
+		b.focus_mode = FOCUS_ALL
+	return HouseStyle.card(row)
+
+
+## G generates again while the generated way is chosen and no text field has the focus.
+func _unhandled_key_input(event: InputEvent) -> void:
+	if visible and event is InputEventKey and event.pressed and event.keycode == KEY_G and not _again.disabled \
+			and not get_viewport().gui_get_focus_owner() is LineEdit:
+		get_viewport().set_input_as_handled()
+		_layout.generate()
 
 
 ## The rail: the picture, the legend with counts, the facts line, the editor's first two guideline lines (ways
@@ -204,6 +248,8 @@ func _way_card(way: String, title: String, caption: String, icon: StringName) ->
 ## The chosen way has the lighter fill and the 2 px gold rim; the ready-made table is off off 6 x 4 ft.
 func _refresh() -> void:
 	_refresh_rail()
+	_again.disabled = _layout.way != "generated"
+	_mirror.visible = _layout.way == "generated"
 	_note.text = _layout.note if not _layout.note.is_empty() else _note.text
 	for way: String in _cards:
 		var card: Button = _cards[way]
