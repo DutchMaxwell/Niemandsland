@@ -13,6 +13,10 @@ static func style(d: AcceptDialog, framed: bool = false, at_table: bool = false)
 	var action_h := HouseStyle.MENU_H_ACTION if menu_scale else HouseStyle.H_ACTION
 	d.theme = HouseStyle.menu_theme() if menu_scale else HouseStyle.theme()
 	d.borderless = not framed
+	# A borderless window shows only its rounded sheet: without these its square, engine-grey (76, 76, 76) back shows
+	# at the sheet's corners (gap review 27.11., sheet 08).
+	d.transparent = not framed
+	d.transparent_bg = not framed
 	d.get_ok_button().theme_type_variation = HouseStyle.PRIMARY
 	d.get_ok_button().custom_minimum_size.y = action_h
 	if d is ConfirmationDialog:

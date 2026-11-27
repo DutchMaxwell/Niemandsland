@@ -269,3 +269,15 @@ func test_credits_box_is_large_enough_to_read_and_inside_the_window() -> void:
 	assert_float(scroll.size.y).override_failure_message("the credits box is %s px tall" % scroll.size.y).is_greater_equal(420.0)
 	assert_bool(scroll.follow_focus).is_true()
 	assert_float(float(credits.size.y)).is_less(_menu.get_viewport().get_visible_rect().size.y)
+
+
+## A borderless menu window shows its rounded sheet only: its square back is transparent, so no engine-grey corner
+## stands behind the sheet's rounded ones (gap review 27.11., sheet 08; red before). Framed in-game windows keep it.
+func test_menu_windows_have_no_square_back_behind_the_rounded_sheet() -> void:
+	_menu._on_credits_pressed()
+	await _frames(2)
+	for d: Window in [_dialog_titled("Credits & licenses"), _update_prompt("notes")]:
+		assert_bool(d.transparent_bg and d.transparent).override_failure_message("%s has a square back" % d.title).is_true()
+	var framed: AcceptDialog = auto_free(AcceptDialog.new())
+	MenuDialog.style(framed, true)
+	assert_bool(framed.transparent_bg).is_false()
