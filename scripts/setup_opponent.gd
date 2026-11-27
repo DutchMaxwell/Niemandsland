@@ -11,6 +11,8 @@ const ONLINE_LABEL := "Online room"
 const LOADING_LINE := "Loading NACHTMAHR's lists ..."
 const NO_MANIFEST_LINE := "NACHTMAHR's lists need a connection the first time."
 const NO_LISTS_LINE := "No NACHTMAHR lists for %s yet."
+const MENU_CFG := "user://menu.cfg"
+const WHO_IDS := ["solo", "local", "online"]
 
 var who := "solo"           # "solo" | "local" | "online"
 var manifest: Dictionary = {}
@@ -20,6 +22,42 @@ var bracket := 0            # an index into the faction's lists
 var seat := 2               # the player NACHTMAHR plays: 2 (Red) or 1 (Blue)
 var _preferred := "solo"    # the card asked for; Solo falls to "local" while it is off
 var _system := GameSystem.DEFAULT_ID
+var _wanted := {}           # a remembered faction / points pick, applied when the manifest offers it
+
+
+## The pick a fresh setup starts on: the remembered one (the menu config), else Solo, NACHTMAHR as player 2. Same
+## file and pattern as GameSystem.default_pick; a value that is no card or seat reads as the default.
+static func default_pick(cfg_path: String = MENU_CFG) -> Dictionary:
+	var cfg := ConfigFile.new()
+	cfg.load(cfg_path)   # a missing file reads as the defaults
+	var who := str(cfg.get_value("menu", "opponent_who", "solo"))
+	return {"who": who if WHO_IDS.has(who) else "solo", "faction": str(cfg.get_value("menu", "opponent_faction", "")),
+		"points": int(str(cfg.get_value("menu", "opponent_points", 0))),
+		"seat": 1 if str(cfg.get_value("menu", "opponent_seat", 2)) == "1" else 2}
+
+
+## Remembers the card, faction, points and seat for the next table (keeps the other menu keys).
+static func remember_pick(pick: Dictionary, cfg_path: String = MENU_CFG) -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(cfg_path)
+	for key: String in ["who", "faction", "points", "seat"]:
+		cfg.set_value("menu", "opponent_" + key, pick.get(key, ""))
+	cfg.save(cfg_path)
+
+
+## The pick to remember: {who, faction, points, seat}.
+func pick() -> Dictionary:
+	var points: Array = brackets()
+	return {"who": who, "faction": faction, "points": int(points[bracket]) if bracket < points.size() else 0,
+		"seat": seat}
+
+
+## Starts on a remembered pick; a faction or bracket the manifest does not offer falls back silently.
+func apply_pick(remembered: Dictionary) -> void:
+	_wanted = remembered
+	seat = int(remembered.get("seat", 2))
+	faction = ""
+	choose_who(str(remembered.get("who", "solo")))
 
 
 func set_manifest(m: Dictionary) -> void:
@@ -109,8 +147,11 @@ func commit() -> void:
 func _settle() -> void:
 	var keys: Array = factions().map(func(f: Array) -> String: return f[0])
 	if not keys.has(faction):
-		faction = str(keys[0]) if not keys.is_empty() else ""
+		var wanted := str(_wanted.get("faction", ""))
+		faction = wanted if keys.has(wanted) else str(keys[0]) if not keys.is_empty() else ""
 		bracket = _largest()
+		if faction == wanted and brackets().has(int(_wanted.get("points", 0))):
+			bracket = brackets().find(int(_wanted.get("points", 0)))
 	who = "local" if _preferred == "solo" and not solo_available() else _preferred
 	changed.emit()
 

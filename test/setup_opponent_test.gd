@@ -97,3 +97,51 @@ func test_the_stored_choice() -> void:
 	m.commit()
 	assert_dict(ProjectSettings.get_setting(PendingOpponent.KEY)).is_equal(
 		{"who": "local", "label": "Two players, one screen"})
+
+
+## Spec 97 (step 97.12): the setup remembers the opponent in the menu config (red before: no default_pick).
+const CFG := "user://setup_opponent_test_menu.cfg"
+
+
+func _clean_cfg() -> void:
+	if FileAccess.file_exists(CFG):
+		DirAccess.remove_absolute(CFG)
+
+
+func test_the_pick_round_trips_and_keeps_the_other_menu_keys() -> void:
+	_clean_cfg()
+	assert_dict(SetupOpponent.default_pick(CFG)).is_equal({"who": "solo", "faction": "", "points": 0, "seat": 2})
+	GameSystem.remember_pick("aof", CFG)
+	var m := _model()
+	m.choose_faction("orc_tribes")
+	m.choose_seat(1)
+	SetupOpponent.remember_pick(m.pick(), CFG)
+	assert_dict(SetupOpponent.default_pick(CFG)).is_equal({"who": "solo", "faction": "orc_tribes", "points": 2000,
+		"seat": 1})
+	assert_str(GameSystem.default_pick(CFG)).is_equal("aof")
+	var again := SetupOpponent.new()
+	again.apply_pick(SetupOpponent.default_pick(CFG))
+	again.set_system("gf")
+	again.set_manifest(MANIFEST)
+	assert_str(again.label()).is_equal("NACHTMAHR · Orc Tribes · 2000")
+	assert_int(again.seat).is_equal(1)
+	_clean_cfg()
+
+
+func test_garbage_reads_as_the_defaults_and_a_lost_faction_falls_back() -> void:
+	_clean_cfg()
+	var cfg := ConfigFile.new()
+	cfg.set_value("menu", "opponent_who", "robot")
+	cfg.set_value("menu", "opponent_faction", "no_such_faction")
+	cfg.set_value("menu", "opponent_points", "lots")
+	cfg.set_value("menu", "opponent_seat", 7)
+	cfg.save(CFG)
+	var pick := SetupOpponent.default_pick(CFG)
+	assert_dict(pick).is_equal({"who": "solo", "faction": "no_such_faction", "points": 0, "seat": 2})
+	var m := SetupOpponent.new()
+	m.apply_pick(pick)
+	m.set_system("gf")
+	m.set_manifest(MANIFEST)
+	assert_str(m.faction).is_equal("alien_hives")
+	assert_int(m.bracket).is_equal(0)
+	_clean_cfg()

@@ -232,6 +232,8 @@ func _show_table_setup(host_settings: Dictionary = {}) -> void:
 	_table_setup.set_biomes(MenuDiorama.Battlefield.BIOMES,diorama.biome)
 	if not host_settings.is_empty():
 		_table_setup.opponent.choose_who("online")   # from the hub: the online room
+	else:
+		_table_setup.opponent.apply_pick(SetupOpponent.default_pick())   # the last table's opponent
 	if setup_lists:
 		_load_setup_lists(_table_setup.opponent)
 	_table_setup.size_chosen.connect(_on_table_setup_chosen.bind(host_settings))
@@ -268,6 +270,7 @@ func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> vo
 			ProjectSettings.set_setting(key,host_settings[key])
 	_table_setup.layout.commit()   # the chosen layout travels to the table (PendingLayout)
 	_table_setup.opponent.commit()   # and who is at the table (PendingOpponent)
+	SetupOpponent.remember_pick(_table_setup.opponent.pick())
 	var setup := _table_setup
 	_table_setup = null
 	await _commit_beat(setup._create)
