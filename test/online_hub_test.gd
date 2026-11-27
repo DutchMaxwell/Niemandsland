@@ -75,3 +75,37 @@ func test_an_emptied_relay_field_gives_the_default_address() -> void:
 	(hub.get("relay_field") as LineEdit).text = "   "
 	var settings := _settings_on_prepare(hub)
 	assert_str(str(settings.get("niemandsland/internet_relay_url", ""))).is_equal(InternetLobby.DEFAULT_RELAY_URL)
+
+
+func _join(hub: Control) -> Dictionary:
+	return {"boxes": hub.get("code_boxes"), "button": hub.get("join_button"), "error": hub.get("join_error")}
+
+
+## Step 47.2b: "Join with a code" - Join is off below six characters; Enter with a short code says why and emits
+## nothing; six characters join without the hyphen; the error goes with the next keystroke (red before: no block).
+func test_join_with_a_code() -> void:
+	var hub := await _hub()
+	if hub == null:
+		return
+	var parts := _join(hub)
+	assert_object(parts.boxes).override_failure_message("no join block").is_not_null()
+	if parts.boxes == null:
+		return
+	var field: LineEdit = parts.boxes.field
+	var got: Array = []
+	hub.connect("join_requested", func(code: String, url: String, _n: String, _b: Button) -> void:
+		got.append([code, url]))
+	field.text = "ab1"
+	field.text_changed.emit("ab1")
+	assert_bool((parts.button as Button).disabled).is_true()
+	field.text_submitted.emit(field.text)
+	assert_bool((parts.error as Label).visible).is_true()
+	assert_str((parts.error as Label).text).is_equal("An invitation code has 6 characters, for example ABC-123.")
+	assert_array(got).is_empty()
+	field.text = "ab1c23"
+	field.text_changed.emit("ab1c23")
+	assert_bool((parts.error as Label).visible).is_false()
+	assert_bool((parts.button as Button).disabled).is_false()
+	assert_str(String((parts.button as Button).theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	field.text_submitted.emit(field.text)
+	assert_array(got).is_equal([["AB1C23", InternetLobby.DEFAULT_RELAY_URL]])
