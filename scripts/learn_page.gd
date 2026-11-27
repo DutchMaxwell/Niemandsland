@@ -11,6 +11,10 @@ const CARD_H := 150
 var _cards: Dictionary = {}
 var _lessons: Dictionary = {}   # per track: lessons, done, playable, next, its name and how a card launches
 var _grid: VBoxContainer
+var _reset: Button
+var _tutorial: TutorialProgress
+var _trial: SpielschuleProgress
+const TICK := "<path d='M5 12.5l4.5 4.5L19 7.5'/>"
 
 
 ## `returned`: the page was opened by a return from a lesson (Trial by Fire is selected then).
@@ -18,6 +22,19 @@ func setup(tutorial: TutorialProgress, trial: SpielschuleProgress, returned: boo
 	eyebrow.text = "LEARN TO PLAY"
 	_build_panel()
 	title.text = "Find your starting point."
+	_tutorial = tutorial
+	_trial = trial
+	_build("TrialTrack" if returned or trial.any_completed(Spielschule.ids()) else "ClassicTrack")
+	return self
+
+
+## The two track cards from the progress as it stands, then `key` selected.
+func _build(key: String) -> void:
+	for card: Node in left.get_children():
+		left.remove_child(card)
+		card.queue_free()
+	var tutorial := _tutorial
+	var trial := _trial
 	var track := TutorialFlow.build_tool_track()
 	var done: Array = track.map(func(l: Dictionary) -> bool: return tutorial.is_lesson_completed(str(l.id)))
 	_track("ClassicTrack", ["CLASSIC TUTORIAL", "Learn the controls", "Camera, miniatures and tools, on a prepared table."],
@@ -30,8 +47,7 @@ func setup(tutorial: TutorialProgress, trial: SpielschuleProgress, returned: boo
 		"Eleven short lessons — play them in any order, replay any time."], chapters, done,
 		chapters.map(Spielschule.is_available), func(chapter: Dictionary) -> void: scenario_requested.emit(chapter),
 		func(chapter: Dictionary) -> void: scenario_requested.emit(chapter))
-	select("TrialTrack" if returned or trial.any_completed(Spielschule.ids()) else "ClassicTrack")
-	return self
+	select(key)
 
 
 ## One track card; the next lesson is the first that is not done and can be played (`playable`).
@@ -134,6 +150,15 @@ func _build_panel() -> void:
 	_grid.name = "LessonGrid"
 	_grid.add_theme_constant_override(&"separation", 12)
 	box.add_child(_grid)
+	_reset = HouseStyle.button("Reset tutorial progress", HouseStyle.DANGER_BUTTON, HouseStyle.MENU_H_ACTION)
+	_reset.name = "ResetTutorial"
+	_reset.flat = true
+	_reset.focus_mode = FOCUS_ALL
+	_reset.size_flags_horizontal = SIZE_SHRINK_END
+	_reset.pressed.connect(func() -> void:
+		_tutorial.reset()
+		_build("ClassicTrack"))
+	box.add_child(_reset)
 
 
 ## The selected track's lessons, four to a row: position, title, goal and a state
@@ -141,6 +166,7 @@ func _build_panel() -> void:
 func _fill_grid(key: String) -> void:
 	var data: Array = _lessons[key]
 	(right.find_child("TrackName", true, false) as Label).text = str(data[4])
+	_reset.visible = key == "ClassicTrack"
 	for child: Node in _grid.get_children():
 		_grid.remove_child(child)
 		child.queue_free()
@@ -161,8 +187,21 @@ func _fill_grid(key: String) -> void:
 		words.set_anchors_and_offsets_preset(PRESET_FULL_RECT, PRESET_MODE_MINSIZE, 16)
 		words.mouse_filter = MOUSE_FILTER_IGNORE
 		card.add_child(words)
-		words.add_child(_text("%02d" % (i + 1), 14, HouseStyle.mono()))
-		words.add_child(_text(str(lesson.title), 19, HouseStyle.font(500)))
+		var finale := key == "TrialTrack" and i == (data[0] as Array).size() - 1
+		var number := HBoxContainer.new()
+		number.add_child(_text("%02d · FINALE" % (i + 1) if finale else "%02d" % (i + 1), 14, HouseStyle.mono()))
+		if data[1][i]:   # a drawn tick, not a glyph: the mono font's coverage of U+2713 is not proven
+			var tick := TextureRect.new()
+			tick.name = "Tick"
+			tick.texture = HouseStyle.svg_icon(MenuView.ICON_SVG % TICK)
+			tick.custom_minimum_size = Vector2(14, 14)
+			tick.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			tick.modulate = HouseStyle.OK
+			number.add_child(tick)
+		words.add_child(number)
+		var lesson_title := _text(str(lesson.title), 19, HouseStyle.font(500))
+		lesson_title.autowrap_mode = TextServer.AUTOWRAP_WORD   # long classic titles wrap inside their card
+		words.add_child(lesson_title)
 		var goal := _text(str(lesson.get("goal", "")), HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
 		goal.autowrap_mode = TextServer.AUTOWRAP_WORD
 		goal.size_flags_vertical = SIZE_EXPAND_FILL
@@ -172,8 +211,29 @@ func _fill_grid(key: String) -> void:
 		var state_label := _text(state, HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
 		state_label.add_theme_color_override(&"font_color", HouseStyle.GOLD if i == data[3] else HouseStyle.MUTED)
 		words.add_child(state_label)
+		if finale:   # two columns wide, a gold wash from the left and the tag "Finale"
+			card.size_flags_stretch_ratio = 2.0
+			var wash := GradientTexture2D.new()
+			wash.gradient = Gradient.new()
+			wash.gradient.set_color(0, Color(HouseStyle.GOLD, 0.14))
+			wash.gradient.set_color(1, Color(HouseStyle.GOLD, 0.0))
+			var fill := TextureRect.new()
+			fill.texture = wash
+			fill.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+			fill.mouse_filter = MOUSE_FILTER_IGNORE
+			card.add_child(fill)
+			card.move_child(fill, 0)
+			var tag := _text("Finale", 13, HouseStyle.mono())
+			tag.add_theme_color_override(&"font_color", HouseStyle.GOLD)
+			tag.size_flags_horizontal = SIZE_SHRINK_BEGIN
+			words.add_child(tag)
 		for label: Label in words.find_children("*", "Label", true, false):
 			label.mouse_filter = MOUSE_FILTER_IGNORE
+		if i == data[3]:   # the next lesson: the gold rim and the lighter fill
+			var rim := HouseStyle.menu_theme().get_stylebox(&"normal", &"Button").duplicate() as StyleBoxFlat
+			rim.bg_color = HouseStyle.ROW_HOVER
+			rim.border_color = HouseStyle.GOLD
+			card.add_theme_stylebox_override(&"normal", rim)
 		row.add_child(card)
 
 
