@@ -22655,13 +22655,19 @@ func _lay_generated_board(record: Dictionary) -> bool:
 
 
 ## GEN-10: a load or a join lays the board its table block carries, or takes a standing board away ({}). Without
-## the models check: a load's models arrive after its table.
+## the models check: a load's models arrive after its table. GEN-11: a board this build makes differently is refused.
 func restore_generated_board(record: Dictionary) -> void:
 	if not record.has("seed") or not ClassDB.class_exists("NmlCore"):
 		if _board_look != null and is_instance_valid(_board_look):
 			_board_look.queue_free()
 		_board_look = null
 		_board_record = {}
+		return
+	var refused := GeneratedBoard.verify(record)   # GEN-11: another build's board is not laid, and says so
+	if not refused.is_empty():
+		print("[Board] " + refused)
+		_show_toast(refused)
+		restore_generated_board({})
 		return
 	_lay_generated_board(record)
 
