@@ -227,3 +227,20 @@ func test_the_chosen_way_card_has_the_sheets_fill() -> void:
 	var box := _way(step, SetupLayout.DEFAULT_WAY).get_theme_stylebox(&"normal") as StyleBoxFlat
 	assert_str(box.bg_color.to_html(false)).is_equal("253035")
 	assert_bool(box.draw_center).override_failure_message("the fill is not drawn").is_true()
+
+
+## Gap review 27.11. (sheet 03c): at 1080p the deployment zones are a compact joined group at the left, and the cards
+## of the page stand 14 px apart with 20 px inside (red before: three stretched buttons, 8 px gaps, 10 px inside).
+func test_the_tools_and_zones_have_room_at_1080p() -> void:
+	var step := _step(Vector2(6, 4))
+	if step == null:
+		return
+	await get_tree().process_frame
+	var none := step.find_child("ZoneNone", true, false) as Control
+	var custom := step.find_child("ZoneCustom", true, false) as Control
+	var group := none.get_parent() as Control
+	assert_float(group.size.x).override_failure_message("the zones stretch across the card").is_less(group.get_parent().size.x * 0.8)
+	assert_float(custom.get_global_rect().position.x - none.get_global_rect().end.x).is_less(200.0)
+	assert_int((step.get("left") as Control).get_theme_constant(&"separation")).is_equal(14)
+	var tools := (step.find_child("GenerateAgain", true, false) as Node).get_parent().get_parent() as PanelContainer
+	assert_float(tools.get_theme_stylebox(&"panel").content_margin_left).is_equal(20.0)
