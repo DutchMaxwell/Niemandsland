@@ -9,8 +9,8 @@ extends Node
 ## opens it again for host and guest alike; the game leaving deployment closes it.
 ##
 ## The arrival card: a new or joined table with no army on it, during deployment (never a loaded game). Its three
-## lines open the army import, the AI opponent (online: the invite card) and Start / Ready; it follows the armies
-## and the players, hides under the game menu, and goes with deployment or its close box.
+## lines open the army import, the second army or NACHTMAHR's list (online: the invite card) and Start / Ready; it
+## follows the armies and the players, hides under the game menu, and goes with deployment or its close box.
 
 const AUTOMATIC := "Rules automation is on — deploy, ready up, then the game applies the rules it models"
 const AFTER_HUD_S := 0.4
@@ -74,7 +74,7 @@ func _watch(main: Node, mode: String) -> void:
 					_invite.close()
 				if is_instance_valid(_arrival):
 					_arrival.queue_free())
-	if mode != "load" and _deploying() and armies.get("armies").is_empty():
+	if mode != "load" and _deploying() and (armies.get("armies") as Dictionary).keys().all(_is_ai):
 		if UiMotion.reduced():
 			_show_arrival()
 		else:
@@ -111,7 +111,7 @@ func _show_arrival() -> void:
 		return
 	_arrival = ArrivalCard.new()
 	_arrival.position = Vector2(40, 150)
-	_arrival.set_lines(["Bring your army", "Invite your group" if _online() else "Pick an opponent", "Deploy and start"])
+	_arrival.set_lines(["Bring your army", "Invite your group" if _online() else _second_line(), "Deploy and start"])
 	_arrival.line_pressed.connect(_on_line)
 	_arrival.dismissed.connect(_arrival.queue_free)
 	_main.get_node("UI/HUD").add_child(_arrival)   # hidden with the HUD (the layout editor hides it)
@@ -126,24 +126,46 @@ func _show_arrival() -> void:
 	_progress()
 
 
-## Line 1 is done with one army; line 2 with two (or, online, a second player at the table).
+## Offline, line 2 names who the setup put at the table: NACHTMAHR's faction, or the second player's army.
+func _second_line() -> String:
+	if PendingOpponent.who == "solo":
+		return "NACHTMAHR brings %s" % PendingOpponent.label.get_slice(" · ", 1)
+	return "Bring the second army"
+
+
+func _is_ai(seat: Variant) -> bool:
+	return _main.solo_ai_slots.has(seat)
+
+
+## Line 1 is done with an army in a seat that is not NACHTMAHR's; line 2 with NACHTMAHR's army (Solo), two armies
+## (two players) or, online, a second player at the table.
 func _progress() -> void:
 	if not is_instance_valid(_arrival):
 		return
-	var armies: int = _main.opr_army_manager.armies.size()
-	var second: bool = armies >= 2 or (_online() and not _main.network_manager.connected_peers.is_empty())
-	_arrival.set_done(0 if armies == 0 else (2 if second else 1))
+	var seats: Array = _main.opr_army_manager.armies.keys()
+	var second: bool = seats.size() >= 2
+	if _online():
+		second = not _main.network_manager.connected_peers.is_empty()
+	elif PendingOpponent.who == "solo":
+		second = seats.any(_is_ai)
+	_arrival.set_flags([not seats.all(_is_ai), second])
 
 
 func _on_line(index: int) -> void:
 	match index:
 		0:
 			_main._on_import_opr_army()
+			if not _online() and PendingOpponent.who == "solo":   # the seat NACHTMAHR does not hold
+				_main.opr_import_dialog.set_player(1 if PendingOpponent.slot == 2 else 2)
 		1:
 			if _online():
 				_reopen()
+			elif PendingOpponent.who == "solo":
+				if not _main.opr_army_manager.armies.keys().any(_is_ai):   # the list failed: load it again
+					_main._load_ai_opponent_list(PendingOpponent.file, PendingOpponent.slot)
 			else:
-				_main._open_ai_opponent_dialog()
+				_main.opr_import_dialog.set_player(2)
+				_main.opr_import_dialog.show()
 		2:
 			_main._on_start_game_pressed()
 
