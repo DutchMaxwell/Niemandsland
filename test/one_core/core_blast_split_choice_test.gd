@@ -63,14 +63,15 @@ func _volley(pick: String) -> String:
 	var squad := _unit(1, "Squad", 12.0, 0.0, {})
 	var mates := _unit(1, "Mates", 12.0, 4.0, {})
 	CoreActivation._env = 1
-	_main.seed_tray_rng(0)
 	var h := CoreActivation.capture(_main, true)
 	var done := [null]
 	var go := func() -> void:
-		done[0] = await CoreActivation.drive(_main, h, ai, [{"t": "begin"}, {"t": "intent", "kind": 0, "shoot": squad.unit_id}], true)
+		done[0] = await CoreActivation.drive(_main, h, ai, [{"t": "begin"}, {"t": "intent", "kind": 0, "shoot": squad.unit_id},
+			{"t": "faces", "faces": [6]}], true)   # the hit rides in the transcript: no seed decides the fixture
 	go.call()
 	var asked := false
-	for _i in 300:
+	var until := Time.get_ticks_msec() + 20000   # a time budget: the prompts wait on real-time pacing, not on frames
+	while Time.get_ticks_msec() < until:
 		if done[0] != null:
 			break
 		for c in _main.find_children("*", "PromptCard", false, false):
