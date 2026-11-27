@@ -24,6 +24,7 @@ func _init() -> void:
 	field = LineEdit.new()
 	field.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	field.max_length = LENGTH + 1
+	field.placeholder_text = "ABC-123"   # not drawn; names the field for screen readers and scripted drivers
 	for colour: StringName in [&"font_color", &"caret_color", &"font_placeholder_color", &"selection_color"]:
 		field.add_theme_color_override(colour, Color.TRANSPARENT)
 	for box: StringName in [&"normal", &"focus", &"read_only"]:

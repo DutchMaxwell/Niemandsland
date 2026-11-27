@@ -15,11 +15,9 @@ func after_test() -> void:
 func test_primary_routes_are_grouped() -> void:
 	var actions := _menu.find_child("MenuButtons",true,false)
 	assert_int(actions.get_child_count()).is_equal(5)
-	assert_bool(_menu.host_online_btn.is_visible_in_tree()).is_false()
+	_menu.online_hub_lists = false
 	_menu.view.buttons.OnlineBtn.pressed.emit()
-	assert_bool(_menu.host_online_btn.is_visible_in_tree()).is_true()
-	assert_bool(_menu.join_online_btn.is_visible_in_tree()).is_true()
-	assert_bool(_menu.browse_online_btn.is_visible_in_tree()).is_true()
+	assert_bool(_menu.view.page_open is OnlineHub).is_true()
 
 func test_continue_matches_actual_save_lookup() -> void:
 	assert_bool(_menu.continue_btn.visible).is_equal(not SaveManager.latest_save_info().is_empty())
@@ -62,22 +60,12 @@ func test_escape_closes_group_without_quit_dialog() -> void:
 func test_group_focus_cycles_inside_group() -> void:
 	_menu.view.show_route("online")
 	assert_object(_menu.browse_online_btn.get_node(_menu.browse_online_btn.focus_next)).is_same(_menu.view.route_back)
-	assert_object(_menu.view.route_back.get_node(_menu.view.route_back.focus_next)).is_same(_menu.host_online_btn)
+	assert_object(_menu.view.route_back.get_node(_menu.view.route_back.focus_next)).is_same(_menu.view.buttons.HostOnlineBtn)
 
 func test_existing_routes_keep_their_own_handlers() -> void:
 	for pair in [[_menu.start_battle_btn,_menu._on_start_battle_pressed],[_menu.continue_btn,_menu._on_continue_pressed],
 		[_menu.load_battle_btn,_menu._on_load_battle_pressed],[_menu.credits_btn,_menu._on_credits_pressed]]:
 		assert_bool(pair[0].pressed.is_connected(pair[1])).is_true()
-
-func test_host_route_opens_existing_dialog_and_keeps_public_checkbox_focusable() -> void:
-	_menu.view.show_route("online")
-	_menu.host_online_btn.pressed.emit()
-	if _menu.view.route_panel.visible:
-		await _menu.view.route_closed
-	assert_bool(_menu.view.route_panel.visible).is_false()
-	assert_bool(_menu._host_popup.visible).is_true()
-	assert_object(_menu._relay_url_input).is_not_null()
-	assert_int(_menu._host_public_check.focus_mode).is_equal(Control.FOCUS_ALL)
 
 func test_join_invalid_code_keeps_dialog_open_and_does_not_transition() -> void:
 	_menu._on_join_online_pressed()
@@ -100,11 +88,14 @@ func test_enter_in_the_join_code_field_joins_like_the_button() -> void:
 
 ## Enter in the host's name field is "Prepare table" (red on main: nothing happened).
 func test_enter_in_the_host_name_field_prepares_the_table() -> void:
-	_menu._on_host_online_pressed()
+	_menu.online_hub_lists = false
+	_menu._open_online_hub()
 	assert_object(_menu._table_setup).is_null()
-	_menu._host_name_input.text_submitted.emit(_menu._host_name_input.text)
+	var hub: OnlineHub = _menu.view.page_open
+	hub.name_field.text_submitted.emit(hub.name_field.text)
 	assert_object(_menu._table_setup).is_not_null()
-	assert_bool(_menu._host_popup.visible).is_false()
+	_menu._table_setup._on_close()   # "Back to main menu" of the setup returns to the hub's Prepare table
+	assert_bool(hub.prepare_button.has_focus()).is_true()
 
 
 func test_load_opens_real_nml_file_dialog() -> void:
@@ -201,9 +192,11 @@ func test_host_creation_commits_selected_table_and_network_settings_together() -
 	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
 	probe.set_script(MenuTransitionProbe)
 	add_child(probe)
-	probe._on_host_online_pressed()
-	probe._host_public_check.button_pressed = true
-	probe._on_host_confirmed()
+	probe.online_hub_lists = false
+	probe._open_online_hub()
+	var hub: OnlineHub = probe.view.page_open
+	hub.public_check.button_pressed = true
+	hub.prepare_button.pressed.emit()
 	var started_early: bool = probe.entered_game
 	probe._table_setup._select_biome("arid_desert")
 	probe._table_setup._select_size("square")
