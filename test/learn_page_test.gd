@@ -73,3 +73,26 @@ func test_all_done_says_so_and_is_disabled() -> void:
 		var button := _card(page, key).button as Button
 		assert_str(button.text).is_equal("All lessons done - pick one to replay")
 		assert_bool(button.disabled).is_true()
+
+
+## Step 48.6b: exactly one track is selected - Trial by Fire once any of its lessons is done or after a return
+## from a lesson, else the classic tutorial; its button is the gold one; a click on the other card selects it.
+func test_one_track_is_selected_and_its_button_is_gold() -> void:
+	var page := await _page(0, 0)
+	if page == null:
+		return
+	assert_bool(_card(page, "ClassicTrack").selected).is_true()
+	assert_bool(_card(page, "TrialTrack").selected).is_false()
+	assert_str(String((_card(page, "ClassicTrack").button as Button).theme_type_variation)).is_equal(
+		String(HouseStyle.PRIMARY))
+	(_card(page, "TrialTrack").button as Button).grab_focus()
+	assert_bool(_card(page, "TrialTrack").selected).is_true()
+	assert_bool(_card(page, "ClassicTrack").selected).is_false()
+
+
+func test_trial_progress_selects_trial_by_fire() -> void:
+	var page := await _page(2, 0)
+	if page == null:
+		return
+	assert_bool(_card(page, "TrialTrack").selected).is_true()
+	assert_bool(_card(page, "ClassicTrack").selected).is_false()
