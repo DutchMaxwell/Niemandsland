@@ -120,6 +120,12 @@ func _serialize_table() -> Dictionary:
 		"biome": table.biome,
 		"paths": TablePaths.of(table).paths,   # worn paths of a table theme (D14)
 	}
+	# GEN-10: the generated board on the table (main.generated_board(), main = the table's parent): its record, which
+	# also reaches a joining peer (this block is the join state). Optional key, no SAVE_VERSION bump: an older save has
+	# none and loads flat.
+	var board: Dictionary = table.get_parent().generated_board() if table.get_parent().has_method("generated_board") else {}
+	if not board.is_empty():
+		data["generated_board"] = board
 
 	# Serialize map layout data from map_layout_editor
 	if map_layout_editor:
@@ -592,6 +598,8 @@ func _deserialize_table(table_data: Dictionary) -> void:
 	if table_data.has("biome") and table.has_method("set_biome"):
 		table.set_biome(table_data["biome"])
 	TablePaths.of(table).set_paths(table_data.get("paths", []))   # an older save has none: clear them
+	if table.get_parent().has_method("restore_generated_board"):   # GEN-10: the saved board, or none (a standing one leaves)
+		table.get_parent().restore_generated_board(table_data.get("generated_board", {}))
 
 	# Restore map layout data
 	_deserialize_map_layout(table_data, table_size)
