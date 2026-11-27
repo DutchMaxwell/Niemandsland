@@ -1984,6 +1984,11 @@ func all_players_ready() -> bool:
 	return true
 
 
+## Host-side: one seat's ready flag (the invite card's tag per player). A guest has no roster: false.
+func is_slot_ready(slot: int) -> bool:
+	return bool(_ready_by_slot.get(slot, false))
+
+
 ## Number of seated slots whose ready flag is set (host-side; for the "n/total" readout).
 func ready_count() -> int:
 	var n := 0
