@@ -129,3 +129,25 @@ func test_row_04_keeps_change_inside_at_1280x720() -> void:
 		return
 	assert_float(change.get_global_rect().end.x).override_failure_message("Change ends at %d, the row at %d" % [
 		int(change.get_global_rect().end.x), int(row.get_global_rect().end.x)]).is_less_equal(row.get_global_rect().end.x)
+
+
+## Step 82 (sheet 03): from 900 px of window height the right column is one framed rail card - picture, footprint, the
+## summary as rows and Create table as its last row, the columns 1.9 : 1; the footer keeps the key legend only. At
+## 1280x720 the compact form stays (red before: an unframed picture and a page-wide footer with summary and Create).
+func test_from_900_px_the_right_column_is_the_rail_card() -> void:
+	var dialog := await _open(Vector2i(1920, 1080))
+	var card := dialog.find_child("RailCard", true, false) as PanelContainer
+	assert_object(card).override_failure_message("no rail card").is_not_null()
+	if card == null:
+		return
+	assert_bool(card.get_theme_stylebox("panel") is StyleBoxFlat).override_failure_message("the card has no frame").is_true()
+	assert_bool(card.is_ancestor_of(dialog._create)).override_failure_message("Create table is not in the card").is_true()
+	assert_bool(card.is_ancestor_of(dialog._summary.System)).override_failure_message("the summary is not in the card").is_true()
+	assert_float(dialog._create.size.x).is_greater(card.size.x - 60.0)
+	assert_float(dialog._summary.System.get_global_rect().position.y).is_less(dialog._summary.Biome.get_global_rect().position.y)
+	var left: Control = dialog._left
+	assert_float(left.size.x / card.size.x).is_between(1.7, 2.1)
+	assert_object(dialog.find_child("KeyLegend", true, false)).is_not_null()
+	var small := await _open(Vector2i(1280, 720))
+	assert_bool(small.find_child("RailCard", true, false).is_ancestor_of(small._create)) \
+		.override_failure_message("the 720 page lost its footer button").is_false()
