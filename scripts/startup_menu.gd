@@ -20,8 +20,6 @@ const BROWSE_TIMEOUT_S := 8.0
 const JOIN_CODE_LEN := 6
 ## Trial by Fire: the width (px) every wrapping label of the list is given, and the least size (px) of the
 ## scrolling list. Without a width floor the labels wrap at one letter and the window grows past the screen.
-const TRIAL_LABEL_WIDTH := 460
-const TRIAL_LIST_MIN := Vector2(500, 560)
 
 
 # === Native menu view and preserved game routes ===
@@ -33,8 +31,6 @@ var _table_setup: TableSizeDialog
 var _transitioning := false
 var continue_btn: Button
 var start_battle_btn: Button
-var tutorial_btn: Button
-var spielschule_btn: Button
 var host_online_btn: Button
 var join_online_btn: Button
 var browse_online_btn: Button
@@ -85,8 +81,6 @@ func _ready() -> void:
 	_add_boot_cover()
 	continue_btn = view.buttons.ContinueBtn
 	start_battle_btn = view.buttons.StartBattleBtn
-	tutorial_btn = view.buttons.TutorialBtn
-	spielschule_btn = view.buttons.SpielschuleBtn
 	host_online_btn = view.buttons.HostOnlineBtn
 	join_online_btn = view.buttons.JoinOnlineBtn
 	browse_online_btn = view.buttons.BrowseOnlineBtn
@@ -100,8 +94,7 @@ func _ready() -> void:
 	view.version.text = "Fan project for OnePageRules     " + version_string()
 	continue_btn.pressed.connect(_on_continue_pressed)
 	start_battle_btn.pressed.connect(_on_start_battle_pressed)
-	tutorial_btn.pressed.connect(_on_tutorial_pressed)
-	spielschule_btn.pressed.connect(_on_spielschule_pressed)
+	view.buttons.LearnBtn.pressed.connect(_open_learn_page.bind(false))
 	host_online_btn.pressed.connect(_on_host_online_pressed)
 	join_online_btn.pressed.connect(_on_join_online_pressed)
 	browse_online_btn.pressed.connect(_on_browse_online_pressed)
@@ -130,7 +123,7 @@ func _ready() -> void:
 		(continue_btn if continue_btn.visible else start_battle_btn).grab_focus.call_deferred()
 	if ProjectSettings.get_setting("niemandsland/open_game_school", false):
 		ProjectSettings.set_setting("niemandsland/open_game_school", false)
-		call_deferred("_on_spielschule_pressed")
+		_open_learn_page.call_deferred(true)
 	_maybe_show_whats_new.call_deferred()
 
 
@@ -308,16 +301,21 @@ func _on_table_setup_cancelled() -> void:
 
 
 
-## TUTORIAL pressed: first-timers go straight in (assessment + full track); once any
-## chapter is completed, a chapter picker offers resume / per-lesson replay / reset.
+## "Learn the controls" (Help): the lesson page, as "Learn to play".
 func _on_tutorial_pressed() -> void:
-	var progress := TutorialProgress.new()
-	progress.load_from_disk()
-	var track := TutorialFlow.build_tool_track()
-	if not progress.any_completed(TutorialFlow.ids(track)):
-		_launch_tutorial("")
-		return
-	_show_tutorial_picker(progress, track)
+	_open_learn_page(false)
+
+
+## The lesson page in place of the menu's list; `returned` after a lesson (Trial by Fire is selected then).
+func _open_learn_page(returned: bool) -> void:
+	var tutorial := TutorialProgress.new()
+	tutorial.load_from_disk()
+	var trial := SpielschuleProgress.new()
+	trial.load_from_disk()
+	var page := LearnPage.new().setup(tutorial, trial, returned)
+	page.tutorial_requested.connect(_launch_tutorial)
+	page.scenario_requested.connect(_launch_scenario)
+	view.open_page(page)
 
 
 ## Arm the runtime-only tutorial flags that main.gd reads in _ready(). Split out of
@@ -333,148 +331,6 @@ func _arm_tutorial_flags(lesson_id: String) -> void:
 func _launch_tutorial(lesson_id: String) -> void:
 	_arm_tutorial_flags(lesson_id)
 	_transition_to_game()
-
-
-## The position a lesson shows to the player: the digits of its code ("T-04" -> 4, "S-01" -> 1). The code itself stays
-## what it is in the data and in saves; it is never shown.
-static func lesson_number(id: String) -> int:
-	var digits := ""
-	for character: String in id:
-		if character >= "0" and character <= "9":
-			digits += character
-	return int(digits) if not digits.is_empty() else 0
-
-
-## The chapter picker: RESUME on top, then one button per lesson (checkmarked when
-## completed — everything stays replayable, MTG-Arena model), plus a progress reset.
-func _show_tutorial_picker(progress: TutorialProgress, track: Array) -> void:
-	var dialog := AcceptDialog.new()
-	dialog.title = "Tutorial"
-	dialog.ok_button_text = "Close"
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", HudTokens.SECTION_SEP)
-
-	var lesson_ids := TutorialFlow.ids(track)
-	var next_id := progress.first_incomplete(lesson_ids)
-	var resume_btn := Button.new()
-	resume_btn.theme_type_variation = HouseStyle.PRIMARY
-	if next_id.is_empty():
-		resume_btn.text = "All lessons done - pick one to replay"
-		resume_btn.disabled = true
-	else:
-		var started := lesson_ids.any(func(id: String) -> bool: return progress.is_lesson_completed(id))
-		resume_btn.text = "Continue with lesson %d" % (lesson_ids.find(next_id) + 1) if started else "Start"
-		resume_btn.pressed.connect(func() -> void:
-			dialog.queue_free()
-			_launch_tutorial(""))
-	vbox.add_child(resume_btn)
-	vbox.add_child(HSeparator.new())
-
-	for position in track.size():   # a lesson shows its place in the track; codes like T-09b share digits
-		var lesson: Dictionary = track[position]
-		var lesson_id := String(lesson.get("id", ""))
-		var done := progress.is_lesson_completed(lesson_id)
-		var btn := Button.new()
-		btn.text = "%02d  %s%s" % [position + 1, String(lesson.get("title", "")), "   ·   done" if done else ""]
-		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		btn.pressed.connect(func() -> void:
-			dialog.queue_free()
-			_launch_tutorial(lesson_id))
-		vbox.add_child(btn)
-
-	vbox.add_child(HSeparator.new())
-	var reset_btn := Button.new()
-	reset_btn.text = "Reset tutorial progress"
-	reset_btn.theme_type_variation = HouseStyle.DANGER_BUTTON
-	reset_btn.pressed.connect(func() -> void:
-		progress.reset()
-		dialog.queue_free())
-	vbox.add_child(reset_btn)
-
-	MenuDialog.add_header(dialog, vbox)
-	dialog.add_child(vbox)
-	MenuDialog.style(dialog)
-	dialog.confirmed.connect(dialog.queue_free)
-	dialog.canceled.connect(dialog.queue_free)
-	MenuDialog.open(self, dialog)
-
-
-## GAME SCHOOL (working name "Spielschule") pressed: open the chapter list. The full game-school
-## track — eleven isolated, repeatable lessons, each loading its own prepared scene. Chapters
-## without a bundled scenario yet stay disabled ("scenario coming soon").
-func _on_spielschule_pressed() -> void:
-	var progress := SpielschuleProgress.new()
-	progress.load_from_disk()
-
-	var dialog := AcceptDialog.new()
-	dialog.title = "TRIAL BY FIRE"
-	dialog.ok_button_text = "Close"
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", HudTokens.SECTION_SEP)
-
-	var intro := Label.new()
-	intro.text = "Eleven short lessons — play them in any order, replay any time."
-	intro.theme_type_variation = HouseStyle.CAPTION
-	intro.autowrap_mode = TextServer.AUTOWRAP_WORD
-	intro.custom_minimum_size.x = TRIAL_LABEL_WIDTH
-	vbox.add_child(intro)
-	vbox.add_child(HSeparator.new())
-
-	for chapter in Spielschule.chapters():
-		_add_chapter_row(vbox, chapter, progress, dialog)
-
-	# The list scrolls inside the window, so the window (and its Close button) stays on screen however
-	# many lessons come.
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = TRIAL_LIST_MIN
-	scroll.follow_focus = true
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(vbox)
-	var content := VBoxContainer.new()
-	content.add_child(scroll)
-	MenuDialog.add_header(dialog, content)
-	dialog.add_child(content)
-	MenuDialog.style(dialog)
-	dialog.confirmed.connect(dialog.queue_free)
-	dialog.canceled.connect(dialog.queue_free)
-	MenuDialog.open(self, dialog)
-	# Keep the ten-row list (and its CLOSE button) reachable on small displays.
-	UiPolish.keep_window_reachable(dialog, Vector2i(520, 560))
-
-
-## One chapter row: a title Button (checkmarked when completed — everything stays replayable) with a
-## muted one-line goal beneath it. Playable rows launch the scenario; unbundled/reserved rows are
-## disabled and say why.
-func _add_chapter_row(vbox: VBoxContainer, chapter: Dictionary, progress: SpielschuleProgress, dialog: AcceptDialog) -> void:
-	var id := String(chapter.get("id", ""))
-	var title := String(chapter.get("title", ""))
-	var available := Spielschule.is_available(chapter)
-	var reserved := bool(chapter.get("reserved", false))
-	var done := progress.is_completed(id)
-
-	var btn := Button.new()
-	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	var suffix := "   ·   done" if done else ""
-	if reserved:
-		suffix = "   —   coming with the spell wave"
-	elif not available:
-		suffix = "   —   scenario coming soon"
-	btn.text = "%02d  %s%s" % [lesson_number(id), title, suffix]
-	btn.disabled = not available
-	if available:
-		btn.pressed.connect(func() -> void:
-			dialog.queue_free()
-			_launch_scenario(chapter))
-	vbox.add_child(btn)
-
-	var goal := Label.new()
-	goal.text = "      " + String(chapter.get("goal", ""))
-	goal.theme_type_variation = HouseStyle.CAPTION
-	goal.autowrap_mode = TextServer.AUTOWRAP_WORD
-	goal.custom_minimum_size.x = TRIAL_LABEL_WIDTH
-	vbox.add_child(goal)
 
 
 ## Hand the picked chapter's bundled scenario to the game scene through the SAME runtime-only
@@ -1108,7 +964,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		if child is Window and child.visible:
 			return
 	if event.keycode == KEY_ESCAPE:
-		if view.route_panel.visible:
+		if view.page_open != null:
+			view.close_page()
+		elif view.route_panel.visible:
 			view.close_route()
 		else:
 			_on_exit_pressed()

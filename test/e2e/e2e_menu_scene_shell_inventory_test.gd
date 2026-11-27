@@ -17,7 +17,6 @@ extends GdUnitTestSuite
 const MAIN_ACTIONS := ["Prepare a new table", "Play online", "Load game", "Learn to play", "Settings"]
 const FOOTER := ["Help & feedback", "Credits & licenses", "Quit"]
 const ONLINE_ROUTE := ["Create a room", "Join with a code", "Public tables"]
-const LEARN_ROUTE := ["Learn the controls", "Trial by Fire · In development"]
 const HELP_ROUTE := ["Learn the controls", "Report a problem"]
 
 class MenuTransitionProbe extends "res://scripts/startup_menu.gd":
@@ -208,16 +207,19 @@ func test_online_route_lists_its_three_actions_and_closes_on_a_pick() -> void:
 	assert_object(_menu._browse_popup).is_not_null()
 
 
-func test_learn_route_lists_its_two_actions_and_back_returns_focus() -> void:
+## "Learn to play" opens the lesson page in place of the list, not a route panel; its way back returns the focus
+## (red on main: the click opened the learn route).
+func test_learn_to_play_opens_a_page_not_a_route_panel() -> void:
 	var learn_btn := _button("Learn to play")
 	await _click(learn_btn)
-	assert_bool(_view.route_panel.visible).is_true()
-	assert_str(_view.route_title.text).is_equal("Find your starting point.")
-	for t: String in LEARN_ROUTE:
-		assert_object(_button(t)).override_failure_message("%s is missing from the learn route" % t).is_not_null()
-	await _click(_button(HouseStyle.GLYPH_BACK + "  Back"))
-	await _route_gone()
-	assert_bool(_view.route_panel.visible).is_false()
+	assert_bool(_view.route_panel.visible).override_failure_message("a route panel opened").is_false()
+	var page: Variant = _view.get("page_open")
+	assert_bool(page is LearnPage).override_failure_message("no lesson page").is_true()
+	if not page is LearnPage:
+		return
+	assert_bool((_view.get("_scroll") as Control).visible).is_false()
+	await _click((page as LearnPage).back)
+	assert_bool((_view.get("_scroll") as Control).visible).is_true()
 	assert_object(_view.get_viewport().gui_get_focus_owner()).is_same(learn_btn)
 
 
@@ -230,22 +232,11 @@ func test_help_route_lists_its_two_actions_report_problem_is_wired_not_clicked()
 	assert_bool(_menu.report_problem_btn.pressed.is_connected(_menu._on_report_problem_pressed)).is_true()
 
 
-func test_learn_the_controls_reaches_todays_tutorial_entry() -> void:
-	await _click(_button("Learn to play"))
+func test_learn_the_controls_in_help_opens_the_lesson_page() -> void:
+	await _click(_button("Help & feedback"))
 	await _click(_button("Learn the controls"))
-	# Today's branch depends on real on-disk tutorial progress: some done -> the chapter picker;
-	# none done -> straight into the tutorial (caught by the probe instead of a real scene swap).
-	var picker := _dialog_titled("Tutorial")
-	assert_bool((picker != null and picker.visible) or _menu.entered_game).override_failure_message(
-		"neither the chapter picker opened nor did the tutorial launch").is_true()
-
-
-func test_trial_by_fire_opens_todays_chapter_list() -> void:
-	await _click(_button("Learn to play"))
-	await _click(_button("Trial by Fire · In development"))
-	var dialog := _dialog_titled("TRIAL BY FIRE")
-	assert_object(dialog).is_not_null()
-	assert_bool(dialog.visible).is_true()
+	await _route_gone()
+	assert_bool(_view.get("page_open") is LearnPage).override_failure_message("no lesson page").is_true()
 
 
 func test_credits_dialog_keeps_the_legal_notice_verbatim() -> void:

@@ -347,7 +347,7 @@ func _scenario_3(window_close: bool) -> bool:
 	await _press("EndBattleBtn")
 	_put("host_left", str(Time.get_unix_time_from_system()))
 	await _press("Yes, Exit")
-	if await _press("LearnBtn", 60.0) and await _press("SpielschuleBtn") and await _press("01  First Steps", 30.0, true):
+	if await _press("LearnBtn", 60.0) and await _press("TrialTrackButton"):   # a fresh profile: the first lesson
 		var card = await _wait("lesson card", func() -> Variant: return _screen_text("Step 1 of"), 90.0)
 		var why := _game_log().get_slice("Only the host", 1).get_slice("\n", 0)
 		await _check("3.2", card != null, "First Steps: %s" % ("'%s' on screen" % card if card else "no lesson card; log: Only the host" + why))
