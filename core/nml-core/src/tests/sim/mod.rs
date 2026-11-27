@@ -1781,6 +1781,7 @@ mod extended_buff_range;
 mod feat_precision_piercing;
 mod feat_speed;
 mod feat_takedown_shot;
+mod fall_regroup;
 mod fatigue_debuff;
 mod fold_gate_fixture;
 mod great_banner;
