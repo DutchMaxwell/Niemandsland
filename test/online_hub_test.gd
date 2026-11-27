@@ -48,3 +48,30 @@ func test_enter_in_the_name_field_prepares_the_table() -> void:
 	var name_field := hub.get("name_field") as LineEdit
 	name_field.text_submitted.emit(name_field.text)
 	assert_int(got.size()).is_equal(1)
+
+
+## Step 47.1b: one folded relay line for every function of the page; an emptied field gives the default address.
+func test_the_relay_field_stays_folded_until_its_line_is_pressed() -> void:
+	var hub := await _hub()
+	if hub == null:
+		return
+	var field := hub.get("relay_field") as LineEdit
+	assert_object(field).override_failure_message("no relay field").is_not_null()
+	if field == null:
+		return
+	assert_bool(field.is_visible_in_tree()).is_false()
+	(hub.get("relay_line") as Button).pressed.emit()
+	assert_bool(field.is_visible_in_tree()).is_true()
+	field.text = "wss://example.invalid"
+	assert_str(str(_settings_on_prepare(hub).get("niemandsland/internet_relay_url", ""))).is_equal(
+		"wss://example.invalid")
+
+
+func test_an_emptied_relay_field_gives_the_default_address() -> void:
+	var hub := await _hub()
+	if hub == null or hub.get("relay_field") == null:
+		fail("no relay field")
+		return
+	(hub.get("relay_field") as LineEdit).text = "   "
+	var settings := _settings_on_prepare(hub)
+	assert_str(str(settings.get("niemandsland/internet_relay_url", ""))).is_equal(InternetLobby.DEFAULT_RELAY_URL)
