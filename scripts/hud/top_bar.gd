@@ -18,6 +18,9 @@ enum Turn { NONE, YOURS, OPPONENT }   # NONE = hotseat / multiplayer: nobody tra
 
 const MARGIN := 10   # from the screen edge, like the menu button
 
+## The ONLINE chip was pressed (the invite card opens again during deployment).
+signal link_pressed
+
 var _main: Node = null
 var _round: PanelContainer = null
 var _state: PanelContainer = null
@@ -53,6 +56,11 @@ func setup(main: Node, overlay_parent: Node) -> void:
 	_link = HouseStyle.chip("ONLINE", HouseStyle.CHIP_ONLINE)
 	_link.name = "Link"
 	_link.visible = false
+	_link.mouse_filter = Control.MOUSE_FILTER_STOP
+	_link.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_link.gui_input.connect(func(e: InputEvent) -> void:
+		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+			link_pressed.emit())
 	left.add_child(_link)
 
 	var right := _row(true)
