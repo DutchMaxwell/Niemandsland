@@ -19,7 +19,7 @@ func _step(manifest: Dictionary = MANIFEST, page := Vector2(1920, 1080)) -> Cont
 	var step: Control = auto_free(SetupOpponentStep.new())
 	step.size = page
 	add_child(step)
-	step.setup(opponent, ["Grimdark Future", "Urban ruins", "72 × 48 in"])
+	step.setup(opponent, ["Grimdark Future", "Urban ruins", "72 × 48 in", "Empty table"])
 	return step
 
 
@@ -94,3 +94,47 @@ func test_the_solo_card_hides_for_the_other_cards_and_says_why_it_is_off() -> vo
 	assert_bool(card.visible).is_false()
 	var off := _step({})
 	assert_array(_texts(off)).contains(["NACHTMAHR's lists need a connection the first time."])
+
+
+func _rail_value(step: Control, key: String) -> String:
+	for line: Node in (step.find_child("Rail", true, false) as Control).find_children("*", "HBoxContainer", true, false):
+		if line.get_child_count() == 2 and (line.get_child(0) as Label).text == key:
+			return (line.get_child(1) as Label).text
+	return "<no %s>" % key
+
+
+func test_the_rail_tells_the_table_and_follows_the_opponent() -> void:
+	var step := _step()
+	assert_str(_rail_value(step, "SYSTEM")).is_equal("Grimdark Future")
+	assert_str(_rail_value(step, "BIOME")).is_equal("Urban ruins")
+	assert_str(_rail_value(step, "SIZE")).is_equal("72 × 48 in")
+	assert_str(_rail_value(step, "OPPONENT")).is_equal("NACHTMAHR · Alien Hives · 3000")
+	var faction := step.find_child("Faction", true, false) as OptionButton
+	faction.select(1)
+	faction.item_selected.emit(1)
+	assert_str(_rail_value(step, "OPPONENT")).is_equal("NACHTMAHR · Orc Tribes · 1000")
+	assert_array(_texts(step)).contains(["YOUR TABLE", "Next at the table: bring your own army, then deploy."])
+
+
+func test_create_and_the_layout_row_ask_the_setup() -> void:
+	var step := _step()
+	var asked: Array = []
+	step.connect("create_requested", func() -> void: asked.append("create"))
+	step.connect("layout_requested", func() -> void: asked.append("layout"))
+	(step.find_child("CreateTable", true, false) as Button).pressed.emit()
+	(step.find_child("LayoutRow", true, false) as Button).pressed.emit()
+	assert_array(asked).is_equal(["create", "layout"])
+	assert_array(_texts(step)).contains(["05", "Lay out the table", "Empty table"])
+
+
+func test_the_page_fits_a_720p_window() -> void:
+	var step := _step(MANIFEST, Vector2(1280, 720))
+	for _i in 3:
+		await get_tree().process_frame
+	var window := Rect2(Vector2.ZERO, Vector2(1280, 720)).grow(1)
+	for control: Control in step.find_children("*", "Control", true, false):
+		if control.is_visible_in_tree() and control.get_global_rect().has_area():
+			assert_bool(window.encloses(control.get_global_rect())).override_failure_message(
+				"%s at %s" % [control.name, control.get_global_rect()]).is_true()
+	assert_float((step.get("_keys") as Control).get_global_rect().position.y).is_greater_equal(
+		(step.get("left") as Control).get_global_rect().end.y)

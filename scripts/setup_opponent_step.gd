@@ -25,6 +25,10 @@ var _off: Label
 var _faction: OptionButton
 var _points: OptionButton
 var _seat: OptionButton
+var _rail: PanelContainer
+var _opponent_row: Label
+var _layout_row: Button
+var _keys: HBoxContainer
 
 
 func setup(opponent: SetupOpponent, values: Array) -> void:
@@ -51,23 +55,107 @@ func setup(opponent: SetupOpponent, values: Array) -> void:
 	left.add_child(_solo)
 	_off = SetupLayoutStep._text("", 15, HouseStyle.font(400), HouseStyle.MUTED)
 	left.add_child(_off)
+	left.add_child(_layout_link(str(values[3]) if values.size() > 3 else ""))
+	_build_rail(values)
+	_keys = HBoxContainer.new()   # the key legend at the foot of the page, as state one
+	_keys.add_theme_constant_override(&"separation", 8)
+	for pair: Array in [["Tab", "next step"], ["← →", "choose"], ["Enter", "create table"], ["Esc", "back"]]:
+		_keys.add_child(HouseStyle.key_cap(pair[0]))
+		_keys.add_child(SetupLayoutStep._text(pair[1], 15, HouseStyle.font(400), HouseStyle.MUTED))
+	add_child(_keys)
 	_opponent.changed.connect(_refresh)
 	resized.connect(_place)
 	_place()
 	_refresh()
 
 
-## The layout page's left column: same padding, width and top (under the setup's own title).
+## The layout page's measures: as drawn at 1920 x 1080; below 800 px of height rows of 38 and cards of 96 without
+## captions, so a 1280 x 720 window shows the page without scrolling.
 func _place() -> void:
 	var compact := size.y < 800
 	var pad := 28.0 if compact else maxf(28.0, size.x * 0.04)
 	var rail_w := 504.0 if compact else minf(684.0, size.x * 0.36)
+	_rail.custom_minimum_size.x = rail_w
+	_rail.position = Vector2(size.x - pad - rail_w, 100.0 if compact else 108.0)
 	left.position = Vector2(pad, 120.0 if compact else 232.0)
 	left.custom_minimum_size.x = size.x - 2 * pad - rail_w - (24.0 if compact else 44.0)
-	for row: Control in left.get_children().slice(0, 3):
+	for row: Control in left.get_children().slice(0, 3) + [_layout_row]:
 		row.custom_minimum_size.y = 38 if compact else 52
+		if row is PanelContainer:   # as the layout page: the folded rows lose their padding to stay 38 px
+			row.remove_theme_stylebox_override(&"panel")
+			if compact:
+				var tight := row.get_theme_stylebox(&"panel").duplicate() as StyleBox
+				tight.content_margin_top = 1
+				tight.content_margin_bottom = 1
+				row.add_theme_stylebox_override(&"panel", tight)
 	_head.custom_minimum_size.y = 40 if compact else 72
-	left.reset_size.call_deferred()
+	for card: Button in _cards.values():
+		card.custom_minimum_size.y = 96 if compact else 132
+		(card.get_child(0).get_child(1) as Label).add_theme_font_size_override(&"font_size", 16 if compact else 20)
+		(card.get_child(0).get_child(2) as Control).visible = not compact   # the caption
+	_keys.position = Vector2(pad, size.y - (44.0 if compact else 60.0))
+	for box: Control in [left, _rail]:
+		box.reset_size.call_deferred()
+
+
+## Step 05 under the cards, in the look of a folded row: "05", its name, the chosen way, Change.
+func _layout_link(way: String) -> Button:
+	_layout_row = Button.new()
+	_layout_row.name = "LayoutRow"
+	_layout_row.focus_mode = FOCUS_ALL
+	_layout_row.pressed.connect(func() -> void: layout_requested.emit())
+	var line := HBoxContainer.new()
+	line.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	line.offset_left = 14
+	line.offset_right = -14
+	line.add_theme_constant_override(&"separation", 12)
+	line.mouse_filter = MOUSE_FILTER_IGNORE
+	line.add_child(SetupLayoutStep._text("05", 16, HouseStyle.mono(), HouseStyle.GOLD))
+	var name_label := SetupLayoutStep._text("Lay out the table", 18, HouseStyle.font(400), HouseStyle.MUTED)
+	name_label.size_flags_horizontal = SIZE_EXPAND_FILL
+	line.add_child(name_label)
+	line.add_child(SetupLayoutStep._text(way, 18, HouseStyle.font(400), HouseStyle.INK))
+	line.add_child(SetupLayoutStep._text("Change", 16, HouseStyle.font(400), HouseStyle.ACCENT))
+	for label: Label in line.get_children():
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_layout_row.add_child(line)
+	return _layout_row
+
+
+## The rail YOUR TABLE: SYSTEM, BIOME, SIZE, OPPONENT (it follows the model), Create table, what comes next.
+func _build_rail(values: Array) -> void:
+	_rail = PanelContainer.new()
+	_rail.name = "Rail"
+	_rail.theme_type_variation = HouseStyle.PANEL_VARIANT
+	add_child(_rail)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override(&"separation", 12)
+	_rail.add_child(box)
+	box.add_child(SetupLayoutStep._text("YOUR TABLE", 14, HouseStyle.eyebrow_font(), HouseStyle.MUTED))
+	for row: Array in [["SYSTEM", values[0]], ["BIOME", values[1]], ["SIZE", values[2]], ["OPPONENT", ""]]:
+		var line := HBoxContainer.new()
+		var key := SetupLayoutStep._text(row[0], 14, HouseStyle.eyebrow_font(), HouseStyle.MUTED)
+		key.size_flags_horizontal = SIZE_EXPAND_FILL
+		line.add_child(key)
+		_opponent_row = SetupLayoutStep._text(str(row[1]), 18, HouseStyle.font(400), HouseStyle.INK)
+		line.add_child(_opponent_row)
+		box.add_child(line)
+	var create := HouseStyle.button("Create table", HouseStyle.PRIMARY, 56)
+	create.name = "CreateTable"
+	create.focus_mode = FOCUS_ALL
+	create.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	create.pressed.connect(func() -> void: create_requested.emit())
+	var cap := HouseStyle.key_cap_on_gold("Enter")
+	cap.set_anchors_preset(PRESET_CENTER_RIGHT)
+	cap.grow_horizontal = GROW_DIRECTION_BEGIN
+	cap.offset_left = -16
+	cap.offset_right = -16
+	create.add_child(cap)
+	box.add_child(create)
+	var next := SetupLayoutStep._text("Next at the table: bring your own army, then deploy.", 15, HouseStyle.font(400),
+		HouseStyle.MUTED)
+	next.autowrap_mode = TextServer.AUTOWRAP_WORD
+	box.add_child(next)
 
 
 func _who_card(id: String, title: String, caption: String, icon: String) -> Button:
@@ -162,3 +250,4 @@ func _refresh() -> void:
 			card.remove_theme_stylebox_override(&"normal")
 		card.set_meta("chosen", id == _opponent.who)
 	_refresh_solo()
+	_opponent_row.text = _opponent.label()
