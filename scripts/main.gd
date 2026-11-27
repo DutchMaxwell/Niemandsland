@@ -11731,9 +11731,9 @@ func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String, 
 	if id.begins_with("interference:"):   # CC-14a (O3): the table's own words for a foe nobody answers for (`_solo_remote_interference`)
 		_log_rule_event(BattleLog.Category.COMBAT, ("%s: %s's seat is empty — no interference" if owner_peer == 0
 			else "%s: no answer from %s — no interference") % [purpose, _solo_owner_name(unit)], true)
-	elif id.begins_with("push_replace:") and battle_log != null:   # step 29e-2a: the timeout is named, the core places the rest
-		battle_log.log_event(BattleLog.Category.MOVEMENT, ("Push: %s's seat is empty - the core places the rest within 1 in" if owner_peer == 0
-			else "Push: no answer from %%s within %d s - the core places the rest within 1 in" % int(_owner_roll_timeout_s)) % _solo_owner_name(unit), true)
+	elif id.begins_with("push_replace:"):   # step 29e-2a/b: the timeout is named on both tables, the core places the rest
+		_log_rule_event(BattleLog.Category.MOVEMENT, ("Push: %s's seat is empty - the core places the rest within 1 in" if owner_peer == 0
+			else "Push: no answer from %%s within %d s - the core places the rest within 1 in" % ceili(_owner_roll_timeout_s)) % _solo_owner_name(unit), true)
 	elif battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: no answer to the %s — the automatic pick stands" % [_solo_owner_name(unit), purpose], true)
