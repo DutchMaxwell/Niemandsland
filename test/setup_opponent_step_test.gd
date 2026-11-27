@@ -138,3 +138,46 @@ func test_the_page_fits_a_720p_window() -> void:
 				"%s at %s" % [control.name, control.get_global_rect()]).is_true()
 	assert_float((step.get("_keys") as Control).get_global_rect().position.y).is_greater_equal(
 		(step.get("left") as Control).get_global_rect().end.y)
+
+
+## Spec 97 (step 97.14b): the same page at the table - rows 01-03 read-only, no step 05, the rail's button says what
+## it does for the chosen card, and a seat a connected human holds is not on offer (#196). Red before: no table mode.
+func _table_step(human_seats: Array) -> Control:
+	var opponent := SetupOpponent.new()
+	opponent.set_system("gf")
+	opponent.set_manifest(MANIFEST)
+	var step: Control = auto_free(SetupOpponentStep.new())
+	step.size = Vector2(1920, 1080)
+	assert_bool("table_mode" in step).override_failure_message("no table mode").is_true()
+	if not "table_mode" in step:
+		return null
+	step.set("table_mode", true)
+	step.set("human_seats", human_seats)
+	add_child(step)
+	step.setup(opponent, ["Grimdark Future", "Urban ruins", "72 × 48 in"])
+	return step
+
+
+func test_at_the_table_the_rows_are_read_only_and_the_button_names_the_action() -> void:
+	var step := _table_step([])
+	if step == null:
+		return
+	for change: Node in step.find_children("Change*", "Button", true, false):
+		assert_bool((change as Control).is_visible_in_tree()).override_failure_message(change.name).is_false()
+	assert_bool((step.find_child("LayoutRow", true, false) as Control).is_visible_in_tree()).is_false()
+	var create := step.find_child("CreateTable", true, false) as Button
+	assert_str(create.text).is_equal("Bring NACHTMAHR")
+	_card(step, "local").pressed.emit()
+	assert_str(create.text).is_equal("Bring the second army")
+	_card(step, "online").pressed.emit()
+	assert_str(create.text).is_equal("Host an online room")
+
+
+func test_at_the_table_a_human_seat_is_not_nachtmahrs() -> void:
+	var step := _table_step([2])
+	if step == null:
+		return
+	var seat := step.find_child("Seat", true, false) as OptionButton
+	assert_bool(seat.is_item_disabled(seat.get_item_index(2))).is_true()
+	assert_str(seat.get_item_text(seat.get_item_index(2))).is_equal("Player 2 (Red) — human player")
+	assert_int(step.get("_opponent").seat).is_equal(1)

@@ -15,6 +15,8 @@ const WHO := [
 	["online", "Online room", "Create a room for your group and share the invitation code.",
 		"<circle cx='12' cy='12' r='9'/><path d='M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18'/>"]]
 const MenuView = preload("res://scripts/startup_menu_view.gd")
+## At the table (table_mode) the rail's button says what it does for the chosen card.
+const TABLE_ACTIONS := {"solo": "Bring NACHTMAHR", "local": "Bring the second army", "online": "Host an online room"}
 
 var left: VBoxContainer
 var _opponent: SetupOpponent
@@ -29,6 +31,10 @@ var _rail: PanelContainer
 var _opponent_row: Label
 var _layout_row: Button
 var _keys: HBoxContainer
+var _create: Button
+var _next: Label
+var table_mode := false   # set before setup: the page opened at the table (rows read-only, no step 05)
+var human_seats: Array = []   # set before setup: seats a connected human holds (#196: never NACHTMAHR's)
 
 
 func setup(opponent: SetupOpponent, values: Array) -> void:
@@ -57,6 +63,13 @@ func setup(opponent: SetupOpponent, values: Array) -> void:
 	left.add_child(_off)
 	left.add_child(_layout_link(str(values[3]) if values.size() > 3 else ""))
 	_build_rail(values)
+	if table_mode:
+		_layout_row.visible = false
+		_next.visible = false
+		for change: Node in left.find_children("Change*", "Button", true, false):
+			(change as Control).visible = false
+		if human_seats.has(_opponent.seat):
+			_opponent.choose_seat(3 - _opponent.seat)
 	_keys = HBoxContainer.new()   # the key legend at the foot of the page, as state one
 	_keys.add_theme_constant_override(&"separation", 8)
 	for pair: Array in [["Tab", "next step"], ["← →", "choose"], ["Enter", "create table"], ["Esc", "back"]]:
@@ -141,6 +154,7 @@ func _build_rail(values: Array) -> void:
 		line.add_child(_opponent_row)
 		box.add_child(line)
 	var create := HouseStyle.button("Create table", HouseStyle.PRIMARY, 56)
+	_create = create
 	create.name = "CreateTable"
 	create.focus_mode = FOCUS_ALL
 	create.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -155,6 +169,7 @@ func _build_rail(values: Array) -> void:
 	var next := SetupLayoutStep._text("Next at the table: bring your own army, then deploy.", 15, HouseStyle.font(400),
 		HouseStyle.MUTED)
 	next.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_next = next
 	box.add_child(next)
 
 
@@ -197,6 +212,10 @@ func _solo_card() -> PanelContainer:
 	_seat = _field(row, "AI PLAYS AS", "Seat")
 	_seat.add_item("Player 2 (Red)", 2)
 	_seat.add_item("Player 1 (Blue)", 1)
+	for i in _seat.item_count:   # #196: a seat a connected human holds is not on offer
+		if human_seats.has(_seat.get_item_id(i)):
+			_seat.set_item_disabled(i, true)
+			_seat.set_item_text(i, _seat.get_item_text(i) + " — human player")
 	_seat.item_selected.connect(func(i: int) -> void: _opponent.choose_seat(_seat.get_item_id(i)))
 	return HouseStyle.card(row)
 
@@ -251,3 +270,5 @@ func _refresh() -> void:
 		card.set_meta("chosen", id == _opponent.who)
 	_refresh_solo()
 	_opponent_row.text = _opponent.label()
+	if table_mode:
+		_create.text = TABLE_ACTIONS[_opponent.who]
