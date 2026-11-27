@@ -168,3 +168,26 @@ func test_requests_generations_and_clean_up() -> void:
 	await get_tree().process_frame
 	assert_bool(is_instance_valid(lobby)).override_failure_message("the listing lobby outlived the page").is_false()
 	hub.free()
+
+
+## Step 47.8: Tab walks the hub in reading order - way back, name, the check, Prepare table, the code, Join, the
+## relay line, refresh, then the rows' Join buttons - and wraps (red before: the engine's own order).
+func test_tab_walks_the_hub_in_reading_order() -> void:
+	var hub := await _hub()
+	if hub == null:
+		return
+	hub.call("_on_rooms", [{"code": "ABC123", "players": 1}, {"code": "KLM456", "players": 2}], hub.get("_gen"))
+	await get_tree().process_frame
+	var expected: Array = [hub.get("back"), hub.get("name_field"), hub.get("public_check"), hub.get("prepare_button"),
+		(hub.get("code_boxes") as CodeBoxes).field, hub.get("join_button"), hub.get("relay_line"),
+		hub.find_child("Refresh", true, false)]
+	for row: Node in _rows(hub):
+		expected.append(row.find_children("*", "Button", true, false)[0])
+	var order: Array = []
+	var at := hub.get("back") as Control
+	for _i in expected.size() + 1:
+		order.append(at)
+		at = at.get_node_or_null(at.focus_next) if not at.focus_next.is_empty() else null
+		if at == null:
+			break
+	assert_array(order).is_equal(expected + [hub.get("back")])

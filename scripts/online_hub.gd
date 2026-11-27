@@ -97,6 +97,7 @@ func _ready() -> void:
 	again.size_flags_horizontal = SIZE_SHRINK_END
 	again.size_flags_vertical = SIZE_SHRINK_CENTER
 	again.tooltip_text = "Refresh list"
+	again.name = "Refresh"
 	again.pressed.connect(refresh)
 	head.add_child(again)
 	box.add_child(head)
@@ -107,6 +108,7 @@ func _ready() -> void:
 	status_label = _text("", HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
 	_rows.add_child(status_label)
 	relay_field.text_submitted.connect(func(_url: String) -> void: refresh())
+	_chain()
 	if lists_on_open:
 		refresh()
 
@@ -138,6 +140,7 @@ func _on_rooms(rooms: Array, gen: int) -> void:
 	count_label.text = "%d game%s online" % [rooms.size(), "" if rooms.size() == 1 else "s"]
 	for room: Dictionary in rooms:
 		_rows.add_child(_room_row(str(room.get("code", "")), int(room.get("players", 0))))
+	_chain()
 
 
 func _on_failed(reason: String, gen: int) -> void:
@@ -313,3 +316,16 @@ func _draw_corners(block: Control) -> void:
 	for corner: Array in [[Vector2.ONE, Vector2.ONE], [block.size - Vector2.ONE, -Vector2.ONE]]:
 		block.draw_line(corner[0], corner[0] + Vector2(14 * corner[1].x, 0), HouseStyle.GOLD, 1.5, true)
 		block.draw_line(corner[0], corner[0] + Vector2(0, 14 * corner[1].y), HouseStyle.GOLD, 1.5, true)
+
+
+## Tab in reading order: the way back, the name, the check, Prepare table, the code, Join, the relay line, refresh,
+## the rows' Join buttons, and round again.
+func _chain() -> void:
+	var stops: Array[Control] = [back, name_field, public_check, prepare_button, code_boxes.field, join_button,
+		relay_line, find_child("Refresh", true, false)]
+	for row: Node in _rows.get_children():
+		if row.name.begins_with("Room"):
+			stops.append(row.find_children("*", "Button", true, false)[0])
+	for i in stops.size():
+		stops[i].focus_next = stops[i].get_path_to(stops[(i + 1) % stops.size()])
+		stops[i].focus_previous = stops[i].get_path_to(stops[i - 1])
