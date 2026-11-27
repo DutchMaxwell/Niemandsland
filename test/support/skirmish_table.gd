@@ -168,6 +168,18 @@ func summary_text() -> String:
 	return ""
 
 
+## A table of `feet` (the size the setup screen hands the table: 4 x 4 ft for the skirmish systems).
+func table_feet(feet: Vector2) -> void:
+	main._set_table_size(feet)
+	await runner.simulate_frames(2)
+
+
+## The table's Start Game / Ready button (its deployment gate included).
+func press_start() -> void:
+	main._on_start_game_pressed()
+	await E2EBoot.settle(_tree)
+
+
 ## The card's Activate (the committed start). True when the activation is open afterwards.
 func start(gu: GameUnit) -> bool:
 	return await E2EBoot.start_activation(main, gu)
