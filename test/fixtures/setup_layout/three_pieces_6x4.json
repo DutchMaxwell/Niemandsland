@@ -1,0 +1,15 @@
+{
+	"version": "1.5",
+	"table_size": {"x": 6.0, "y": 4.0},
+	"grid_rotation": 0.0,
+	"deployment_type": 0,
+	"custom_zones": {"player1": [], "player2": []},
+	"mission_objectives": [],
+	"placed_pieces": [
+		{"prefab_key": "ruine_9x9", "origin_x": 2, "origin_y": 2, "rotation": 0, "flip": false, "seed": 1},
+		{"prefab_key": "wald_9x9", "origin_x": 10, "origin_y": 6, "rotation": 0, "flip": false, "seed": 2},
+		{"prefab_key": "ruine_9x6", "origin_x": 18, "origin_y": 11, "rotation": 0, "flip": false, "seed": 3}
+	],
+	"free_cells": {},
+	"free_walls": []
+}
