@@ -69,7 +69,8 @@ func _shot(answer: String, drags: Array, push_face := 5, tag := "") -> Array:
 		done[0] = await CoreActivation.drive(_main, h, gunner, t, false)
 	go.call()
 	var left := drags.duplicate()
-	for _i in 600:
+	var until := Time.get_ticks_msec() + 20000   # a time budget: the prompts wait on real-time pacing, not on frames
+	while Time.get_ticks_msec() < until:
 		if done[0] != null:
 			break
 		for c in _main.find_children("*", "PromptCard", false, false):
