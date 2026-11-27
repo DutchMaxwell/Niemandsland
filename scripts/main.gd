@@ -3619,6 +3619,9 @@ func core_activation_start(gu: GameUnit) -> bool:
 		push_error("core_activation_start: no session for %s (the capture failed)" % gu.get_name())
 		return false
 	_log_rule_event(BattleLog.Category.GENERAL, "%s begins its activation." % gu.get_name())
+	if CoherencyChecker.is_skirmish_system(gu) and not CoreActivation.is_plain_human(gu):   # step 28a: the core does not take it
+		_log_rule_event(BattleLog.Category.MOVEMENT, "%s: jumping and falling resolved by the players (%s)" % [gu.get_name(),
+			", ".join(PackedStringArray(CoreSlice.refusals_human(gu)))])
 	return true
 
 
@@ -22544,6 +22547,10 @@ func _on_game_phase_changed(phase: int) -> void:
 		if opr_army_manager != null and battle_log != null:
 			for line in BattleSim.default_command_picks(opr_army_manager):
 				battle_log.log_event(BattleLog.Category.GENERAL, line)
+			# Step 28a: only the core rolls skirmish jumps; a table it does not run says so once.
+			if not CoreActivation.applies(self) and opr_army_manager.game_units.values().any(
+					func(u) -> bool: return u is GameUnit and CoherencyChecker.is_skirmish_system(u)):
+				_log_rule_event(BattleLog.Category.MOVEMENT, "Jumping and falling: Manual table, resolved by the players")
 	_solo_grade_logged = ""   # every phase change opens a new game's grade line
 	_solo_log_grade()
 	# Step 2.9: a hotseat Automatic table has no AI-seat handoff to print the rule inventory at, so print
@@ -22754,7 +22761,6 @@ func _on_units_dropped(moves: Array) -> void:
 		var unit := UnitUtils.get_game_unit((mv as Dictionary).get("node") as Node3D)
 		if unit != null:
 			_sync_unit_property(unit, "moved_round", opr_army_manager.current_round)   # MP: the other table's AI shoots at a unit that moved
-			await _resolve_skirmish_drop(mv, unit)
 	await _solo_human_strafing(moves)
 
 
@@ -22774,53 +22780,6 @@ func _attach_generated_board_for_test(seed_value: int, theme: String) -> void:
 	if not OS.is_debug_build() or not ClassDB.class_exists("NmlCore"):
 		return
 	_board_look = BoardgenGreybox.attach(table, (ClassDB.instantiate("NmlCore") as Object).call("boardgen_layout_themed", seed_value, theme))
-
-
-## Plan step 27-pre P3: the core listed a jump for this unit's placement (its open session's drop check), so the core
-## rolls it when the activation resolves; the table rolling it too would roll it twice. Every other drop - no session, or a
-## ledge the core does not see (a free ruin's floor until 27-pre-R) - stays the table's.
-func _core_owns_drop(unit: GameUnit) -> bool:
-	return CoreActivation.core_sees_jump(unit.unit_id)
-
-
-## Human drops use the same surface truth, tray, casualties and activation flow as combat.
-func _resolve_skirmish_drop(mv: Dictionary, unit: GameUnit) -> void:
-	if not CoherencyChecker.is_skirmish_system(unit) or object_manager == null or _core_owns_drop(unit):
-		return
-	var node: Node3D = mv.node
-	var model := unit.get_model_for_node(node)
-	if model == null or not model.is_alive:
-		return
-	for drop in JumpRules.drops(mv.get("path", PackedVector2Array()), object_manager._surface_fn(), mv.get("from_raw", node.position).y):
-		var page := OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit))
-		if JumpRules.drop_kind(drop.dy_in) == JumpRules.DropKind.IMPASSABLE:
-			_log_rule_event(BattleLog.Category.MOVEMENT, "%s: drop over 6\", impassable (%s)" % [unit.get_name(), page])
-			return
-		while _solo_tray_busy:
-			if not is_inside_tree():
-				return
-			await get_tree().process_frame
-		var target := JumpRules.jump_target(model.has_special_rule("Strider") or unit.has_special_rule("Strider"), model.has_special_rule("Flying") or unit.has_special_rule("Flying"))
-		var faces: Array = [] if target == 0 else await _solo_tray_roll(JumpRules.jump_dice(drop.dy_in), target, _roller_label(unit), "jump", "Jump (%s)" % page)
-		var fell := faces.any(func(face): return int(face) < target)
-		_log_rule_event(BattleLog.Category.MOVEMENT, "%s jumps %.1f\": %s (%s)" % [unit.get_name(), drop.dy_in, "falls" if fell else "passed", page])
-		if not fell:
-			continue
-		if node.has_meta("drop_tween"):
-			(node.get_meta("drop_tween") as Tween).kill()
-		node.global_position = drop.foot
-		if network_manager != null and node.has_meta("network_id"):
-			network_manager.broadcast_move(node.get_meta("network_id"), node.global_position)
-		var ap := JumpRules.fall_hit_ap(drop.dy_in)
-		_log_rule_event(BattleLog.Category.COMBAT, "%s falls: %s; activation ends (%s)" % [unit.get_name(), "model killed" if unit.get_alive_count() > 1 else "1 hit AP(%d)" % ap, page])
-		if unit.get_alive_count() > 1:
-			model.apply_damage(model.wounds_current)
-			await _solo_remove_dead_models(unit, [model], int(unit.unit_properties.get("player_id", 1)))
-		else:
-			var saves := await _solo_tray_roll(1, AiCombatMath.save_target(unit.get_defense(), ap), _roller_label(unit), "save", "Fall AP(%d) (%s)" % [ap, page])
-			await _solo_land_wounds(unit, AiCombatMath.wounds(1, saves, unit.get_defense(), ap), 0)
-		await _solo_complete_human_attack(unit)
-		return
 
 
 ## Check coherency for all currently selected units

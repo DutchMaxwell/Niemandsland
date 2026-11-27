@@ -43,7 +43,6 @@ scripts/separation_resolver.gd
 scripts/solo/act_intent.gd
 scripts/solo/core_assets.gd
 scripts/solo/dice_recorder.gd
-scripts/solo/jump_rules.gd
 scripts/solo/model_kits_export.gd
 scripts/solo/move_intent.gd
 scripts/solo/policy_order.gd
