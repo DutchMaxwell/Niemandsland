@@ -461,6 +461,31 @@ func test_save_facts_are_left_out_of_a_file_that_is_too_large_or_broken() -> voi
 	DirAccess.remove_absolute(broken)
 
 
+## The save list (step 48.1) lists every save of a folder, newest first, without reading the files (red on main:
+## no such method). Three saves a second apart, one upper-case extension, one file that is not a save.
+func test_list_saves_lists_every_save_newest_first_without_the_facts() -> void:
+	var manager: GDScript = load("res://scripts/save_manager.gd")
+	assert_bool(manager.has_method("list_saves")).override_failure_message("no list_saves").is_true()
+	if not manager.has_method("list_saves"):
+		return
+	var dir := "user://list_saves_fixture"
+	DirAccess.make_dir_recursive_absolute(dir)
+	for file: String in ["oldest.nml", "middle.NML", "newest.nml"]:
+		FileAccess.open(dir.path_join(file), FileAccess.WRITE).store_string(
+			FileAccess.get_file_as_string(CARD_FIXTURES.path_join("save_with_facts.nml")))
+		await get_tree().create_timer(1.1).timeout
+	FileAccess.open(dir.path_join("notes.txt"), FileAccess.WRITE).store_string("not a save")
+	var saves: Array = manager.call("list_saves", dir)
+	var names: Array = saves.map(func(info: Dictionary) -> String: return str(info.get("name", "")))
+	assert_array(names).is_equal(["newest", "middle", "oldest"])
+	assert_bool((saves[0] as Dictionary).has("system")).is_false()
+	assert_int(int((saves[0] as Dictionary).get("modified_unix", 0))).is_greater(0)
+	assert_array(manager.call("list_saves", "user://no_such_save_folder")).is_empty()
+	for file: String in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(file))
+	DirAccess.remove_absolute(dir)
+
+
 ## The bundled Source Code Pro is a variable font whose default instance is ExtraLight: every mono line of the
 ## first screen asks for weight 400 (red on main: the plain font, thin and dim).
 func test_mono_lines_carry_weight_400() -> void:

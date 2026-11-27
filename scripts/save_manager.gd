@@ -953,6 +953,26 @@ static func latest_save_info(dir_path: String = "") -> Dictionary:
 	return info
 
 
+## Every .nml save of a directory (default: the standard save dir), newest first, for the menu's
+## save list: [{ "path", "name", "modified_unix" }]. The files are not read - the list fills the
+## facts later, one file at a time.
+static func list_saves(dir_path: String = "") -> Array[Dictionary]:
+	var dir := dir_path if not dir_path.is_empty() else get_default_save_dir()
+	var saves: Array[Dictionary] = []
+	if not DirAccess.dir_exists_absolute(dir):
+		return saves
+	for file in DirAccess.get_files_at(dir):
+		if file.to_lower().ends_with(".nml"):
+			var path := dir.path_join(file)
+			var modified := FileAccess.get_modified_time(path)
+			saves.append({"path": path, "name": file.get_basename(), "modified_unix": modified})
+	saves.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if a["modified_unix"] != b["modified_unix"]:
+			return a["modified_unix"] > b["modified_unix"]
+		return a["name"] < b["name"])
+	return saves
+
+
 ## What the menu's Continue card tells about a save, read from its plain JSON: { "system", "round", "biome",
 ## "size_feet" }, each only when the save holds it. A file above `max_bytes` or one that does not parse
 ## leaves them all out.
