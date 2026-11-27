@@ -20,6 +20,11 @@ var left: VBoxContainer
 var _opponent: SetupOpponent
 var _cards: Dictionary = {}
 var _head: HBoxContainer
+var _solo: PanelContainer
+var _off: Label
+var _faction: OptionButton
+var _points: OptionButton
+var _seat: OptionButton
 
 
 func setup(opponent: SetupOpponent, values: Array) -> void:
@@ -42,6 +47,10 @@ func setup(opponent: SetupOpponent, values: Array) -> void:
 	left.add_child(cards)
 	for entry: Array in WHO:
 		cards.add_child(_who_card(entry[0], entry[1], entry[2], entry[3]))
+	_solo = _solo_card()
+	left.add_child(_solo)
+	_off = SetupLayoutStep._text("", 15, HouseStyle.font(400), HouseStyle.MUTED)
+	left.add_child(_off)
 	_opponent.changed.connect(_refresh)
 	resized.connect(_place)
 	_place()
@@ -89,6 +98,54 @@ func _who_card(id: String, title: String, caption: String, icon: String) -> Butt
 	return card
 
 
+## NACHTMAHR's list: three equal columns, FACTION / POINTS / AI PLAYS AS, each an eyebrow over a dropdown.
+func _solo_card() -> PanelContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override(&"separation", 16)
+	_faction = _field(row, "FACTION", "Faction")
+	_faction.item_selected.connect(func(i: int) -> void: _opponent.choose_faction(_faction.get_item_metadata(i)))
+	_points = _field(row, "POINTS", "Points")
+	_points.item_selected.connect(_opponent.choose_bracket)
+	_seat = _field(row, "AI PLAYS AS", "Seat")
+	_seat.add_item("Player 2 (Red)", 2)
+	_seat.add_item("Player 1 (Blue)", 1)
+	_seat.item_selected.connect(func(i: int) -> void: _opponent.choose_seat(_seat.get_item_id(i)))
+	return HouseStyle.card(row)
+
+
+func _field(row: HBoxContainer, eyebrow: String, field_name: String) -> OptionButton:
+	var column := VBoxContainer.new()
+	column.size_flags_horizontal = SIZE_EXPAND_FILL
+	column.add_theme_constant_override(&"separation", 8)
+	column.add_child(SetupLayoutStep._text(eyebrow, 14, HouseStyle.eyebrow_font(), HouseStyle.MUTED))
+	var pick := OptionButton.new()
+	pick.name = field_name
+	pick.theme_type_variation = HouseStyle.BUTTON
+	pick.custom_minimum_size.y = 44
+	column.add_child(pick)
+	row.add_child(column)
+	return pick
+
+
+## The dropdowns follow the model: the system's factions, the chosen faction's brackets, the seat.
+func _refresh_solo() -> void:
+	_solo.visible = _opponent.who == "solo"
+	_off.text = _opponent.off_line()
+	_off.visible = not _off.text.is_empty()
+	_faction.clear()
+	for f: Array in _opponent.factions():
+		_faction.add_item(f[1])
+		_faction.set_item_metadata(_faction.item_count - 1, f[0])
+		if f[0] == _opponent.faction:
+			_faction.select(_faction.item_count - 1)
+	_points.clear()
+	for p: int in _opponent.brackets():
+		_points.add_item("%d points" % p)
+	if _points.item_count > 0:
+		_points.select(_opponent.bracket)
+	_seat.select(_seat.get_item_index(_opponent.seat))
+
+
 ## The chosen card has the lighter fill and the 2 px gold rim (as the layout step's way cards); Solo is off while
 ## NACHTMAHR has no list for the picked system.
 func _refresh() -> void:
@@ -104,3 +161,4 @@ func _refresh() -> void:
 		else:
 			card.remove_theme_stylebox_override(&"normal")
 		card.set_meta("chosen", id == _opponent.who)
+	_refresh_solo()

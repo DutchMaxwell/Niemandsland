@@ -62,3 +62,35 @@ func test_a_change_asks_for_that_step() -> void:
 	step.connect("change_requested", func(i: int) -> void: asked.append(i))
 	(step.find_child("Change3", true, false) as Button).pressed.emit()
 	assert_array(asked).is_equal([3])
+
+
+func test_the_solo_card_has_the_three_dropdowns_with_the_manifests_values() -> void:
+	var step := _step()
+	var faction := step.find_child("Faction", true, false) as OptionButton
+	var points := step.find_child("Points", true, false) as OptionButton
+	var seat := step.find_child("Seat", true, false) as OptionButton
+	assert_array(range(faction.item_count).map(func(i: int) -> String: return faction.get_item_text(i))).is_equal(
+		["Alien Hives", "Orc Tribes"])
+	assert_str(points.get_item_text(points.selected)).is_equal("3000 points")
+	assert_str(seat.get_item_text(seat.selected)).is_equal("Player 2 (Red)")
+	assert_array(_texts(step)).contains(["FACTION", "POINTS", "AI PLAYS AS"])
+
+
+func test_a_faction_change_refills_the_points_and_picks_the_largest() -> void:
+	var step := _step()
+	var faction := step.find_child("Faction", true, false) as OptionButton
+	faction.select(1)
+	faction.item_selected.emit(1)
+	var points := step.find_child("Points", true, false) as OptionButton
+	assert_int(points.item_count).is_equal(1)
+	assert_str(points.get_item_text(points.selected)).is_equal("1000 points")
+	assert_str(step.get("_opponent").faction).is_equal("orc_tribes")
+
+
+func test_the_solo_card_hides_for_the_other_cards_and_says_why_it_is_off() -> void:
+	var step := _step()
+	var card := (step.find_child("Faction", true, false) as Control).get_parent().get_parent().get_parent() as Control
+	_card(step, "local").pressed.emit()
+	assert_bool(card.visible).is_false()
+	var off := _step({})
+	assert_array(_texts(off)).contains(["NACHTMAHR's lists need a connection the first time."])
