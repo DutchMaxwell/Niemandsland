@@ -266,6 +266,29 @@ func aim(att: GameUnit, target: GameUnit, melee := false) -> void:
 	await E2EBoot.settle(_tree)
 
 
+## The guided solo deployment (vs the AI) standing in its SCOUT phase with the human on turn and `placed` (units already
+## down) recorded - the state the deploy flow reaches after the main phase (as e2e_deploy_phases_test arms it).
+func scout_phase(placed: Array) -> void:
+	var seen := {}
+	for u in placed:
+		seen[(u as GameUnit).unit_id] = true
+	main._solo_deploy_fsm = {"phase": "scout", "winner_is_ai": false, "human_turn": true, "human_out": false,
+		"human_placed": seen, "objectives": [], "seed": 5}
+
+
+## The human's "✓ Unit placed" in the guided deployment; true when the placement was taken (the unit is on record).
+func deploy_done(gu: GameUnit) -> bool:
+	main._solo_deploy_human_done_one()
+	await runner.simulate_frames(2)
+	return (main._solo_deploy_fsm.get("human_placed", {}) as Dictionary).has(gu.unit_id)
+
+
+## The solo action toast's text (the deployment refusals speak there).
+func toast_text() -> String:
+	var t := main.get_node_or_null("UI/SoloActionToast") as Label
+	return "" if t == null else t.text
+
+
 ## Pin the table to the pending rules epoch `n` and record the pin (R-FT1); teardown restores the shipped epoch.
 func need_epoch(n: int) -> void:
 	AiActRecorder.rules_epoch = n
