@@ -57,6 +57,7 @@ func open(host: Node, dir := "") -> void:
 	empty_note.size_flags_vertical = SIZE_EXPAND_FILL
 	empty_note.alignment = BoxContainer.ALIGNMENT_CENTER
 	empty_note.visible = saves.is_empty()
+	scroll.visible = not saves.is_empty()   # the empty list takes no half of the sheet: the note stands in its middle
 	for line: Array in [["No saved games yet.", HouseStyle.BODY],
 			["Games you save at the table appear here.", HouseStyle.CAPTION]]:
 		var label := HouseStyle.label(line[0], line[1])
