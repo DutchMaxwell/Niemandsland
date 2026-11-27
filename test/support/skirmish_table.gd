@@ -168,6 +168,15 @@ func summary_text() -> String:
 	return ""
 
 
+## Press the visible button whose text is `text` anywhere in the main scene (a board prompt's answer); false if none.
+func press_button(text: String) -> bool:
+	for b in main.find_children("*", "Button", true, false):
+		if (b as Button).text == text and (b as Button).is_visible_in_tree() and not b.is_queued_for_deletion():
+			(b as Button).pressed.emit()
+			return true
+	return false
+
+
 ## The card's Activate (the committed start). True when the activation is open afterwards.
 func start(gu: GameUnit) -> bool:
 	return await E2EBoot.start_activation(main, gu)
