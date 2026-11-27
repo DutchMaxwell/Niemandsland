@@ -195,3 +195,20 @@ func test_tab_walks_the_page_in_reading_order() -> void:
 		expected.append("Lesson%02d" % (i + 1))
 	expected.append_array(["ResetTutorial", "WayBack"])
 	assert_array(order).is_equal(expected)
+
+
+## Sheet 07 (.ch.next): the next lesson's card has the lighter fill #253035, drawn (red before: the 10 % accent wash of a
+## hovered row, never drawn - the card was darker than its neighbours, as the setup's cards before #3838).
+func test_the_next_lesson_has_the_sheets_fill() -> void:
+	var page := await _page(2, 1)
+	if page == null:
+		return
+	await get_tree().process_frame
+	page.call("select", "ClassicTrack")
+	await get_tree().process_frame
+	var next: Array = _lesson_cards(page).filter(func(c: Node) -> bool: return (c as Control).has_theme_stylebox_override(&"normal"))
+	assert_int(next.size()).is_equal(1)
+	if next.size() == 1:
+		var box := (next[0] as Control).get_theme_stylebox(&"normal") as StyleBoxFlat
+		assert_str(box.bg_color.to_html(false)).is_equal("253035")
+		assert_bool(box.draw_center).is_true()
