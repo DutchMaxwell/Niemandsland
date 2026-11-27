@@ -251,7 +251,7 @@ func test_the_chat_wears_the_house_style(timeout := 120000) -> void:
 ## The FPS line is boxed like the top bar's chips, in the tone of its rate; the distance is the gold table readout,
 ## amber / red while capped — and gold again after the drag (it used to lose its colour for good).
 func test_the_readouts_wear_house_tokens_and_keep_their_gold(timeout := 120000) -> void:
-	await _runner.simulate_frames(10)
+	await _runner.simulate_frames(10, 100)   # the HUD arrives piece by piece (<= 900 ms); its fade is not a look
 	var fps_line: Label = _main.performance_label
 	assert_object(fps_line.theme).is_same(HouseStyle.theme())
 	assert_str(_variant(fps_line)).is_equal(String(HouseStyle.BAR_TEXT))
