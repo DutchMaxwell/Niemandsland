@@ -83,3 +83,23 @@ func test_a_generated_board_from_the_setup_stands_at_the_table(do_skip := not Cl
 	# the board leaves while the table is alive: TableBiomePresenter.request_rebuild asks get_tree() after teardown
 	(main.get("_board_look") as Node).queue_free()
 	await get_tree().process_frame
+
+
+## GEN-6: Create table after the setup chose "Generated board" (gff, 4 x 4 ft): the board stands at the table, with the
+## record the setup showed and the Front Line deployment the way set.
+@warning_ignore('unused_parameter')
+func test_create_table_on_the_board_way_lays_the_board_with_front_line(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
+	ProjectSettings.set_setting(SETUP_KEY, {"size": Vector2(4, 4), "biome": "urban_ruins"})
+	var setup: SetupLayout = auto_free(SetupLayout.new())
+	add_child(setup)
+	setup.set_table(Vector2(4, 4), "gff")
+	assert_bool(setup.choose("board")).is_true()
+	var code := GeneratedBoard.code(setup.board)
+	setup.commit()
+	var main := await _boot()
+	assert_str(GeneratedBoard.code(main.generated_board())).is_equal(code)
+	assert_int(int(main.map_layout_editor.deployment_type)).is_equal(1)
+	assert_bool(FileAccess.file_exists(SetupLayout.FILE)).override_failure_message("the pending file stayed").is_false()
+	(main.get("_board_look") as Node).queue_free()
+	await get_tree().process_frame
