@@ -33,6 +33,7 @@ const LINE_SOFT := Color(0.529, 0.729, 0.737, 0.22)   # window rim (accent at 22
 const FILL := Color(1, 1, 1, 0.03)    # a resting control
 const ROW_HOVER := Color(0.529, 0.729, 0.737, 0.10)   # a menu row under the pointer or focus (accent at 10 %)
 const ROW_PRESS := Color(0.529, 0.729, 0.737, 0.22)   # a menu row held down (accent at 22 %)
+const CARD_CHOSEN := Color("253035")  # the chosen choice card's fill (sheet 03b .w.on)
 const FILL_RAISED := Color(1, 1, 1, 0.05)   # icon buttons
 const WELL := Color(0, 0, 0, 0.30)    # sunken cards: counter, result, log
 const OUTLINE := Color(0, 0, 0, 0.85) # the rim of a readout drawn straight onto the table
