@@ -58,7 +58,7 @@ static func applies(main) -> bool:
 ## (or "off") is the way back until the switch and the #172 guard are deleted. Tests set the entry per kind. CC-14a: `interference`
 ## (a foe's token spend against an AI cast, `interference:<seq>:<caster>:<slot>`) starts OFF like the Takedown pick.
 const CHOICE_KINDS := ["takedown_model", "wound_alloc", "interference", "strike_back"]
-const CHOICE_DEFAULT_ON := ["wound_alloc", "strike_back", "versatile_mode", "spot_markers"]
+const CHOICE_DEFAULT_ON := ["wound_alloc", "strike_back", "versatile_mode", "spot_markers", "blast_split"]
 static var _choice_on: Dictionary = {}
 
 
@@ -288,6 +288,10 @@ static func pending_choices(main, unit: GameUnit, transcript: Array) -> Array:
 			ids.append("takedown_model:%s:%s" % [unit.unit_id, (target as GameUnit).unit_id])
 		if choice_enabled("wound_alloc"):
 			ids.append("wound_alloc:%s:%s:0" % [unit.unit_id, (target as GameUnit).unit_id])
+		# Step 29c (D-29-R1): a human-owned skirmish target's owner places the even Blast split's remainder; the core asks
+		# only where a remainder has a choice, so the probe is unseen like the wound allocation's.
+		if choice_enabled("blast_split") and CoherencyChecker.is_skirmish_system(target) and not main._solo_is_ai_unit(target):
+			ids.append("blast_split:%s:%s" % [unit.unit_id, (target as GameUnit).unit_id])
 		# Step 22b (OD-2: a player's pick is asked through the core): a human Versatile Attack shooter picks the mode (22a).
 		if choice_enabled("versatile_mode") and not main._solo_is_ai_unit(unit) \
 				and not RulesRegistry.unit_rules_of_primitive(unit, "Versatile Attack").is_empty():
@@ -361,6 +365,8 @@ static func choice_purpose(id: String, transcript: Array = []) -> String:
 			return "Versatile Attack mode"
 		"spot_markers":
 			return "Precision Spotter markers"
+		"blast_split":
+			return "Blast split"
 		"interference":
 			return _cast_spell_of(transcript, id.get_slice(":", 2)) if not transcript.is_empty() else "interference"   # the table's request names the spell
 	return "choice"
