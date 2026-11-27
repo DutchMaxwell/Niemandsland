@@ -3550,7 +3550,7 @@ func hotseat_off_turn_drag(unit: GameUnit) -> bool:
 	if unit == null or opr_army_manager == null \
 			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING:
 		return false
-	if hotseat_turn_refusal(unit_owner_slot(unit.unit_properties)) == "":
+	if hotseat_turn_refusal(unit_owner_slot(unit.unit_properties)) == "" or CoreActivation.replacing(unit):
 		return false
 	var text := "%s is not on turn — moved back" % unit.get_name()
 	hotseat_log_refusal(text)
@@ -3631,6 +3631,8 @@ func core_activation_start(gu: GameUnit) -> bool:
 ## Step 40b: `for_drag` (the drag machine's gate) lets a unit that already activated through while "Enforce Movement Limit"
 ## is off - the escape hatch of O1/O2; the doors keep the lock.
 func core_drag_blocked(gu: GameUnit, for_drag := false) -> bool:
+	if CoreActivation.replacing(gu):
+		return false   # step 29e-2a: the owner places the rest after a push
 	if not CoreActivation.is_lifecycle_unit(self, gu) or CoreActivation.session_open(gu.unit_id) \
 			or CoreActivation.session_open(_solo_combat_unit(gu).unit_id):
 		return false
@@ -11729,6 +11731,9 @@ func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String, 
 	if id.begins_with("interference:"):   # CC-14a (O3): the table's own words for a foe nobody answers for (`_solo_remote_interference`)
 		_log_rule_event(BattleLog.Category.COMBAT, ("%s: %s's seat is empty — no interference" if owner_peer == 0
 			else "%s: no answer from %s — no interference") % [purpose, _solo_owner_name(unit)], true)
+	elif id.begins_with("push_replace:") and battle_log != null:   # step 29e-2a: the timeout is named, the core places the rest
+		battle_log.log_event(BattleLog.Category.MOVEMENT, ("Push: %s's seat is empty - the core places the rest within 1 in" if owner_peer == 0
+			else "Push: no answer from %%s within %d s - the core places the rest within 1 in" % int(_owner_roll_timeout_s)) % _solo_owner_name(unit), true)
 	elif battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: no answer to the %s — the automatic pick stands" % [_solo_owner_name(unit), purpose], true)
@@ -11763,6 +11768,8 @@ func _solo_choice_local(unit: GameUnit, id: String, options: Array, wounds := 0,
 			pushed.get_name() if pushed else "The target"), "Try to push", "No") else "no"
 	if id.get_slice(":", 0) == "push_to":
 		return await CoreActivation.pick_push_spot(self, opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2)))
+	if id.get_slice(":", 0) == "push_replace":   # step 29e-2a: the defender places the rest
+		return await CoreActivation.pick_push_replace(self, opr_army_manager.get_game_unit_by_id(id.get_slice(":", 1)), options)
 	if id.get_slice(":", 0) == "blast_split":   # step 29c: the defender picks which units take the Blast remainder
 		return await _solo_ask_blast_split(opr_army_manager.get_game_unit_by_id(id.get_slice(":", 1)), options)
 	if id.get_slice(":", 0) == "spot_markers":   # the table's own marker dialog; the count is one of the core's options "0".."N"
@@ -14641,9 +14648,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	# LAST fallback, every window, ghost, radial, drag and pick mode before it keeps its own Esc.
 	var key := event as InputEventKey
 	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
-		if CoreActivation.skip_push_pick():   # step 29e-1: Esc skips the push spot
+		if CoreActivation.skip_push_pick() or CoreActivation.finish_replace_pick(false):   # 29e-1/2a: Esc skips / places for me
 			get_viewport().set_input_as_handled()
 			return
+	if key != null and key.pressed and not key.echo and key.keycode in [KEY_ENTER, KEY_KP_ENTER] and CoreActivation.finish_replace_pick(true):
+		get_viewport().set_input_as_handled()   # step 29e-2a: Enter answers the placed spots
+		return
+	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
 		if not _esc_owned:
 			# maintainer test 7, 26.10.2026: Esc with a selection deselects first; the menu opens on the next Esc.
 			if not left_panel_scroll.visible and object_manager != null \
@@ -22616,6 +22627,8 @@ func _on_units_dropped(moves: Array) -> void:
 	for mv in moves:
 		if CoreActivation.take_push_drop(self, mv):   # step 29e-1: the push spot is the drop, not a move of that unit
 			return
+		if CoreActivation.replacing(UnitUtils.get_game_unit((mv as Dictionary).get("node") as Node3D)):
+			return   # step 29e-2a: placing the rest after a push is no move of that unit
 	for mv in moves:
 		if float((mv as Dictionary).get("inches", 0.0)) <= 0.1:
 			continue
