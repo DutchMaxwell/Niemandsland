@@ -16,12 +16,10 @@ func test_primary_routes_are_grouped() -> void:
 	var actions := _menu.find_child("MenuButtons",true,false)
 	assert_int(actions.get_child_count()).is_equal(5)
 	assert_bool(_menu.host_online_btn.is_visible_in_tree()).is_false()
-	assert_bool(_menu.tutorial_btn.is_visible_in_tree()).is_false()
 	_menu.view.buttons.OnlineBtn.pressed.emit()
 	assert_bool(_menu.host_online_btn.is_visible_in_tree()).is_true()
 	assert_bool(_menu.join_online_btn.is_visible_in_tree()).is_true()
 	assert_bool(_menu.browse_online_btn.is_visible_in_tree()).is_true()
-	assert_bool(_menu.tutorial_btn.is_visible_in_tree()).is_false()
 
 func test_continue_matches_actual_save_lookup() -> void:
 	assert_bool(_menu.continue_btn.visible).is_equal(not SaveManager.latest_save_info().is_empty())
@@ -68,10 +66,8 @@ func test_group_focus_cycles_inside_group() -> void:
 
 func test_existing_routes_keep_their_own_handlers() -> void:
 	for pair in [[_menu.start_battle_btn,_menu._on_start_battle_pressed],[_menu.continue_btn,_menu._on_continue_pressed],
-		[_menu.load_battle_btn,_menu._on_load_battle_pressed],[_menu.tutorial_btn,_menu._on_tutorial_pressed],
-		[_menu.spielschule_btn,_menu._on_spielschule_pressed],[_menu.credits_btn,_menu._on_credits_pressed]]:
+		[_menu.load_battle_btn,_menu._on_load_battle_pressed],[_menu.credits_btn,_menu._on_credits_pressed]]:
 		assert_bool(pair[0].pressed.is_connected(pair[1])).is_true()
-	assert_bool(_menu.tutorial_btn.pressed.is_connected(_menu._on_spielschule_pressed)).is_false()
 
 func test_host_route_opens_existing_dialog_and_keeps_public_checkbox_focusable() -> void:
 	_menu.view.show_route("online")
@@ -136,10 +132,7 @@ func test_return_from_lesson_opens_chapter_picker_and_clears_flag() -> void:
 	var menu: Control = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
 	add_child(menu)
 	await get_tree().process_frame
-	var found := false
-	for child in menu.get_children():
-		if child is AcceptDialog and child.title == "TRIAL BY FIRE":
-			found = child.visible
+	var found: bool = menu.view.page_open is LearnPage   # the lesson page, not a window
 	var cleared: bool = not ProjectSettings.get_setting(key, false)
 	ProjectSettings.set_setting(key, previous)
 	assert_bool(found).is_true()
@@ -153,10 +146,7 @@ func test_normal_menu_boot_does_not_open_chapter_picker() -> void:
 	var menu: Control = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
 	add_child(menu)
 	await get_tree().process_frame
-	var found := false
-	for child in menu.get_children():
-		if child is AcceptDialog and child.title == "TRIAL BY FIRE":
-			found = child.visible
+	var found: bool = menu.view.page_open != null
 	ProjectSettings.set_setting(key, previous)
 	assert_bool(found).is_false()
 

@@ -88,6 +88,7 @@ func _track(key: String, words: Array, lessons: Array, done: Array, playable: Ar
 	box.add_child(line)
 	var button := HouseStyle.button("Start" if count == 0 else "Continue with lesson %d" % (next + 1),
 		HouseStyle.BUTTON, HouseStyle.MENU_H_ACTION)
+	button.name = key + "Button"
 	button.focus_mode = FOCUS_ALL
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	if next < 0:
