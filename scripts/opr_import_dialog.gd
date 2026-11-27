@@ -23,6 +23,8 @@ var _preview_army: OPRApiClient.OPRArmy = null
 
 ## API Client for parsing
 var api_client: OPRApiClient
+## The table's armies by seat (main sets it): an import into a held seat asks first. Null = no question.
+var army_manager: OPRArmyManager = null
 
 
 func _ready() -> void:
@@ -236,6 +238,11 @@ func _on_import() -> void:
 		return
 
 	var player_id = player_option.get_selected_id()
+	if army_manager != null and ArmyReplaceConfirm.occupied(army_manager.armies, player_id) \
+			and not await ArmyReplaceConfirm.ask(army_manager.armies, player_id):
+		return   # Keep: the window stays open with its list, another seat can be picked
+	if _preview_army == null:
+		return
 	_preview_army.player_id = player_id
 	var army := _preview_army  # _reset_dialog() nulls _preview_army; keep a reference
 

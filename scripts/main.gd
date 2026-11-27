@@ -792,6 +792,7 @@ func _ready() -> void:
 	opr_import_dialog = OPRImportDialog.new()
 	get_tree().root.add_child(opr_import_dialog)
 	opr_import_dialog.army_imported.connect(_on_opr_army_imported)
+	opr_import_dialog.army_manager = opr_army_manager
 	opr_import_dialog.hide()
 
 	# Initialize OPR Stats Tooltip
@@ -20940,6 +20941,9 @@ func _load_ai_opponent_list(file: String, slot: int) -> void:
 	if network_manager != null and network_manager.slot_has_human_peer(slot):
 		_solo_show_toast("P%d is a connected human player — NACHTMAHR stays out" % slot)
 		return
+	if opr_army_manager != null and ArmyReplaceConfirm.occupied(opr_army_manager.armies, slot) \
+			and not await ArmyReplaceConfirm.ask(opr_army_manager.armies, slot):
+		return   # Keep (maintainer 27.11.: replacing an army asks first)
 	var text: String = await _ai_lists.list_text(file)
 	if text.is_empty():
 		_solo_show_toast("AI list not found: %s (no bundle, no cache, no connection)" % file)

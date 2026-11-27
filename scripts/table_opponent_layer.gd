@@ -3,7 +3,7 @@ extends CanvasLayer
 ## The table's "Opponent…" (game menu): the setup's step-04 page in table mode over the table - the same page, the
 ## same model. Its button (or Enter) does what the chosen card says: NACHTMAHR's list into its seat (the table's own
 ## loader), the army import on Player 2, or the Host dialog. Esc or Back closes it and changes nothing. Bringing
-## NACHTMAHR into a seat that already holds an army replaces it, as any import into that seat does.
+## NACHTMAHR into a seat that already holds an army asks first (Replace / Keep), as any import into that seat does.
 
 ## Tests hand in their own list source here (no CDN); null = the table's.
 static var lists_override: AiLists = null
