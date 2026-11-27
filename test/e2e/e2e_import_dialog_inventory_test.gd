@@ -165,3 +165,32 @@ func test_the_window_has_no_old_layer_marks() -> void:
 	assert_str(String(headline.theme_type_variation)).is_equal(String(HouseStyle.BODY))
 	assert_bool(headline.has_theme_font_override("font")).override_failure_message("the headline still wears the wordmark font").is_false()
 	assert_str(String(_dlg.state_panel._detail.theme_type_variation)).is_equal(String(HouseStyle.CAPTION))
+
+
+func _visible_segments() -> Array:
+	var row := _dlg.find_child("PlayerSegments", true, false)
+	return [] if row == null else row.get_children().filter(func(b: Node) -> bool: return (b as Button).visible)
+
+
+## Step 86, maintainer 27.11.: Assign player is a segment pair "Player 1 (Blue) | Player 2 (Red)" driving the same
+## value; the hidden dropdown stays in sync (red on main: a four-item dropdown).
+func test_assign_player_is_a_pair_of_segments() -> void:
+	var segments := _visible_segments()
+	assert_array(segments.map(func(b: Button) -> String: return b.text)).is_equal(["Player 1 (Blue)", "Player 2 (Red)"])
+	assert_bool(_dlg.player_option.visible).is_false()
+	if segments.size() < 2:
+		return
+	(segments[1] as Button).pressed.emit()
+	assert_int(_dlg.player_option.get_selected_id()).is_equal(2)
+	assert_bool(HouseStyle.is_selected(segments[1])).is_true()
+	assert_bool(HouseStyle.is_selected(segments[0])).is_false()
+
+
+## A room hands a third or fourth guest seat 3 or 4: the window still pre-selects that seat and imports for it.
+func test_a_third_seat_keeps_its_own_segment() -> void:
+	_dlg.set_player(3)
+	var texts: Array = _visible_segments().map(func(b: Button) -> String: return b.text)
+	assert_array(texts).is_equal(["Player 1 (Blue)", "Player 2 (Red)", "Player 3 (Green)"])
+	_load_fake_army()
+	_dlg.import_btn.pressed.emit()
+	assert_int(int(_imported[0][1])).is_equal(3)
