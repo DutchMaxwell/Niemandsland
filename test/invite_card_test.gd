@@ -56,3 +56,19 @@ func test_keep_setting_up_and_esc_close_the_card() -> void:
 	card.get_viewport().push_input(esc)
 	await get_tree().process_frame
 	assert_bool(card.visible).is_false()
+
+
+## Step 49.2b: the session's caption under the buttons, a click on the dimmed table closes the card, the focus
+## opens on Copy code (red before: no caption, the scrim ignored the click).
+func test_caption_scrim_click_and_first_focus() -> void:
+	var card := await _card()
+	if card == null:
+		return
+	await get_tree().process_frame
+	assert_array(_texts(card)).contains(["Multiplayer is manual play."])
+	assert_object(card.get_viewport().gui_get_focus_owner()).is_same(card.find_child("CopyCode", true, false))
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	(card.get_child(0) as Control).gui_input.emit(click)
+	assert_bool(card.visible).is_false()
