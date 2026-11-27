@@ -2,7 +2,7 @@ class_name CoherencyChecker
 extends RefCounted
 ## Checks unit coherency according to OPR rules.
 ## - Model-to-model: 1" (or 3" if elevated)
-## - Max chain length: 9" (6" for Skirmish)
+## - Max chain length: 9" (a skirmish unit: its rules book's chain, NmlCore.book_chain_in)
 
 # ===== Constants =====
 
@@ -12,10 +12,9 @@ const COHERENCY_DISTANCE_INCHES := 1.0
 ## Maximum chain distance in inches (standard game)
 const MAX_CHAIN_DISTANCE_INCHES := 9.0
 
-## Maximum chain distance for Skirmish mode (Grimdark Future: Firefight /
-## Age of Fantasy: Skirmish). Verified: GF: Firefight Beginner's Guide v3.5.1, p.7
-## ("within 6” of all other models").
-const SKIRMISH_CHAIN_DISTANCE_INCHES := 6.0
+## Plan step 28b: a skirmish unit's chain is its rules book's (NmlCore.book_chain_in at the live rules epoch), never a
+## twin here. A build without the core keeps the standard chain.
+static var _core: Object = null
 
 ## Elevated coherency distance (different heights)
 const ELEVATED_COHERENCY_INCHES := 3.0
@@ -65,6 +64,14 @@ class CoherencyResult:
 ## Whether a unit belongs to a skirmish game system (Grimdark Future: Firefight or
 ## Age of Fantasy: Skirmish), which uses the 6" max-spread coherency instead of 9".
 ## Reads game_system stamped into unit_properties at import.
+static func book_chain_in(game_unit: GameUnit) -> float:
+	if _core == null and ClassDB.class_exists("NmlCore"):
+		_core = ClassDB.instantiate("NmlCore")
+	if _core == null:
+		return MAX_CHAIN_DISTANCE_INCHES
+	return float(_core.call("book_chain_in", str(game_unit.unit_properties.get("game_system", "")), AiActRecorder.rules_epoch))
+
+
 static func is_skirmish_system(game_unit: GameUnit) -> bool:
 	return game_unit.unit_properties.get("game_system", "") in ["gff", "aofs"]
 
@@ -73,7 +80,7 @@ static func is_skirmish_system(game_unit: GameUnit) -> bool:
 ## models must form an uninterrupted chain in 1" coherency (3" across different
 ## elevation) AND stay within 9" (6" Skirmish) of all other models.
 ## @param game_unit: The unit to check
-## @param is_skirmish: If true, uses 6" max spread instead of 9"
+## @param is_skirmish: If true, the spread cap is the unit's rules book chain (book_chain_in) instead of 9"
 ## @returns: CoherencyResult with valid flag and issues array
 static func check_unit_coherency(game_unit: GameUnit, is_skirmish: bool = false) -> CoherencyResult:
 	var result = CoherencyResult.new()
@@ -108,7 +115,7 @@ static func check_unit_coherency(game_unit: GameUnit, is_skirmish: bool = false)
 				)
 
 	# Check 2: Every model must stay within the max spread of all others.
-	var max_chain = SKIRMISH_CHAIN_DISTANCE_INCHES if is_skirmish else MAX_CHAIN_DISTANCE_INCHES
+	var max_chain := book_chain_in(game_unit) if is_skirmish else MAX_CHAIN_DISTANCE_INCHES
 	var spread := _get_max_spread_pair(models)
 	if spread.distance > max_chain:
 		result.add_issue(

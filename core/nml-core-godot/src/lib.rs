@@ -998,6 +998,13 @@ impl NmlCore {
         nml_core::rules::default_command_picks_of(player, [f64::from(at.x), f64::from(at.y)], &others).iter().map(GString::from).collect()
     }
 
+    /// The coherency chain (inches) of `system`'s rules book at `rules_epoch` (`nml_core::rules::Book::chain_in_at`): what the
+    /// table's coherency check and visualiser draw, so they never hold a twin of the book.
+    #[func]
+    fn book_chain_in(&self, system: GString, rules_epoch: i64) -> f64 {
+        nml_core::rules::book(&system.to_string()).chain_in_at(u32::try_from(rules_epoch).unwrap_or(0))
+    }
+
     /// The seeded 48 x 48 in heightfield board for `seed` (`nml_core::boardgen`, point-symmetric): `cells` (`level` 0-3,
     /// inches in `level_in`), `lots`, `arteries`, `connectors` (all `Ladder`, with `edge_in`), `landmarks` (kind, footprint, core
     /// `terrain` class, `solid`), `problems` (empty = accepted).
