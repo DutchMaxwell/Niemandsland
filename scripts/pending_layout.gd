@@ -1,6 +1,7 @@
 class_name PendingLayout
 ## The layout the table setup chose (step 04, "Lay out the table"), carried to the table beside
-## `niemandsland/pending_table_setup`: {} for the empty table, {"theme": id} for a ready-made table, or
+## `niemandsland/pending_table_setup`: {} for the empty table, {"theme": id} for a ready-made table, {"board": record}
+## for a generated board (`GeneratedBoard.resolve`), or
 ## {"path": file} - a file the setup wrote with the layout editor's own save. The reveal gate applies it on a new
 ## table; a load and a join never do.
 
@@ -24,6 +25,8 @@ static func apply(main: Node) -> bool:
 	ProjectSettings.set_setting(KEY, null)
 	if not choice is Dictionary:
 		return false
+	if choice.has("board") and main.has_method("apply_generated_board"):   # GEN-4: a generated board, through its door
+		return main.apply_generated_board(choice.board)
 	if choice.has("theme") and main.has_method("apply_table_theme"):
 		main.apply_table_theme(str(choice.theme))
 		return true
