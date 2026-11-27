@@ -455,6 +455,8 @@ func _card_data(unit: GameUnit) -> Dictionary:
 		"activation_open": CoreActivation.session_open(unit.unit_id),
 		"can_cancel": CoreActivation.can_cancel(unit.unit_id),
 		"can_place_for_me": CoreActivation.fall_pending(unit.unit_id),
+		"command_picks": "Done picking" if CommandPicks.picking == unit else ("Command picks" \
+			if is_inside_tree() and CommandPicks.refusal(get_node_or_null("/root/Main"), unit).is_empty() else ""),
 		"fatigued": unit.is_fatigued,
 		"shaken": unit.is_shaken,
 		"caster": unit.is_caster(),
@@ -833,6 +835,13 @@ func _card_action(kind: String) -> void:
 		"place_for_me":
 			if radial_menu_controller != null:
 				radial_menu_controller.card_place_for_me(unit)
+		"command_picks":   # PC2: arm the table pick, or finish it
+			var main_node := get_tree().root.get_node_or_null("Main")
+			if CommandPicks.picking == unit:
+				CommandPicks.finish(main_node)
+			else:
+				CommandPicks.begin(main_node, unit)
+			refresh_presented()
 		"fatigued":
 			if radial_menu_controller != null:
 				radial_menu_controller.card_toggle_fatigued(unit, true)
