@@ -186,3 +186,13 @@ func test_the_way_cards_keep_196_px_at_1080p() -> void:
 	if step == null:
 		return
 	assert_float((step.find_child("Way_empty", true, false) as Control).size.y).is_greater_equal(196.0)
+
+
+func test_a_folded_row_is_built_alone() -> void:
+	var calls: Array = []
+	var row: PanelContainer = auto_free(SetupLayoutStep.folded_row(4, "Opponent", "Two players, one screen",
+		func() -> void: calls.append(4)))
+	var texts: Array = row.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	assert_array(texts).is_equal(["04", "Opponent", "Two players, one screen"])
+	(row.find_child("Change4", true, false) as Button).pressed.emit()
+	assert_array(calls).is_equal([4])
