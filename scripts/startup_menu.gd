@@ -252,6 +252,7 @@ func _show_table_setup(host_settings: Dictionary = {}) -> void:
 		return
 	_table_setup = TableSizeDialog.new()
 	_table_setup.online = not host_settings.is_empty()   # Create room: online stays Manual
+	_table_setup.layout_step = true   # step 04, "Lay out the table"
 	_table_setup.selected_system = GameSystem.default_pick()   # the last pick; the dialog applies it in _ready
 	add_child(_table_setup)
 	_table_setup.set_biomes(MenuDiorama.Battlefield.BIOMES,diorama.biome)
@@ -284,6 +285,7 @@ func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> vo
 		RulesAutomation.remember_pick(_table_setup.selected_rules)
 	for key in host_settings:
 		ProjectSettings.set_setting(key,host_settings[key])
+	_table_setup.layout.commit()   # the chosen layout travels to the table (PendingLayout)
 	var setup := _table_setup
 	_table_setup = null
 	await _commit_beat(setup._create)

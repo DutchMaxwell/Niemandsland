@@ -72,6 +72,10 @@ var _margin: MarginContainer
 var _cards: Array[TextureRect] = []
 var _valid := true
 var online := false   # set before add_child: a Create-room dialog locks the rules pick to Manual
+var layout_step := false   # set before add_child: the menu's setup has step 04 (the table's chooser does not)
+var layout: SetupLayout
+var _step04: SetupLayoutStep
+var _layout_name: Label
 var selected_rules := RulesAutomation.Level.MANUAL
 
 class Footprint extends Control:
@@ -296,8 +300,11 @@ func _build_ui() -> void:
 	left.add_child(_label("Table size is fixed once you create it.",11,HouseStyle.MUTED))
 	_add_left_air(left)
 	left.add_child(HSeparator.new())
-	left.add_child(_label("+   Your terrain. Your layout.",14,HouseStyle.ACCENT))
-	left.add_child(_label("Place and rearrange terrain freely after creating your table. The biome defines its visual style.",12,HouseStyle.MUTED,true))
+	if layout_step:
+		_add_layout_row(left)
+	else:
+		left.add_child(_label("+   Your terrain. Your layout.",14,HouseStyle.ACCENT))
+		left.add_child(_label("Place and rearrange terrain freely after creating your table. The biome defines its visual style.",12,HouseStyle.MUTED,true))
 	var right := VBoxContainer.new()
 	_right = right
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -384,6 +391,43 @@ func _build_ui() -> void:
 	_create.pressed.connect(_confirm)
 	_footer.add_child(_create)
 	_style(_create,true,true)
+
+
+## Step 04 in the setup's first state: one row "04 Lay out the table", the chosen way's name and Change; it opens
+## the second state, the page of the four ways (SetupLayoutStep).
+func _add_layout_row(column: VBoxContainer) -> void:
+	layout = SetupLayout.new()
+	add_child(layout)
+	var row := _button("")
+	row.name = "LayoutRow"
+	row.custom_minimum_size.y = 52
+	row.pressed.connect(_show_state.bind(true))
+	var line := HBoxContainer.new()
+	line.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 14)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var heading := _label("04   Lay out the table",17)
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.add_child(heading)
+	_layout_name = _label("",16)
+	line.add_child(_layout_name)
+	line.add_child(_label("   Change",15,HouseStyle.ACCENT))
+	row.add_child(line)
+	column.add_child(row)
+
+
+## The second state shows step 04 in place of steps 01-03 and the summary; the first state takes them back.
+func _show_state(two: bool) -> void:
+	for part: Control in [_system_step, _columns, _footer, _page.get_child(_footer.get_index() - 1)]:
+		part.visible = not two
+	if is_instance_valid(_step04):
+		_step04.queue_free()
+	if two:
+		_step04 = SetupLayoutStep.new()
+		_step04.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		get_child(0).add_child(_step04)
+		_step04.setup(layout, [_summary.System.text, _summary.Biome.text, _summary.Size.text])
+		_step04.change_requested.connect(func(_step: int) -> void: _show_state(false))
+		_step04.create_requested.connect(_confirm)
 
 
 ## Step 01 of the setup: one card per game system (its name, Battle or Skirmish, the board it starts on).
@@ -562,6 +606,9 @@ func _refresh() -> void:
 		_footprint.centimeters = _unit_option.selected == 1
 		_footprint.queue_redraw()
 	_footprint.modulate.a = 1.0 if _valid else 0.25
+	if layout != null and _valid:
+		layout.set_table(inches / 12.0, selected_system)
+		_layout_name.text = layout.label()
 	_layout()
 
 
@@ -583,7 +630,10 @@ func _on_close() -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if visible and event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-		_on_close()
+		if is_instance_valid(_step04) and _step04.visible:
+			_show_state(false)   # Esc: from step 04 back to the first state, from there to the menu
+		else:
+			_on_close()
 		get_viewport().set_input_as_handled()
 	elif visible and event is InputEventKey and event.pressed and event.keycode in [KEY_ENTER,KEY_KP_ENTER]:
 		_confirm()   # creates only when the choice is valid
