@@ -155,3 +155,34 @@ func test_zones_objectives_and_the_key_legend() -> void:
 	(step.find_child("DeployObjectives", true, false) as Button).pressed.emit()
 	assert_bool(_layout.editor.visible).is_true()
 	assert_bool(_layout.editor.objectives_editing).is_true()
+
+
+func _sized_step(window: Vector2) -> Control:
+	var step := _step(Vector2(6, 4))
+	if step == null:
+		return null
+	step.size = window
+	_layout.choose("generated")
+	for _i in 3:
+		await get_tree().process_frame
+	return step
+
+
+## Step 65.10: state two fits a 1280 x 720 window without scrolling; at 1920 x 1080 the way cards keep 196 px
+## (red before: the page stood at its 1920 x 1080 places in every window).
+func test_state_two_fits_a_720p_window() -> void:
+	var step := await _sized_step(Vector2(1280, 720))
+	if step == null:
+		return
+	var window := Rect2(Vector2.ZERO, Vector2(1280, 720)).grow(1)
+	for control: Control in step.find_children("*", "Control", true, false):
+		if control.is_visible_in_tree() and control.get_global_rect().has_area():
+			assert_bool(window.encloses(control.get_global_rect())).override_failure_message(
+				"%s at %s" % [control.name, control.get_global_rect()]).is_true()
+
+
+func test_the_way_cards_keep_196_px_at_1080p() -> void:
+	var step := await _sized_step(Vector2(1920, 1080))
+	if step == null:
+		return
+	assert_float((step.find_child("Way_empty", true, false) as Control).size.y).is_greater_equal(196.0)

@@ -30,6 +30,11 @@ var _layout_row: Label
 var _again: Button
 var _mirror: CheckButton
 var _zones: Array[Button] = []
+var _rail: PanelContainer
+var _picture: LayoutPreview
+var _keys: HBoxContainer
+var _folded: Array[Control] = []
+var _head: HBoxContainer
 var _objectives: Label
 
 
@@ -38,8 +43,6 @@ func setup(layout: SetupLayout, values: Array) -> void:
 	theme = HouseStyle.menu_theme()
 	left = VBoxContainer.new()
 	left.add_theme_constant_override(&"separation", 8)
-	left.position = Vector2(76, 232)   # under the setup's own title, as drawn at 1920 x 1080
-	left.custom_minimum_size.x = 1040
 	add_child(left)
 	for i in STEPS.size():
 		var row := HBoxContainer.new()
@@ -65,11 +68,11 @@ func setup(layout: SetupLayout, values: Array) -> void:
 		change.pressed.connect(func() -> void: change_requested.emit(i + 1))
 		row.add_child(change)
 		var folded := HouseStyle.card(row)
-		folded.custom_minimum_size.y = 52
 		left.add_child(folded)
+		_folded.append(folded)
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override(&"separation", 12)
-	head.custom_minimum_size.y = 72   # air above the heading, as drawn
+	_head = head
 	head.add_child(_text("04", 16, HouseStyle.mono(), HouseStyle.GOLD))
 	var heading := _text("Lay out the table", 22, HouseStyle.font(500), HouseStyle.INK)
 	heading.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -98,14 +101,41 @@ func setup(layout: SetupLayout, values: Array) -> void:
 	_build_rail(values)
 	_layout.changed.connect(_refresh)
 	var keys := HBoxContainer.new()   # the key legend at the foot of the page
-	keys.position = Vector2(76, 1020)
+	_keys = keys
 	keys.add_theme_constant_override(&"separation", 8)
 	for pair: Array in [["Tab", "next step"], ["← →", "choose"], ["G", "generate again"], ["Enter", "create table"],
 			["Esc", "back"]]:
 		keys.add_child(HouseStyle.key_cap(pair[0]))
 		keys.add_child(_text(pair[1], 15, HouseStyle.font(400), HouseStyle.MUTED))
 	add_child(keys)
+	resized.connect(_place)
+	_place()
 	_refresh()
+
+
+## The page's measures: as drawn at 1920 x 1080; below 800 px of height the compact ones, so a 1280 x 720 window
+## shows all of state two without scrolling (rows 38, way cards 112 without captions, the picture as high as the
+## space leaves, at least 200).
+func _place() -> void:
+	var compact := size.y < 800
+	var pad := 28.0 if compact else maxf(28.0, size.x * 0.04)
+	var rail_w := 504.0 if compact else minf(684.0, size.x * 0.36)
+	_rail.custom_minimum_size.x = rail_w
+	_rail.position = Vector2(size.x - pad - rail_w, 100.0 if compact else 108.0)
+	_picture.custom_minimum_size.y = maxf(200.0, size.y - 460.0) if compact else 456.0   # the rest of the rail ~340
+	left.position = Vector2(pad, 120.0 if compact else 232.0)   # under the setup's own title
+	left.custom_minimum_size.x = size.x - 2 * pad - rail_w - (24.0 if compact else 44.0)
+	for row in _folded:
+		row.custom_minimum_size.y = 38 if compact else 52
+	_head.custom_minimum_size.y = 40 if compact else 72
+	for card: Button in _cards.values():
+		card.custom_minimum_size.y = 128 if compact else 196
+		(card.get_child(0).get_child(1) as Label).add_theme_font_size_override(&"font_size", 16 if compact else 20)
+		(card.get_child(0).get_child(2) as Control).visible = not compact   # the caption
+	_legend.add_theme_constant_override(&"separation", 8 if compact else 18)
+	_keys.position = Vector2(pad, size.y - (44.0 if compact else 60.0))
+	for box: Control in [left, _rail]:   # a container keeps its old height: shrink both to their new content
+		box.reset_size.call_deferred()
 
 
 ## The tools card: Generate again and the mirror (the generated way only), and the layout editor.
@@ -190,16 +220,15 @@ func _unhandled_key_input(event: InputEvent) -> void:
 ## generated and file only), what the table will be, and Create table.
 func _build_rail(values: Array) -> void:
 	var rail := PanelContainer.new()
+	_rail = rail
 	rail.name = "Rail"
 	rail.theme_type_variation = HouseStyle.PANEL_VARIANT
-	rail.position = Vector2(1160, 108)
-	rail.custom_minimum_size.x = 684
 	add_child(rail)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override(&"separation", 10)
 	rail.add_child(box)
 	var picture := LayoutPreview.new()
-	picture.custom_minimum_size.y = 456
+	_picture = picture
 	picture.show_layout(_layout)
 	box.add_child(picture)
 	_legend = HBoxContainer.new()
@@ -283,7 +312,9 @@ func _way_card(way: String, title: String, caption: String, icon: StringName) ->
 	mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
 	mark.modulate = HouseStyle.ACCENT
 	words.add_child(mark)
-	words.add_child(_text(title, 20, HouseStyle.font(500), HouseStyle.INK))
+	var name_label := _text(title, 20, HouseStyle.font(500), HouseStyle.INK)
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	words.add_child(name_label)
 	var line := _text(caption, 15, HouseStyle.font(400), HouseStyle.MUTED)
 	line.autowrap_mode = TextServer.AUTOWRAP_WORD
 	words.add_child(line)
