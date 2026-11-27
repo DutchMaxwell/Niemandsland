@@ -281,6 +281,23 @@ pub fn allowance_of(statics: &[UnitStatic], state: &State, unit: &str, terrain: 
     d
 }
 
+/// `regroup_around`'s answer: the unit's positions after the core's 1 in placer and its line, or `not_ok` for an unknown
+/// unit or model slot.
+pub fn regroup_of(state: &State, unit: &str, model_slot: i64, terrain: &Terrain) -> VarDictionary {
+    let Some(&u) = state.roster.index.get(unit) else { return not_ok(&format!("unknown unit {unit}")) };
+    let Some(m) = usize::try_from(model_slot).ok().filter(|&m| m < state.positions[u].len()) else { return not_ok("unknown model slot") };
+    let (pos, line) = nml_core::sim::regroup_around(state, u, m, terrain);
+    let mut positions = VarArray::new();
+    for p in &pos {
+        positions.push(&Vector3::new(p[0] as f32, p[1] as f32, p[2] as f32).to_variant());
+    }
+    let mut d = VarDictionary::new();
+    d.set("ok", true);
+    d.set("positions", &positions);
+    d.set("line", line.as_str());
+    d
+}
+
 /// `{"ok": false, "reason"}`: a refusal that is not the core's own (unknown handle or unit, a drop that is not understood).
 /// `check_rest`'s answer: `{"ok", "illegal": [..]}` by `legal::rest_illegal` over the named unit keys, or `not_ok` naming an
 /// unknown key.

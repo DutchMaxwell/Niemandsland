@@ -423,6 +423,27 @@ impl NmlCore {
         actcall::difficult_of(&slot.statics, &slot.cap.state, &unit.to_string(), terrain, &drop)
     }
 
+    /// FALL-REPLACE (D-27c): does a model of `unit` on handle `h` stand more than 1 in from its fallen model `model_slot`
+    /// (`nml_core::sim::fall_replace_needed`)? The table's End-door lock asks it; false for an unknown handle, unit or slot.
+    #[func]
+    fn fall_replace_needed(&mut self, h: i64, unit: GString, model_slot: i64) -> bool {
+        let Some(i) = self.index(h) else { return false };
+        let st = &self.slab[i].as_ref().unwrap().cap.state;
+        let (Some(&u), Ok(m)) = (st.roster.index.get(&unit.to_string()), usize::try_from(model_slot)) else { return false };
+        nml_core::sim::fall_replace_needed(st, u, m)
+    }
+
+    /// "Place for me" after a fall: the core's 1 in placer (`nml_core::sim::regroup_around`, ruling D14) for `unit` around
+    /// its model `model_slot` on handle `h`. `{"ok": true, "positions": [Vector3 per model], "line"}` (line empty = nobody
+    /// moved) or `{"ok": false, "reason"}`. Reads only: the table lands the positions as a move.
+    #[func]
+    fn regroup_around(&mut self, h: i64, unit: GString, model_slot: i64) -> VarDictionary {
+        let Some(i) = self.index(h) else { return actcall::not_ok("unknown handle") };
+        let absent = Terrain::absent();
+        let terrain = self.header.as_ref().map(|hd| &hd.terrain).unwrap_or(&absent);
+        actcall::regroup_of(&self.slab[i].as_ref().unwrap().cap.state, &unit.to_string(), model_slot, terrain)
+    }
+
     /// May the models of the units `unit_ids` (roster keys) REST where they stand on handle `h`?
     /// `{"ok": bool, "illegal": [{"unit", "model", "kind", "other", "other_model", "by_in"}]}` (`nml_core::mv::legal`), or
     /// `{"ok": false, "reason"}` for an unknown handle or key. Reads only; a `done` step carries the same list as `"illegal"`.

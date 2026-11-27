@@ -1175,8 +1175,7 @@ fn push_regroup(state: &mut State, ti: usize, m: usize, cover: Cover) -> String 
     let (mut moved, mut stuck) = (Vec::new(), Vec::new());
     for k in (0..state.positions[ti].len()).filter(|&k| k != m) {
         let (q, rk) = (state.positions[ti][k], state.radii[ti].get(k).copied().unwrap_or(0.0));
-        let d = (q[0] - c[0]).hypot(q[2] - c[2]);
-        if d - rm - rk <= IN2M + 1e-9 {
+        if !beyond_1in(state, ti, m, k) {
             continue;
         }
         let base = (q[2] - c[2]).atan2(q[0] - c[0]);
@@ -1205,6 +1204,29 @@ fn push_regroup(state: &mut State, ti: usize, m: usize, cover: Cover) -> String 
         tail += &format!("; {} found no room within 1 in and stays", list(&stuck));
     }
     tail
+}
+
+/// Does model `k` of unit `ti` stand more than 1 in, base to base, from its model `m`? The one test `push_regroup` and
+/// `fall_replace_needed` read.
+fn beyond_1in(state: &State, ti: usize, m: usize, k: usize) -> bool {
+    let (c, q) = (state.positions[ti][m], state.positions[ti][k]);
+    let r = |j: usize| state.radii[ti].get(j).copied().unwrap_or(0.0);
+    (q[0] - c[0]).hypot(q[2] - c[2]) - r(m) - r(k) > IN2M + 1e-9
+}
+
+/// FALL-REPLACE (3.6 p.15, D-27c): after model `m` of unit `ti` fell, does another model of the unit stand more than 1 in
+/// from it? Then its owner re-places them (or takes [`regroup_around`]). False for an unknown unit or slot.
+pub fn fall_replace_needed(state: &State, ti: usize, m: usize) -> bool {
+    state.positions.get(ti).is_some_and(|ps| m < ps.len() && (0..ps.len()).any(|k| k != m && beyond_1in(state, ti, m, k)))
+}
+
+/// The core's 1 in placer for a fall ("Place for me"): `push_regroup` (ruling D14) on a copy of `state`, nothing written
+/// back. The unit's positions after it and the line naming who moved (empty when nobody had to).
+pub fn regroup_around(state: &State, ti: usize, m: usize, terrain: &Terrain) -> (Vec<[f64; 3]>, String) {
+    let mut next = state.clone();
+    let tail = push_regroup(&mut next, ti, m, Cover::Board(terrain));
+    let line = tail.strip_prefix("; ").map(|t| format!("Fall: model {} fell; {t}", m + 1)).unwrap_or_default();
+    (next.positions[ti].clone(), line)
 }
 
 /// The skirmish Blast spread's morale: each neighbour `land_blast_spill` wounded tests like a shot target - the same
