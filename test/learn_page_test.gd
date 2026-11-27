@@ -96,3 +96,56 @@ func test_trial_progress_selects_trial_by_fire() -> void:
 		return
 	assert_bool(_card(page, "TrialTrack").selected).is_true()
 	assert_bool(_card(page, "ClassicTrack").selected).is_false()
+
+
+func _lesson_cards(page: Control) -> Array:
+	var grid := page.find_child("LessonGrid", true, false)
+	return [] if grid == null else grid.find_children("Lesson*", "Button", true, false)
+
+
+func _texts(node: Node) -> Array:
+	var texts: Array = []
+	for label: Label in node.find_children("*", "Label", true, false):
+		if label.is_visible_in_tree() and not label.text.is_empty():
+			texts.append(label.text)
+	return texts
+
+
+## Step 48.7: the right panel lists the selected track's lessons as numbered cards, never by working code
+## (red before: no grid).
+func test_the_selected_track_shows_eleven_numbered_cards_without_working_codes() -> void:
+	var page := await _page(2, 0)
+	if page == null:
+		return
+	var cards := _lesson_cards(page)
+	assert_int(cards.size()).is_equal(11)
+	if cards.size() < 11:
+		return
+	assert_array(_texts(cards[8])).contains(["09", "Spellcasting"])
+	assert_array(_texts(cards[0])).contains(["Done · replay"])
+	var next := cards.filter(func(c: Node) -> bool: return _texts(c).has("Next lesson"))
+	assert_int(next.size()).is_equal(1)
+	assert_array(_texts(next[0])).contains(["03"])
+	var codes := RegEx.create_from_string("[ST]-\\d\\d|S-SPELL|W\\d")
+	for text: String in _texts(page):
+		assert_object(codes.search(text)).override_failure_message("working code in " + text).is_null()
+	var requested: Array = []
+	page.connect("scenario_requested", func(chapter: Dictionary) -> void: requested.append(chapter.id))
+	(cards[4] as Button).pressed.emit()
+	assert_array(requested).is_equal(["S-05"])
+
+
+func test_selecting_the_classic_track_shows_its_lessons() -> void:
+	var page := await _page(2, 1)
+	if page == null:
+		return
+	page.call("select", "ClassicTrack")
+	var cards := _lesson_cards(page)
+	assert_int(cards.size()).is_equal(11)
+	if cards.is_empty():
+		return
+	assert_array(_texts(cards[0])).contains(["01", "Camera & table", "Done · replay"])
+	var requested: Array = []
+	page.connect("tutorial_requested", func(id: String) -> void: requested.append(id))
+	(cards[1] as Button).pressed.emit()
+	assert_array(requested).is_equal([TutorialFlow.ids(TutorialFlow.build_tool_track())[1]])

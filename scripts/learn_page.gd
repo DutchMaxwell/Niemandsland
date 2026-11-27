@@ -7,29 +7,36 @@ extends MenuPage
 signal tutorial_requested(lesson_id: String)
 signal scenario_requested(chapter: Dictionary)
 
+const CARD_H := 150
 var _cards: Dictionary = {}
+var _lessons: Dictionary = {}   # per track: lessons, done, playable, next, its name and how a card launches
+var _grid: VBoxContainer
 
 
 ## `returned`: the page was opened by a return from a lesson (Trial by Fire is selected then).
 func setup(tutorial: TutorialProgress, trial: SpielschuleProgress, returned: bool) -> LearnPage:
 	eyebrow.text = "LEARN TO PLAY"
+	_build_panel()
 	title.text = "Find your starting point."
 	var track := TutorialFlow.build_tool_track()
 	var done: Array = track.map(func(l: Dictionary) -> bool: return tutorial.is_lesson_completed(str(l.id)))
 	_track("ClassicTrack", ["CLASSIC TUTORIAL", "Learn the controls", "Camera, miniatures and tools, on a prepared table."],
 		track, done, track.map(func(_l: Dictionary) -> bool: return true),
-		func(_lesson: Dictionary) -> void: tutorial_requested.emit(""))
+		func(_lesson: Dictionary) -> void: tutorial_requested.emit(""),
+		func(lesson: Dictionary) -> void: tutorial_requested.emit(str(lesson.id)))
 	var chapters := Spielschule.chapters()
 	done = chapters.map(func(c: Dictionary) -> bool: return trial.is_completed(str(c.id)))
 	_track("TrialTrack", ["TRIAL BY FIRE · IN DEVELOPMENT", "Short practice scenarios",
 		"Eleven short lessons — play them in any order, replay any time."], chapters, done,
-		chapters.map(Spielschule.is_available), func(chapter: Dictionary) -> void: scenario_requested.emit(chapter))
+		chapters.map(Spielschule.is_available), func(chapter: Dictionary) -> void: scenario_requested.emit(chapter),
+		func(chapter: Dictionary) -> void: scenario_requested.emit(chapter))
 	select("TrialTrack" if returned or trial.any_completed(Spielschule.ids()) else "ClassicTrack")
 	return self
 
 
 ## One track card; the next lesson is the first that is not done and can be played (`playable`).
-func _track(key: String, words: Array, lessons: Array, done: Array, playable: Array, request: Callable) -> void:
+func _track(key: String, words: Array, lessons: Array, done: Array, playable: Array, request: Callable,
+		launch: Callable) -> void:
 	var card := PanelContainer.new()
 	card.name = key
 	card.draw.connect(_draw_corners.bind(card))
@@ -54,6 +61,7 @@ func _track(key: String, words: Array, lessons: Array, done: Array, playable: Ar
 	for i in lessons.size():
 		if next < 0 and not done[i] and playable[i]:
 			next = i
+	_lessons[key] = [lessons, done, playable, next, words[0].get_slice(" · ", 0), launch]
 	var line := HBoxContainer.new()
 	var tally := _text("%d / %d LESSONS" % [count, lessons.size()], HouseStyle.MENU_FONT_EYEBROW, HouseStyle.mono())
 	tally.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -101,6 +109,72 @@ func select(key: String) -> void:
 		var button := parts[2] as Button
 		button.theme_type_variation = HouseStyle.PRIMARY if on and not button.disabled else HouseStyle.BUTTON
 		(button.get_node("EnterCap") as Control).visible = on and not button.disabled
+	_fill_grid(key)
+
+
+## The right panel's head: the selected track's name, "Pick a lesson", "Everything stays replayable".
+func _build_panel() -> void:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override(&"separation", 12)
+	right.add_child(box)
+	var head := HBoxContainer.new()
+	var names := VBoxContainer.new()
+	names.size_flags_horizontal = SIZE_EXPAND_FILL
+	var track_name := _text("", HouseStyle.MENU_FONT_EYEBROW, HouseStyle.eyebrow_font())
+	track_name.name = "TrackName"
+	track_name.add_theme_color_override(&"font_color", HouseStyle.ACCENT)
+	names.add_child(track_name)
+	names.add_child(_text("Pick a lesson", 22, HouseStyle.font(500)))
+	head.add_child(names)
+	var note := _text("Everything stays replayable", HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
+	note.add_theme_color_override(&"font_color", HouseStyle.MUTED)
+	head.add_child(note)
+	box.add_child(head)
+	_grid = VBoxContainer.new()
+	_grid.name = "LessonGrid"
+	_grid.add_theme_constant_override(&"separation", 12)
+	box.add_child(_grid)
+
+
+## The selected track's lessons, four to a row: position, title, goal and a state
+## line ("Done · replay", or "Next lesson" in gold on the next one); a lesson that cannot be played says so.
+func _fill_grid(key: String) -> void:
+	var data: Array = _lessons[key]
+	(right.find_child("TrackName", true, false) as Label).text = str(data[4])
+	for child: Node in _grid.get_children():
+		_grid.remove_child(child)
+		child.queue_free()
+	var row: HBoxContainer
+	for i in (data[0] as Array).size():
+		if i % 4 == 0:
+			row = HBoxContainer.new()
+			row.add_theme_constant_override(&"separation", 12)
+			_grid.add_child(row)
+		var lesson: Dictionary = data[0][i]
+		var card := Button.new()
+		card.name = "Lesson%02d" % (i + 1)
+		card.custom_minimum_size = Vector2(0, CARD_H)
+		card.size_flags_horizontal = SIZE_EXPAND_FILL
+		card.disabled = not data[2][i]
+		card.pressed.connect(func() -> void: (data[5] as Callable).call(lesson))
+		var words := VBoxContainer.new()
+		words.set_anchors_and_offsets_preset(PRESET_FULL_RECT, PRESET_MODE_MINSIZE, 16)
+		words.mouse_filter = MOUSE_FILTER_IGNORE
+		card.add_child(words)
+		words.add_child(_text("%02d" % (i + 1), 14, HouseStyle.mono()))
+		words.add_child(_text(str(lesson.title), 19, HouseStyle.font(500)))
+		var goal := _text(str(lesson.get("goal", "")), HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
+		goal.autowrap_mode = TextServer.AUTOWRAP_WORD
+		goal.size_flags_vertical = SIZE_EXPAND_FILL
+		words.add_child(goal)
+		var state := "Next lesson" if i == data[3] else ("Done · replay" if data[1][i] else "")
+		state = "Coming soon" if card.disabled else state
+		var state_label := _text(state, HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
+		state_label.add_theme_color_override(&"font_color", HouseStyle.GOLD if i == data[3] else HouseStyle.MUTED)
+		words.add_child(state_label)
+		for label: Label in words.find_children("*", "Label", true, false):
+			label.mouse_filter = MOUSE_FILTER_IGNORE
+		row.add_child(card)
 
 
 ## The selected card's two gold corner brackets (top left, bottom right), as on the menu's Continue card.
