@@ -1023,7 +1023,8 @@ impl NmlCore {
 
     /// Plan step 27-pre P1: the ledges the core plays on for the board of `seed` / `theme` (as
     /// [`boardgen_layout_themed`] names it): `{"tiers": {nx, nz, cell_in, level_in, ladders, stairs}, "solid_cells": [..]}`,
-    /// `boardgen::plain::to_plain`'s, for the table's terrain line. Pure data.
+    /// `boardgen::plain::to_plain`'s, for the table's terrain line; GEN-2: also `cells` (cover classes), `version`, `digest`
+    /// (16 hex) and `problems` (empty = accepted). Pure data.
     #[func]
     fn boardgen_tiers(&self, seed: i64, theme: GString) -> VarDictionary {
         plain::variant_of(&boardcall::tiers_value_themed(seed, &theme.to_string())).try_to::<VarDictionary>().unwrap_or_default()

@@ -37,10 +37,16 @@ pub fn layout_value_themed(seed: i64, theme: &str) -> Value {
 /// Plan step 27-pre P1: the ledges the core plays on for the board of `seed` / `theme` - the `tiers` (per-cell height in
 /// inches, ladders) and the `solid_cells` of `boardgen::plain::to_plain`, the same conversion every selfplay board takes,
 /// for the table to put into the terrain line it hands the core. The same layout as [`layout_value_themed`] draws.
+/// GEN-2: it also names the board - `cells` (`to_plain`'s cover classes in the overlay's grid), `version`
+/// (`GENERATOR_VERSION`), `digest` (16 hex of `board_hash`, what a save and an MP peer compare) and the layout's `problems`
+/// (empty = accepted; an unknown theme adds "unknown theme"), so the table can re-roll a rejected seed.
 pub fn tiers_value_themed(seed: i64, theme: &str) -> Value {
-    let layout = boardgen::generate_themed(seed, Symmetry::Point180, theme_of(theme).unwrap_or_default());
+    let known = theme_of(theme);
+    let layout = boardgen::generate_themed(seed, Symmetry::Point180, known.unwrap_or_default());
     let plain = boardgen::plain::to_plain(&layout);
-    json!({ "tiers": plain.tiers, "solid_cells": plain.solid_cells })
+    let problems: Vec<&str> = layout.problems().into_iter().chain(known.is_none().then_some("unknown theme")).collect();
+    json!({ "tiers": plain.tiers, "solid_cells": plain.solid_cells, "cells": plain.cells,
+            "version": boardgen::plain::GENERATOR_VERSION, "digest": format!("{:016x}", boardgen::plain::board_hash(&plain)), "problems": problems })
 }
 
 #[cfg(test)]
@@ -67,6 +73,24 @@ mod tests {
             }
             assert!(heights.iter().any(|h| h.as_f64().unwrap() > 0.0), "a board with ledges");
         }
+    }
+
+    /// GEN-2: the binding names the board - its `cells` (cover classes in the overlay's grid), the generator `version`,
+    /// the `digest` (16 hex of `board_hash`) a save and an MP peer compare, and the layout's `problems` for the re-roll.
+    #[test]
+    fn the_binding_names_the_board() {
+        for (seed, theme) in [(42, ""), (42, "ruintown"), (7, "deepworks")] {
+            let v = tiers_value_themed(seed, theme);
+            let layout = boardgen::generate_themed(seed, Symmetry::Point180, theme_of(theme).unwrap());
+            let plain = boardgen::plain::to_plain(&layout);
+            assert_eq!(v["cells"], serde_json::to_value(&plain.cells).unwrap(), "seed {seed} {theme}");
+            assert_eq!(v["version"], json!(boardgen::plain::GENERATOR_VERSION));
+            assert_eq!(v["digest"], json!(format!("{:016x}", boardgen::plain::board_hash(&plain))));
+            assert_eq!(v["problems"], layout_value_themed(seed, theme)["problems"]);
+        }
+        assert_eq!(tiers_value_themed(42, "")["digest"], json!("cbcd64fada596527"), "PINNED_SEED_42 of plain.rs");
+        assert_eq!(tiers_value_themed(42, "ruintown")["digest"], json!("acda780062931af3"), "PINNED_TOWN_42 of plain.rs");
+        assert_eq!(tiers_value_themed(42, "castle")["problems"], json!(["unknown theme"]));
     }
 
     #[test]
