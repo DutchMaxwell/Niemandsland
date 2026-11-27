@@ -15,6 +15,8 @@ const ROW_H := 78
 const ROW_CONTROL_W := 470
 const ROW_NAME_PX := 19
 const ROW_FRAME_W := 300   # the table frame's dropdown
+const ROW_DROPDOWN_H := 44   # a dropdown in a row (sheet 05 .dd)
+const ROW_SEGMENT_H := 40    # the Quality segments, one joined group (sheet 05 .seg)
 ## The rail's page icons: own drawings in the menu rows' style (24 x 24 view box, white strokes, tinted by the button).
 const PAGE_ICON_SVG := "<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='#fff' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'>%s</svg>"
 const PAGE_ICONS := {
@@ -693,6 +695,10 @@ func _build_graphics_rows() -> void:
 	for i in frame.item_count:
 		frame.set_item_text(i, items[i])
 	frame.custom_minimum_size.x = ROW_FRAME_W
+	_quality_row.add_theme_constant_override(&"separation", 0)   # one joined group of five
+	_quality_row.size_flags_horizontal = Control.SIZE_SHRINK_END
+	for segment: Node in _quality_row.get_children():
+		(segment as Control).custom_minimum_size.y = ROW_SEGMENT_H
 	var first := page.get_child(0)
 	if first is Label and (first as Label).text == "Quality":   # the row names it now
 		_drop_help_line(first)
@@ -857,6 +863,8 @@ func _as_row(control: Control, row_name: String, help: String) -> Control:
 		(control as Button).text = ""
 	_drop_help_line(control)
 	control.set_meta("help_line", true)
+	if control is OptionButton:
+		control.custom_minimum_size.y = ROW_DROPDOWN_H
 	control.size_flags_horizontal = Control.SIZE_FILL if control is HBoxContainer else Control.SIZE_SHRINK_END
 	control.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	holder.add_child(control)
