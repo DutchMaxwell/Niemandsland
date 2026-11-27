@@ -54,7 +54,7 @@ func test_the_host_gets_the_invite_card_once_per_code_and_the_chip_reopens_it() 
 	_main.internet_lobby.room_code_ready.emit("ABC123")   # a relay reconnect re-announces the same code
 	await _runner.simulate_frames(2)
 	assert_bool(card.visible).override_failure_message("the same code raised the card again").is_false()
-	_main._top_bar.link_pressed.emit()
+	_main.find_child("TopBar", true, false).link_pressed.emit()
 	await _runner.simulate_frames(2)
 	assert_bool(card.visible).override_failure_message("the ONLINE chip did not reopen it").is_true()
 
@@ -68,7 +68,7 @@ func test_a_guest_gets_the_card_only_from_the_chip() -> void:
 	await _runner.simulate_frames(2)
 	var card := _invite()
 	assert_bool(card != null and card.visible).override_failure_message("a guest got the card by itself").is_false()
-	_main._top_bar.link_pressed.emit()
+	_main.find_child("TopBar", true, false).link_pressed.emit()
 	await _runner.simulate_frames(2)
 	card = _invite()
 	assert_bool(card != null and card.visible).override_failure_message("the chip did not open it").is_true()
