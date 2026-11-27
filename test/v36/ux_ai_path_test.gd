@@ -1,7 +1,6 @@
 extends GdUnitTestSuite
-## UX-AI-PATH (0.3.15): NACHTMAHR's opponent lists come from their own rules-3.6 CDN folder
-## (ai_lists_v36/) and user cache (user://ai_lists_cache_v36) — 0.3.14 keeps ai_lists/ and
-## user://ai_lists_cache, and a cached 3.5 list is never read by 3.6. The AI Opponent dialog offers only
+## UX-AI-PATH (0.3.15): the table loads NACHTMAHR's lists through AiLists from the rules-3.6 CDN folder
+## (ai_lists_v36/; the sources and caches themselves are test/ai_lists_test.gd). The AI Opponent dialog offers only
 ## the lists of the system the human army plays (an entry without "system" counts as "gf"); with no
 ## human army it offers all, suffixed " (GF)" / " (AoF)" when the manifest mixes both.
 ## The CDN fetch is a recorder stub: no network. Probe files are removed again after each test.
@@ -17,21 +16,23 @@ const MIXED := {
 }
 
 
-## main.gd with the CDN fetch, the local read and the toast stubbed: records every requested CDN path.
+## main.gd with the toast stubbed; its AiLists is a recorder of every requested CDN path (no bundle, no cache).
 class Probe extends "res://scripts/main.gd":
-	var fetched: Array = []
 	var toasts: Array = []
-	var stub_local := true
-
-	func _fetch_cdn_text(rel_path: String) -> String:
-		fetched.append(rel_path)
-		return ""
-
-	func _ai_lists_local_text(file: String) -> String:
-		return "" if stub_local else super(file)
 
 	func _solo_show_toast(text: String, _auto_hide_s: float = 0.0, _explain: bool = false) -> void:
 		toasts.append(text)
+
+
+class Lists extends AiLists:
+	var fetched: Array = []
+
+	func fetch_text(rel_path: String) -> String:
+		fetched.append(rel_path)
+		return ""
+
+	func local_text(_file: String) -> String:
+		return ""
 
 
 var _root_before: Array = []
@@ -47,32 +48,13 @@ func after_test() -> void:
 			DirAccess.remove_absolute("%s/%s" % [d, PROBE_FILE])
 
 
-func _write(dir: String, text: String) -> void:
-	DirAccess.make_dir_recursive_absolute(dir)
-	var f := FileAccess.open("%s/%s" % [dir, PROBE_FILE], FileAccess.WRITE)
-	f.store_string(text)
-	f.close()
-
-
-func test_the_v36_names_differ_from_the_0_3_14_names() -> void:
-	var probe: Node = auto_free(Probe.new())
-	assert_str(probe.AI_LISTS_CDN_PATH).is_equal("ai_lists_v36")
-	assert_str(probe.AI_LISTS_CACHE_DIR).is_equal(NEW_CACHE)
-	assert_str(probe.AI_LISTS_CDN_PATH).is_not_equal("ai_lists")
-	assert_str(probe.AI_LISTS_CACHE_DIR).is_not_equal(OLD_CACHE)
-
-
 func test_a_list_is_fetched_from_the_v36_folder() -> void:
 	var probe: Node = auto_free(Probe.new())
+	var lists: Lists = auto_free(Lists.new())
+	probe._ai_lists = lists
 	await probe._load_ai_opponent_list("orc_tribes_1000.json", 2)
-	assert_array(probe.fetched).is_equal(["ai_lists_v36/orc_tribes_1000.json"])
+	assert_array(lists.fetched).is_equal(["ai_lists_v36/orc_tribes_1000.json"])
 	assert_int(probe.toasts.size()).is_equal(1)
-
-
-func test_the_manifest_is_fetched_from_the_v36_folder() -> void:
-	var probe: Node = auto_free(Probe.new())
-	await probe._load_ai_list_manifest()
-	assert_array(probe.fetched).is_equal(["ai_lists_v36/_manifest.json"])
 
 
 ## The delivery probe's default is the v36 manifest the maintainer uploads (no --path needed).
@@ -86,22 +68,6 @@ func test_the_cdn_probe_default_follows_the_v36_folder() -> void:
 		"cdn_lists_probe has no v36 default path").is_true()
 	if has_default:
 		assert_str(str(probe_tool.call("_default_path"))).is_equal("ai_lists_v36/_manifest.json")
-
-
-func test_a_cache_write_lands_in_the_v36_dir_only() -> void:
-	var probe: Node = auto_free(Probe.new())
-	probe._ai_lists_cache_write(PROBE_FILE, "v36")
-	assert_str(FileAccess.get_file_as_string("%s/%s" % [NEW_CACHE, PROBE_FILE])).is_equal("v36")
-	assert_bool(FileAccess.file_exists("%s/%s" % [OLD_CACHE, PROBE_FILE])).is_false()
-
-
-func test_a_cached_3_5_list_is_never_read() -> void:
-	var probe: Node = auto_free(Probe.new())
-	probe.stub_local = false
-	_write(OLD_CACHE, "3.5 list")
-	assert_str(probe._ai_lists_local_text(PROBE_FILE)).is_equal("")
-	_write(NEW_CACHE, "3.6 list")
-	assert_str(probe._ai_lists_local_text(PROBE_FILE)).is_equal("3.6 list")
 
 
 ## The AI Opponent dialog over `manifest` with the human slot holding an army of `system` ("" = none):
