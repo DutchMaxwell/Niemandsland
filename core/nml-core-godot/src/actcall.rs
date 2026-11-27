@@ -136,12 +136,6 @@ fn input_of(v: &Variant) -> Option<Input> {
         "cast" => Input::Cast(cast_of(&d)?),
         // meleefix: `{"t": "consolidate", "unit", "planner", "task", "marker", "lane", "spread", "runners"}`; `unit` is required.
         "consolidate" => Input::Consolidate(consolidate_of(&d)?),
-        // The skirmish Pushing rule: `{"t": "push", "target", "model", "to": Vector3}`, every field required.
-        "push" => Input::Push(nml_core::activation::PushInput {
-            target: field("target")?.try_to::<GString>().ok()?.to_string(),
-            model: plain::int(&field("model")?).max(0) as usize,
-            to: field("to")?.try_to::<Vector3>().ok().map(|p| [p.x as f64, p.y as f64, p.z as f64])?,
-        }),
         // D-PAR3 14a: `{"t": "paid", "start", "dangerous", "beats"}`, each absent = false.
         "paid" => {
             let on = |k: &str| field(k).is_some_and(|v| plain::flag(&v));
