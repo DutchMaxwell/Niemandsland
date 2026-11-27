@@ -669,6 +669,8 @@ const INTERFERENCE: &str = "interference:";
 const SPOT_MARKERS: &str = "spot_markers:";
 /// E-24: the ids of the defender's strike-back choice (`strike_back:<charger>:<defender>`, options `strike` / `hold`) start with this.
 const STRIKE_BACK: &str = "strike_back:";
+/// Step 29b: the ids of the defender's Blast split choice (`blast_split:<shooter>:<target>`) start with this.
+const BLAST_SPLIT: &str = "blast_split:";
 /// Step 22a (OD-2: a player's own pick is asked of the player): the ids of the Versatile mode choice
 /// (`versatile_mode:<activating unit>`, options `ap` / `hit`) start with this. It rides the strike-back list (a two-way choice).
 const VERSATILE_MODE: &str = "versatile_mode:";
@@ -728,6 +730,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let mut wound: Vec<(usize, String, Option<Vec<usize>>)> = Vec::new();
     let mut interference: Vec<(usize, String, Option<i64>)> = Vec::new();
     let mut strike_back: Vec<(usize, String, Option<bool>)> = Vec::new();
+    let mut blast: Vec<(usize, String, Option<Vec<String>>)> = Vec::new();
     for (i, x) in t.iter().enumerate() {
         let Input::Choice { id, option } = x else { continue };
         if id.starts_with(TAKEDOWN_MODEL) {
@@ -760,6 +763,9 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             };
             strike_back.retain(|w| w.1 != *id);
             strike_back.push((i, id.clone(), answer));
+        } else if id.starts_with(BLAST_SPLIT) {
+            blast.retain(|w| w.1 != *id);
+            blast.push((i, id.clone(), (!option.is_empty()).then(|| option.split(',').map(String::from).collect())));
         } else if id.starts_with(VERSATILE_MODE) {
             if *id != format!("{VERSATILE_MODE}{unit}") {
                 return ActStep::Refused { index: i, reason: format!("the open choice is {VERSATILE_MODE}{unit}, not {id}") };
@@ -775,7 +781,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         } else {
             return ActStep::Refused {
                 index: i,
-                reason: format!("unknown choice kind {id} (expected {TAKEDOWN_MODEL}, {WOUND_ALLOC}, {INTERFERENCE}, {SPOT_MARKERS}, {STRIKE_BACK} or {VERSATILE_MODE})"),
+                reason: format!("unknown choice kind {id} (expected {TAKEDOWN_MODEL}, {WOUND_ALLOC}, {INTERFERENCE}, {SPOT_MARKERS}, {STRIKE_BACK}, {BLAST_SPLIT} or {VERSATILE_MODE})"),
             };
         }
     }
@@ -821,6 +827,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let reached_wound = std::cell::RefCell::new(Vec::new());
     let reached_int = std::cell::RefCell::new(Vec::new());
     let reached_back = std::cell::RefCell::new(Vec::new());
+    let reached_blast = std::cell::RefCell::new(Vec::new());
     let cast_refused = std::cell::RefCell::new(None);
     let run = |statics: &[UnitStatic]| {
         let resolve = |tray: &mut Tray| {
@@ -838,6 +845,9 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             for (_, id, answer) in &strike_back {
                 tray.offer_strike_back(id.clone(), *answer);
             }
+            for (_, id, answer) in &blast {
+                tray.offer_blast_split(id.clone(), answer.clone());
+            }
             tray.offer_casts(casts.clone());
             tray.offer_push(push.clone());
             tray.offer_consolidation(consolidate.clone());
@@ -845,6 +855,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             *reached_wound.borrow_mut() = tray.feed().map(|f| f.wound_choices.clone()).unwrap_or_default();
             *reached_int.borrow_mut() = tray.feed().map(|f| f.interference_choices.clone()).unwrap_or_default();
             *reached_back.borrow_mut() = tray.feed().map(|f| f.strike_back_choices.clone()).unwrap_or_default();
+            *reached_blast.borrow_mut() = tray.feed().map(|f| f.blast_choices.clone()).unwrap_or_default();
             *cast_refused.borrow_mut() = tray.feed().and_then(|f| f.cast_refused.clone());
             out
         };
@@ -859,6 +870,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
     let wound_choices = reached_wound.take();
     let int_choices = reached_int.take();
     let back_choices = reached_back.take();
+    let blast_choices = reached_blast.take();
     enum Pending {
         Refuse(usize, String),
         Ask { id: String, options: Vec<String>, owner: String, lines: Vec<LogLine>, landings: Vec<Landing> },
@@ -896,6 +908,16 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         let Some((at, owner)) = &c.reached else { continue };
         let options = if c.id.starts_with(VERSATILE_MODE) { ["ap", "hit"] } else { ["strike", "hold"] }.map(String::from).to_vec();
         events.push((*at, c.order, Pending::Ask { id: c.id.clone(), options, owner: owner.clone(), lines: c.lines.clone(), landings: c.landings.clone() }));
+    }
+    for c in &blast_choices {
+        let Some((at, options, owner)) = &c.reached else { continue };
+        let index = blast.iter().find(|w| w.1 == c.id).map_or(0, |w| w.0);
+        if c.bad {
+            let got = c.answer.as_ref().map(|a| a.join(",")).unwrap_or_default();
+            events.push((*at, c.order, Pending::Refuse(index, format!("{got} is not an option of {} (options: {})", c.id, options.join(" | ")))));
+        } else if c.answer.is_none() {
+            events.push((*at, c.order, Pending::Ask { id: c.id.clone(), options: options.clone(), owner: owner.clone(), lines: c.lines.clone(), landings: c.landings.clone() }));
+        }
     }
     events.sort_by_key(|(at, order, _)| (*at, *order));
     for (at, _, ev) in events {
@@ -4444,6 +4466,10 @@ mod tests {
 #[cfg(test)]
 #[path = "tests/activation_skirmish_vertical.rs"]
 mod skirmish_vertical_tests;
+
+#[cfg(test)]
+#[path = "tests/activation_blast_choice.rs"]
+mod blast_choice_tests;
 
 #[cfg(test)]
 mod ruin_ledge_tests {
