@@ -1,16 +1,24 @@
 class_name SetupLayoutStep
 extends Control
 ## Step 04 of the table setup, "Lay out the table" (the setup's second state): steps 01-03 folded into rows with
-## their values and "Change", and the heading of step 04.
+## their values and "Change", the heading, and the four ways as cards bound to a SetupLayout.
 
 signal change_requested(step: int)
 
+const WAYS := [
+	["empty", "Empty table", "Place terrain yourself once you are at the table.", &"table"],
+	["generated", "Auto-Generate Layout", "A balanced layout for this table size. Generate again until you like it.", &"table"],
+	["theme", "Ruined Borderland", "", &"table"],
+	["file", "Load a layout", "Open a layout file you saved in the layout editor.", &"folder"]]
 const STEPS := ["Game system", "Biome", "Table size"]
 const TICK := "<path d='M5 12.5l4.5 4.5L19 7.5'/>"
 const MenuView = preload("res://scripts/startup_menu_view.gd")
 
 var left: VBoxContainer
 var _layout: SetupLayout
+var _cards: Dictionary = {}
+var _note: Label
+var _file: FileDialog
 
 
 func setup(layout: SetupLayout, values: Array) -> void:
@@ -56,6 +64,75 @@ func setup(layout: SetupLayout, values: Array) -> void:
 	head.add_child(heading)
 	head.add_child(_text("Terrain can still be moved at the table.", 15, HouseStyle.font(400), HouseStyle.MUTED))
 	left.add_child(head)
+	var ways := HBoxContainer.new()
+	ways.add_theme_constant_override(&"separation", 12)
+	left.add_child(ways)
+	var theme_info := TableTheme.load_theme(SetupLayout.THEME_ID)
+	for way: Array in WAYS:
+		var caption: String = way[2] if way[0] != "theme" else "A ready-made table: %s, %d pieces." % [
+			theme_info.mood.to_lower(), theme_info.pieces.size()]
+		ways.add_child(_way_card(way[0], way[1], caption, way[3]))
+	_note = _text("", 15, HouseStyle.font(400), HouseStyle.WARN)
+	left.add_child(_note)
+	_file = FileDialog.new()
+	_file.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	_file.access = FileDialog.ACCESS_FILESYSTEM
+	_file.filters = PackedStringArray(["*.json ; Layout files"])
+	_file.title = "Load Terrain Layout"
+	_file.file_selected.connect(func(path: String) -> void: _note.text = _layout.load_file(path))
+	add_child(_file)
+	_layout.changed.connect(_refresh)
+	_refresh()
+
+
+func _way_card(way: String, title: String, caption: String, icon: StringName) -> Button:
+	var card := Button.new()
+	card.name = "Way_" + way
+	card.custom_minimum_size = Vector2(0, 196)
+	card.size_flags_horizontal = SIZE_EXPAND_FILL
+	card.focus_mode = FOCUS_ALL
+	card.pressed.connect(func() -> void:
+		if way == "file":
+			_file.popup_centered_ratio(0.6)
+		else:
+			_layout.choose(way))
+	var words := VBoxContainer.new()
+	words.set_anchors_and_offsets_preset(PRESET_FULL_RECT, PRESET_MODE_MINSIZE, 18)
+	words.mouse_filter = MOUSE_FILTER_IGNORE
+	var mark := TextureRect.new()
+	mark.texture = MenuView._icon(icon)
+	mark.custom_minimum_size = Vector2(28, 28)
+	mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
+	mark.modulate = HouseStyle.ACCENT
+	words.add_child(mark)
+	words.add_child(_text(title, 20, HouseStyle.font(500), HouseStyle.INK))
+	var line := _text(caption, 15, HouseStyle.font(400), HouseStyle.MUTED)
+	line.autowrap_mode = TextServer.AUTOWRAP_WORD
+	words.add_child(line)
+	if way == "theme":
+		words.add_child(_text("NEEDS 6 × 4 FT", 13, HouseStyle.mono(), HouseStyle.MUTED))
+	card.add_child(words)
+	_cards[way] = card
+	return card
+
+
+## The chosen way has the lighter fill and the 2 px gold rim; the ready-made table is off off 6 x 4 ft.
+func _refresh() -> void:
+	_note.text = _layout.note if not _layout.note.is_empty() else _note.text
+	for way: String in _cards:
+		var card: Button = _cards[way]
+		var on := way == _layout.way
+		card.set_meta("chosen", on)
+		card.disabled = way == "theme" and not TableTheme.load_theme(SetupLayout.THEME_ID).fits(_layout.editor.table_size_feet)
+		if on:
+			var rim := HouseStyle.menu_theme().get_stylebox(&"normal", &"Button").duplicate() as StyleBoxFlat
+			rim.bg_color = HouseStyle.ROW_HOVER
+			rim.border_color = HouseStyle.GOLD
+			rim.set_border_width_all(2)
+			card.add_theme_stylebox_override(&"normal", rim)
+		else:
+			card.remove_theme_stylebox_override(&"normal")
 
 
 func _text(text: String, font_size: int, font: Font, colour: Color) -> Label:
