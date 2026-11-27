@@ -8,6 +8,9 @@ signal load_requested(path: String, button: Button)
 signal closed
 
 const ROW_H := 98
+const ROW_H_SMALL := 78   # below 800 px of window height (three rows show at 720)
+const PICTURE := Vector2(150, 78)
+const PICTURE_SMALL := Vector2(120, 62)
 const LOAD_W := 130
 const FONT_NAME := 22
 const MenuView = preload("res://scripts/startup_menu_view.gd")
@@ -19,6 +22,9 @@ var empty_note: VBoxContainer
 var _facts: Array[Label] = []
 var _saves: Array[Dictionary] = []
 var _next := 0
+var _small := false
+var _pictures: Array[TextureRect] = []
+var _loads: Array[Button] = []
 
 
 ## Builds the sheet over `host` for the saves of `dir` (default: the save folder).
@@ -29,6 +35,7 @@ func open(host: Node, dir := "") -> void:
 	root.theme = HouseStyle.menu_theme()
 	add_child(root)
 	var view := host.get_viewport().get_visible_rect().size if host.is_inside_tree() else Vector2(1920, 1080)
+	_small = view.y < 800
 	(parts["sheet"] as Control).custom_minimum_size = Vector2(minf(1200, view.x - 128), minf(780, view.y - 120))
 	(parts["close"] as Button).pressed.connect(close)
 	var body := parts["body"] as VBoxContainer
@@ -36,6 +43,7 @@ func open(host: Node, dir := "") -> void:
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = SIZE_EXPAND_FILL
+	scroll.follow_focus = true
 	body.add_child(scroll)
 	rows = VBoxContainer.new()
 	rows.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -57,6 +65,9 @@ func open(host: Node, dir := "") -> void:
 	body.add_child(_footer(saves.size()))
 	_saves = saves
 	host.add_child(self)
+	_chain()
+	if not _loads.is_empty():
+		_loads[0].grab_focus.call_deferred()
 
 
 ## "<n> SAVES IN YOUR SAVES FOLDER", then "Open saves folder" and "Browse files…" (any folder, any .nml).
@@ -68,6 +79,7 @@ func _footer(count: int) -> HBoxContainer:
 	count_label.size_flags_horizontal = SIZE_EXPAND_FILL
 	footer.add_child(count_label)
 	var folder := HouseStyle.button("Open saves folder", HouseStyle.BUTTON, HouseStyle.MENU_H_ACTION)
+	folder.name = "OpenFolder"
 	folder.pressed.connect(func() -> void: OS.shell_show_in_file_manager(SaveManager.get_default_save_dir()))
 	browse_button = HouseStyle.button("Browse files…", HouseStyle.BUTTON, HouseStyle.MENU_H_ACTION)
 	browse_button.pressed.connect(_open_file_dialog)
@@ -114,15 +126,23 @@ func _input(event: InputEvent) -> void:
 
 func _row(info: Dictionary) -> PanelContainer:
 	var row := HouseStyle.card()
-	row.custom_minimum_size.y = ROW_H
+	row.custom_minimum_size.y = ROW_H_SMALL if _small else ROW_H
 	var line := HBoxContainer.new()
 	line.add_theme_constant_override(&"separation", HouseStyle.MENU_PAD_PANEL)
 	row.add_child(line)
+	var picture := TextureRect.new()   # the save's biome picture, shown once its facts are read
+	picture.custom_minimum_size = PICTURE_SMALL if _small else PICTURE
+	picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	picture.size_flags_vertical = SIZE_SHRINK_CENTER
+	picture.visible = false
+	line.add_child(picture)
+	_pictures.append(picture)
 	var words := VBoxContainer.new()
 	words.size_flags_horizontal = SIZE_EXPAND_FILL
 	words.alignment = BoxContainer.ALIGNMENT_CENTER
 	line.add_child(words)
-	var title := _text(str(info.name), HouseStyle.BODY, FONT_NAME, HouseStyle.font(500))
+	var title := _text(str(info.name), HouseStyle.BODY, 19 if _small else FONT_NAME, HouseStyle.font(500))
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title.clip_text = true
 	words.add_child(title)
@@ -137,8 +157,55 @@ func _row(info: Dictionary) -> PanelContainer:
 	button.size_flags_horizontal = SIZE_SHRINK_END
 	button.size_flags_vertical = SIZE_SHRINK_CENTER
 	button.pressed.connect(func() -> void: load_requested.emit(str(info.path), button))
+	var cap := HouseStyle.key_cap_on_gold("Enter")
+	cap.name = "EnterCap"
+	cap.mouse_filter = MOUSE_FILTER_IGNORE
+	cap.set_anchors_preset(PRESET_CENTER_RIGHT)
+	cap.grow_horizontal = GROW_DIRECTION_BEGIN
+	cap.grow_vertical = GROW_DIRECTION_BOTH
+	cap.offset_left = -10
+	cap.offset_right = -10
+	cap.visible = false
+	button.add_child(cap)
 	line.add_child(button)
+	_loads.append(button)
+	button.focus_entered.connect(_select.bind(row))
+	row.mouse_entered.connect(button.grab_focus)
 	return row
+
+
+## The selected row (the one with focus): accent fill at 10 %, a 1 px gold rim, its Load gold with an Enter cap.
+func _select(selected: PanelContainer) -> void:
+	for i in rows.get_child_count():
+		var row := rows.get_child(i) as PanelContainer
+		var on := row == selected
+		var box := StyleBoxFlat.new()
+		box.bg_color = HouseStyle.ROW_HOVER
+		box.border_color = HouseStyle.GOLD
+		box.set_border_width_all(HouseStyle.BORDER)
+		box.set_corner_radius_all(HouseStyle.RADIUS_CARD)
+		box.set_content_margin_all(HouseStyle.PAD_CARD_X)
+		if on:
+			row.add_theme_stylebox_override(&"panel", box)
+		else:
+			row.remove_theme_stylebox_override(&"panel")
+		_loads[i].theme_type_variation = HouseStyle.PRIMARY if on else HouseStyle.BUTTON
+		_loads[i].alignment = HORIZONTAL_ALIGNMENT_LEFT if on else HORIZONTAL_ALIGNMENT_CENTER
+		(_loads[i].get_node("EnterCap") as Control).visible = on
+
+
+## Up / Down walk the rows' Load buttons; Tab goes on to the footer, the close box and back to the first row.
+func _chain() -> void:
+	var stops: Array[Control] = []
+	stops.append_array(_loads)
+	stops.append_array([find_child("OpenFolder", true, false), browse_button, find_child("CloseButton", true, false)])
+	for i in stops.size():
+		stops[i].focus_mode = FOCUS_ALL
+		stops[i].focus_next = stops[i].get_path_to(stops[(i + 1) % stops.size()])
+		stops[i].focus_previous = stops[i].get_path_to(stops[i - 1])
+	for i in _loads.size():
+		_loads[i].focus_neighbor_top = _loads[i].get_path_to(_loads[maxi(i - 1, 0)])
+		_loads[i].focus_neighbor_bottom = _loads[i].get_path_to(_loads[mini(i + 1, _loads.size() - 1)])
 
 
 ## One save per frame: its facts as one upper-case mono line ("GRIMDARK FUTURE · ROUND 1 · GRASSLAND · 6 x 4 FT").
@@ -146,7 +213,12 @@ func _process(_delta: float) -> void:
 	if _next >= _saves.size():
 		set_process(false)
 		return
-	_facts[_next].text = " · ".join(MenuView.facts_lines(SaveManager.save_facts(str(_saves[_next].path))))
+	var facts := SaveManager.save_facts(str(_saves[_next].path))
+	_facts[_next].text = " · ".join(MenuView.facts_lines(facts))
+	var picture := TableSizeDialog.preview_path(str(facts.get("biome", "")))
+	if not picture.is_empty() and ResourceLoader.exists(picture):
+		_pictures[_next].texture = load(picture)
+		_pictures[_next].visible = true
 	_next += 1
 
 
