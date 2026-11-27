@@ -255,7 +255,6 @@ func _ready() -> void:
 	add_child(status)
 	_build_routes()
 	_build_news_card()
-	buttons.OnlineBtn.pressed.connect(func() -> void: show_route("online"))
 	buttons.HelpBtn.pressed.connect(func() -> void: show_route("help"))
 	resized.connect(_layout)
 	_layout()

@@ -1,10 +1,9 @@
 extends GdUnitTestSuite
-## E2E — the online dialogs built by NetDialog, rows 24 and 50 of the UI inventory (uimenus step 8): Create a room
-## / Join with a code (menu) and Public tables (NET-03). Every field, checkbox, button, header and status line
+## E2E — the online dialogs built by NetDialog, rows 24 and 50 of the UI inventory (uimenus step 8): Join with a
+## code (menu) and Public tables (NET-03); Create a room became the online hub (test/online_hub_test.gd). Every field, checkbox, button, header and status line
 ## of today's dialogs, and what each does. The probe swaps the scene change for a flag and the relay request of
 ## the room browser for a status line: no test here touches the network. NetDialog.build is also checked
 ## directly, since the in-game Host / Join dialogs (main.gd) use the same builder.
-## test_inventory_check_names_a_removed_control proves the presence check can fail.
 
 class MenuProbe extends "res://scripts/startup_menu.gd":
 	var entered_game := false
@@ -48,31 +47,6 @@ func _has_label(d: Node, prefix: String) -> bool:
 		if t.begins_with(prefix):
 			return true
 	return false
-
-
-func _host_missing(d: AcceptDialog) -> Array:
-	var missing: Array = []
-	for p: String in ["Create a room", "Your name:", "Relay server:", "Your invitation code appears"]:
-		if not _has_label(d, p) and not _texts(d, "Label").any(func(t: String) -> bool: return t.to_upper().contains(p.to_upper())):
-			missing.append("label: %s" % p)
-	if not _texts(d, "CheckBox").has("List room publicly"):
-		missing.append("checkbox: List room publicly")
-	if d.ok_button_text != "Prepare table":
-		missing.append("button: Prepare table")
-	return missing
-
-
-func test_create_a_room_dialog_has_every_field_and_reaches_the_table_chooser() -> void:
-	_menu._on_host_online_pressed()
-	await _frames(2)
-	var d: AcceptDialog = _menu._host_popup
-	assert_array(_host_missing(d)).override_failure_message("host dialog controls missing: %s" % str(_host_missing(d))).is_empty()
-	assert_int(_menu._host_name_input.max_length).is_equal(PlayerIdentity.MAX_NAME_LEN)
-	assert_str(_menu._relay_url_input.text).is_equal(InternetLobby.DEFAULT_RELAY_URL)
-	assert_bool(_menu._host_public_check.button_pressed).is_false()
-	d.confirmed.emit()
-	await _frames(2)
-	assert_object(_menu._table_setup).override_failure_message("Prepare table did not open the table chooser").is_not_null()
 
 
 func test_join_dialog_has_every_field_and_keeps_an_unusable_code_open() -> void:
@@ -134,11 +108,10 @@ func test_net_dialog_builder_gives_the_in_game_dialogs_header_and_content() -> v
 
 
 func test_all_three_dialogs_wear_the_house_chrome() -> void:
-	_menu._on_host_online_pressed()
 	_menu._on_join_online_pressed()
 	_menu._on_browse_online_pressed()
 	await _frames(2)
-	for d: AcceptDialog in [_menu._host_popup, _menu._join_popup, _menu._browse_popup]:
+	for d: AcceptDialog in [_menu._join_popup, _menu._browse_popup]:
 		assert_object(d.theme).override_failure_message("%s is not in the house theme" % d.title).is_same(HouseStyle.menu_theme())
 		assert_str(String(d.get_ok_button().theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
 		var head := NetDialog.content(d).get_child(0) as HBoxContainer
@@ -147,19 +120,6 @@ func test_all_three_dialogs_wear_the_house_chrome() -> void:
 	var src := FileAccess.get_file_as_string("res://scripts/startup_menu.gd")
 	assert_str(src).not_contains("HudTokens.TEXT_MUTED")
 	assert_str(src).not_contains("HudTokens.DANGER")
-
-
-func test_inventory_check_names_a_removed_control() -> void:
-	_menu._on_host_online_pressed()
-	await _frames(2)
-	var d: AcceptDialog = _menu._host_popup
-	assert_array(_host_missing(d)).is_empty()
-	var check: CheckBox = _menu._host_public_check
-	var parent := check.get_parent()
-	parent.remove_child(check)
-	var missing := _host_missing(d)
-	parent.add_child(check)
-	assert_array(missing).contains_exactly(["checkbox: List room publicly"])
 
 
 ## The code field reads as a code: upper case as you type, the hyphen after the third character, mono 30 px.
@@ -192,11 +152,10 @@ func _relay_toggle(d: Node) -> Button:
 ## The relay address is folded away in all three online windows and opens on its row; its default text and
 ## the way it is read are unchanged. RED on main: the field stood open under its label.
 func test_relay_address_is_folded_away_in_the_three_online_windows() -> void:
-	_menu._on_host_online_pressed()
 	_menu._on_join_online_pressed()
 	_menu._on_browse_online_pressed()
 	await _frames(2)
-	var rows := [[_menu._host_popup, _menu._relay_url_input], [_menu._join_popup, _menu._join_relay_url_input],
+	var rows := [[_menu._join_popup, _menu._join_relay_url_input],
 		[_menu._browse_popup, _menu._browse_url_input]]
 	for row: Array in rows:
 		var dialog: AcceptDialog = row[0]
@@ -218,11 +177,10 @@ func test_relay_address_is_folded_away_in_the_three_online_windows() -> void:
 ## the header and a scrim that dims the menu while one is open (red on main: "NET-01..03" labels, no scrim, no close box).
 func test_the_online_windows_show_no_working_codes_and_dim_the_menu() -> void:
 	var regex := RegEx.create_from_string("NET-\\d+")
-	_menu._on_host_online_pressed()
 	_menu._on_join_online_pressed()
 	_menu._on_browse_online_pressed()
 	await _frames(2)
-	for d: AcceptDialog in [_menu._host_popup, _menu._join_popup, _menu._browse_popup]:
+	for d: AcceptDialog in [_menu._join_popup, _menu._browse_popup]:
 		for text in _texts(d, "Label") + _texts(d, "Button"):
 			assert_bool(regex.search(text) != null).override_failure_message("%s shows %s" % [d.title, text]).is_false()
 		assert_object(d.find_child("CloseButton", true, false)).override_failure_message("%s has no close box" % d.title).is_not_null()

@@ -145,12 +145,13 @@ func _new_table() -> bool:
 func _online_table(host: bool) -> bool:   # Create a room / Join with a code, on the relay this run uses
 	var code := "" if host else await _peek("code", 300.0)
 	await _press("Close", 15.0, false, false)
-	if not (await _press("OnlineBtn", 60.0) and await _press("HostOnlineBtn" if host else "JoinOnlineBtn")):
+	if not await _press("OnlineBtn", 60.0):   # the online hub: one name, Create a room, Join with a code
 		return false
 	_type("Player name", o.role.capitalize())
 	_type("ABC-123", code)
+	await _press("Relay server · ", 10.0, true)   # unfolds the one relay field
 	_type("wss://", o.relay)
-	if not await _press("Prepare table" if host else "Join"):
+	if not await _press("Prepare table" if host else "JoinWithCode"):
 		return false
 	return (not host or await _press("Create table", 30.0, true)) and await _at_table()
 

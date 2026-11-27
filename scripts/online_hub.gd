@@ -256,6 +256,7 @@ func _build_join() -> void:
 	code_boxes.submitted.connect(func(_code: String) -> void: _on_join())
 	row.add_child(code_boxes)
 	join_button = HouseStyle.button("Join", HouseStyle.BUTTON, 62)
+	join_button.name = "JoinWithCode"
 	join_button.focus_mode = FOCUS_ALL
 	join_button.disabled = true
 	join_button.alignment = HORIZONTAL_ALIGNMENT_LEFT

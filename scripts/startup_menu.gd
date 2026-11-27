@@ -31,7 +31,7 @@ var _table_setup: TableSizeDialog
 var _transitioning := false
 var continue_btn: Button
 var start_battle_btn: Button
-var host_online_btn: Button
+var online_hub_lists := true   # false: the online hub asks the relay only on refresh (tests)
 var join_online_btn: Button
 var browse_online_btn: Button
 var load_battle_btn: Button
@@ -42,13 +42,9 @@ var exit_game_btn: Button
 # === Private variables ===
 
 var _save_browser: SaveBrowser
-var _host_popup: AcceptDialog
 var _join_popup: AcceptDialog
 var _browse_popup: AcceptDialog
 var _exit_card: PromptCard
-var _relay_url_input: LineEdit
-var _host_name_input: LineEdit
-var _host_public_check: CheckBox
 var _join_code_input: LineEdit
 var _join_relay_url_input: LineEdit
 var _join_name_input: LineEdit
@@ -81,7 +77,6 @@ func _ready() -> void:
 	_add_boot_cover()
 	continue_btn = view.buttons.ContinueBtn
 	start_battle_btn = view.buttons.StartBattleBtn
-	host_online_btn = view.buttons.HostOnlineBtn
 	join_online_btn = view.buttons.JoinOnlineBtn
 	browse_online_btn = view.buttons.BrowseOnlineBtn
 	load_battle_btn = view.buttons.LoadBattleBtn
@@ -95,7 +90,7 @@ func _ready() -> void:
 	continue_btn.pressed.connect(_on_continue_pressed)
 	start_battle_btn.pressed.connect(_on_start_battle_pressed)
 	view.buttons.LearnBtn.pressed.connect(_open_learn_page.bind(false))
-	host_online_btn.pressed.connect(_on_host_online_pressed)
+	view.buttons.OnlineBtn.pressed.connect(_open_online_hub)
 	join_online_btn.pressed.connect(_on_join_online_pressed)
 	browse_online_btn.pressed.connect(_on_browse_online_pressed)
 	load_battle_btn.pressed.connect(_on_load_battle_pressed)
@@ -252,6 +247,7 @@ func _show_table_setup(host_settings: Dictionary = {}) -> void:
 		return
 	_table_setup = TableSizeDialog.new()
 	_table_setup.online = not host_settings.is_empty()   # Create room: online stays Manual
+	_table_setup.layout_step = true   # step 04, "Lay out the table"
 	_table_setup.selected_system = GameSystem.default_pick()   # the last pick; the dialog applies it in _ready
 	add_child(_table_setup)
 	_table_setup.set_biomes(MenuDiorama.Battlefield.BIOMES,diorama.biome)
@@ -284,6 +280,7 @@ func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> vo
 		RulesAutomation.remember_pick(_table_setup.selected_rules)
 	for key in host_settings:
 		ProjectSettings.set_setting(key,host_settings[key])
+	_table_setup.layout.commit()   # the chosen layout travels to the table (PendingLayout)
 	var setup := _table_setup
 	_table_setup = null
 	await _commit_beat(setup._create)
@@ -297,7 +294,8 @@ func _on_table_setup_cancelled() -> void:
 	_table_setup.queue_free()
 	_table_setup = null
 	view.show()
-	start_battle_btn.grab_focus()
+	var hub := view.page_open as OnlineHub   # "Back to main menu" of an online setup returns to the hub
+	(hub.prepare_button if hub != null else start_battle_btn).grab_focus()
 
 
 
@@ -601,60 +599,23 @@ func _on_update_failed(reason: String, dialog: AcceptDialog, updater: SelfUpdate
 
 # ===== Online Multiplayer =====
 
-func _on_host_online_pressed() -> void:
-	_show_host_popup()
-
-
 func _on_join_online_pressed() -> void:
 	_show_join_popup()
 
 
-func _show_host_popup() -> void:
-	if _host_popup:
-		_host_popup.queue_free()
-	_host_popup = NetDialog.build("Create a room", "NET-01", "Prepare table")
-
-	var content := NetDialog.content(_host_popup)
-	content.add_child(NetDialog.label("Your name:"))
-	_host_name_input = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Player name")
-	_host_name_input.max_length = PlayerIdentity.MAX_NAME_LEN
-	content.add_child(_host_name_input)
-	_host_popup.register_text_enter(_host_name_input)  # Enter in the name field = Prepare table
-	_relay_url_input = NetDialog.advanced_relay(content, InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
-	_host_public_check = CheckBox.new()
-	_host_public_check.text = "List room publicly"
-	_host_public_check.focus_mode = Control.FOCUS_ALL
-	content.add_child(_host_public_check)
-	var info := NetDialog.label("Your invitation code appears once you connect at the table.")
-	info.theme_type_variation = HouseStyle.CAPTION
-	info.autowrap_mode = TextServer.AUTOWRAP_WORD
-	content.add_child(info)
-
-	_host_popup.confirmed.connect(_on_host_confirmed)
-	add_child(_host_popup)
-	MenuDialog.attach_scrim(_host_popup)
-	_host_popup.popup_centered()
-	UiPolish.keep_window_reachable(_host_popup, Vector2i(460, 300))
-	_host_name_input.grab_focus()
+## "Play online": the online hub in place of the menu's list. Create hands its settings to the table setup (the
+## hub stays open under it); a join plays the commit beat on its button, then joins.
+func _open_online_hub() -> void:
+	var hub := OnlineHub.new()
+	hub.lists_on_open = online_hub_lists
+	hub.host_requested.connect(_show_table_setup)
+	hub.join_requested.connect(_on_hub_join)
+	view.open_page(hub)
 
 
-func _on_host_confirmed() -> void:
-	var url = _relay_url_input.text.strip_edges()
-	if url.is_empty():
-		url = InternetLobby.DEFAULT_RELAY_URL
-
-	var player_name := PlayerIdentity.sanitize(_host_name_input.text)
-	PlayerIdentity.save_name(player_name)
-
-	# Hosting only begins after Create table. Back leaves no pending network state.
-	_host_popup.hide()
-	_show_table_setup({
-		"niemandsland/pending_internet_lobby":true,
-		"niemandsland/internet_is_host":true,
-		"niemandsland/internet_relay_url":url,
-		"niemandsland/player_name":player_name,
-		"niemandsland/internet_public":_host_public_check.button_pressed})
-
+func _on_hub_join(code: String, url: String, player_name: String, button: Button) -> void:
+	await _commit_beat(button)
+	_join_room_and_transition(code, url, player_name)
 
 
 func _show_join_popup() -> void:
