@@ -174,14 +174,12 @@ func _on_settings_pressed() -> void:
 		add_child(_settings)
 		_settings.initialize(diorama.get_lighting_controller())
 		_settings.set_modal(true)   # in the menu the sheet is modal with the scrim; at the table it stays see-through
-		var label := Label.new()
-		label.text = "Menu background"
-		_settings._page("Display").add_child(label)
 		var choices := OptionButton.new()
 		for title in ["Urban ruins","Alien jungle","Grassland","Arid desert","Frozen tundra","Volcanic ash"]:
 			choices.add_item(title)
 		choices.select(MenuDiorama.Battlefield.BIOMES.find(diorama.biome))
-		_settings._page("Display").add_child(choices)
+		choices.custom_minimum_size.x = _settings.ROW_FRAME_W
+		_settings._page("Display").add_child(_settings._as_row(choices, "Menu background", _settings.HELP["Menu background"]))
 		choices.item_selected.connect(func(index: int) -> void:
 			diorama.set_biome(MenuDiorama.Battlefield.BIOMES[index])
 			var config := ConfigFile.new()
