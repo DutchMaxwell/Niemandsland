@@ -2,14 +2,16 @@ class_name ArrivalCard
 extends PanelContainer
 ## The small card at the left edge of a new table: FIRST STEPS, "Your table is ready." and three numbered lines.
 ## The first line that is not done is the current one (ink text, gold ring and number); done lines have the ring
-## filled in accent; lines after the current one are muted. Every line can be pressed at any time.
+## filled in accent with a dark tick; lines after the current one are muted. Every line can be pressed at any time.
 ## It knows nothing about the game: TableArrival sets the lines and the progress and answers the two signals.
 
 signal line_pressed(index: int)
+signal dismissed
 
 const WIDTH := 230
 const LINE_H := 34
 const RING := 22
+const TICK := [Vector2(6.5, 11.5), Vector2(9.5, 14.5), Vector2(15.5, 8.0)]
 
 var _lines: Array[Button] = []
 var _done := 0
@@ -23,7 +25,18 @@ func _init() -> void:
 	_body = VBoxContainer.new()
 	_body.add_theme_constant_override(&"separation", 4)
 	add_child(_body)
-	_body.add_child(_text("FIRST STEPS", 12, HouseStyle.eyebrow_font(), HouseStyle.ACCENT))
+	var head := HBoxContainer.new()
+	var kicker := _text("FIRST STEPS", 12, HouseStyle.eyebrow_font(), HouseStyle.ACCENT)
+	kicker.size_flags_horizontal = SIZE_EXPAND_FILL
+	head.add_child(kicker)
+	var close := HouseStyle.button(HouseStyle.GLYPH_CLOSE, HouseStyle.ICON, 24)
+	close.name = "CloseButton"
+	close.custom_minimum_size.x = 24
+	close.size_flags_horizontal = SIZE_SHRINK_END
+	close.tooltip_text = "Close"
+	close.pressed.connect(func() -> void: dismissed.emit())
+	head.add_child(close)
+	_body.add_child(head)
 	_body.add_child(_text("Your table is ready.", 18, HouseStyle.font(500), HouseStyle.INK))
 
 
@@ -67,16 +80,18 @@ func state(index: int) -> StringName:
 
 func _draw_ring(ring: Control, index: int) -> void:
 	var centre := Vector2(RING, RING) / 2
-	if state(index) == &"done":
-		ring.draw_circle(centre, RING / 2.0, HouseStyle.ACCENT)
-		return
-	var colour := HouseStyle.GOLD if state(index) == &"now" else HouseStyle.LINE
-	ring.draw_arc(centre, RING / 2.0 - 1, 0, TAU, 32, colour, 1.5, true)
-	var digit := str(index + 1)
-	var font := HouseStyle.mono()
-	var at := centre + Vector2(-font.get_string_size(digit, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x / 2, 4)
-	ring.draw_string(font, at, digit, HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
-		HouseStyle.GOLD if state(index) == &"now" else HouseStyle.MUTED)
+	match state(index):
+		&"done":
+			ring.draw_circle(centre, RING / 2.0, HouseStyle.ACCENT, true, -1.0, true)
+			ring.draw_polyline(PackedVector2Array(TICK), HouseStyle.ON_GOLD, 2.0, true)
+		_:
+			var colour := HouseStyle.GOLD if state(index) == &"now" else HouseStyle.LINE
+			ring.draw_arc(centre, RING / 2.0 - 1, 0, TAU, 32, colour, 1.5, true)
+			var digit := str(index + 1)
+			var font := HouseStyle.mono()
+			var at := centre + Vector2(-font.get_string_size(digit, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x / 2, 4)
+			ring.draw_string(font, at, digit, HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
+				HouseStyle.GOLD if state(index) == &"now" else HouseStyle.MUTED)
 
 
 func _text(text: String, font_size: int, font: Font, colour: Color) -> Label:
