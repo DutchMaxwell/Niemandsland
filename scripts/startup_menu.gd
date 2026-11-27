@@ -45,7 +45,7 @@ var exit_game_btn: Button
 
 # === Private variables ===
 
-var _load_dialog: FileDialog
+var _save_browser: SaveBrowser
 var _host_popup: AcceptDialog
 var _join_popup: AcceptDialog
 var _browse_popup: AcceptDialog
@@ -489,7 +489,16 @@ func _launch_scenario(chapter: Dictionary) -> void:
 
 
 func _on_load_battle_pressed() -> void:
-	_open_load_battle_dialog()
+	_save_browser = SaveBrowser.new()
+	_save_browser.load_requested.connect(_on_save_chosen)
+	_save_browser.open(self)
+
+
+## A row's Load plays the commit beat on its button; a file picked through "Browse files…" loads at once.
+func _on_save_chosen(path: String, button: Button) -> void:
+	if button != null:
+		await _commit_beat(button)
+	_on_load_file_selected(path)
 
 
 ## Export an ANONYMISED diagnostics bundle (system info + scrubbed recent log) to the
@@ -1065,30 +1074,6 @@ func _transition_to_game() -> void:
 			return
 		overlay.set_progress(progress[0] if progress.size() > 0 else 0.0)
 		await get_tree().process_frame
-
-
-func _open_load_battle_dialog() -> void:
-	if _load_dialog == null:
-		_load_dialog = FileDialog.new()
-		_load_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-		_load_dialog.access = FileDialog.ACCESS_FILESYSTEM
-		_load_dialog.filters = PackedStringArray(["*.nml ; Niemandsland Save Files"])
-		_load_dialog.title = "Load game"
-		# FileDialog derives its OK label from file_mode and takes both button labels from
-		# Godot's own translations, i.e. from the SYSTEM language — on a German Windows the
-		# English-only UI would otherwise show localized Open/Cancel labels. Pin them
-		# explicitly, AFTER file_mode (set_file_mode rewrites ok_button_text).
-		_load_dialog.ok_button_text = "Open"
-		_load_dialog.cancel_button_text = "Cancel"
-		_load_dialog.file_selected.connect(_on_load_file_selected)
-		_load_dialog.theme = HouseStyle.theme()   # native FileDialog: the theme only
-		add_child(_load_dialog)
-		# A hard 800x600 is nearly full-screen on a 1366x768 laptop; clamp to the host
-		# window instead (and re-clamp when it is resized).
-		UiPolish.keep_window_reachable(_load_dialog, Vector2i(800, 600))
-
-	_load_dialog.current_dir = SaveManager.get_default_save_dir()
-	_load_dialog.popup_centered()
 
 
 func _on_load_file_selected(path: String) -> void:

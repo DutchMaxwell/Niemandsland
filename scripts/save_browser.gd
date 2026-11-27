@@ -13,6 +13,8 @@ const FONT_NAME := 22
 const MenuView = preload("res://scripts/startup_menu_view.gd")
 
 var rows: VBoxContainer
+var browse_button: Button
+var file_dialog: FileDialog
 var empty_note: VBoxContainer
 var _facts: Array[Label] = []
 var _saves: Array[Dictionary] = []
@@ -52,8 +54,51 @@ func open(host: Node, dir := "") -> void:
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		empty_note.add_child(label)
 	body.add_child(empty_note)
+	body.add_child(_footer(saves.size()))
 	_saves = saves
 	host.add_child(self)
+
+
+## "<n> SAVES IN YOUR SAVES FOLDER", then "Open saves folder" and "Browse files…" (any folder, any .nml).
+func _footer(count: int) -> HBoxContainer:
+	var footer := HBoxContainer.new()
+	footer.add_theme_constant_override(&"separation", HouseStyle.GAP_ROW)
+	var line := "%d SAVE%s IN YOUR SAVES FOLDER" % [count, "" if count == 1 else "S"]
+	var count_label := _text(line, HouseStyle.CAPTION, HouseStyle.MENU_FONT_EYEBROW, HouseStyle.mono())
+	count_label.size_flags_horizontal = SIZE_EXPAND_FILL
+	footer.add_child(count_label)
+	var folder := HouseStyle.button("Open saves folder", HouseStyle.BUTTON, HouseStyle.MENU_H_ACTION)
+	folder.pressed.connect(func() -> void: OS.shell_show_in_file_manager(SaveManager.get_default_save_dir()))
+	browse_button = HouseStyle.button("Browse files…", HouseStyle.BUTTON, HouseStyle.MENU_H_ACTION)
+	browse_button.pressed.connect(_open_file_dialog)
+	for b: Button in [folder, browse_button]:
+		b.focus_mode = FOCUS_ALL
+		b.size_flags_horizontal = SIZE_SHRINK_END
+		footer.add_child(b)
+	return footer
+
+
+func _open_file_dialog() -> void:
+	if file_dialog == null:
+		file_dialog = FileDialog.new()
+		file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+		file_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		file_dialog.filters = PackedStringArray(["*.nml ; Niemandsland Save Files"])
+		file_dialog.title = "Load game"
+		# FileDialog derives its OK label from file_mode and takes both button labels from
+		# Godot's own translations, i.e. from the SYSTEM language — on a German Windows the
+		# English-only UI would otherwise show localized Open/Cancel labels. Pin them
+		# explicitly, AFTER file_mode (set_file_mode rewrites ok_button_text).
+		file_dialog.ok_button_text = "Open"
+		file_dialog.cancel_button_text = "Cancel"
+		file_dialog.file_selected.connect(func(path: String) -> void: load_requested.emit(path, null))
+		file_dialog.theme = HouseStyle.theme()   # native FileDialog: the theme only
+		add_child(file_dialog)
+		# A hard 800x600 is nearly full-screen on a 1366x768 laptop; clamp to the host
+		# window instead (and re-clamp when it is resized).
+		UiPolish.keep_window_reachable(file_dialog, Vector2i(800, 600))
+	file_dialog.current_dir = SaveManager.get_default_save_dir()
+	file_dialog.popup_centered()
 
 
 func close() -> void:

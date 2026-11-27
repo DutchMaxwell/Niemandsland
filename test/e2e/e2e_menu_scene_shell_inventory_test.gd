@@ -179,12 +179,21 @@ func test_prepare_a_new_table_opens_the_table_chooser() -> void:
 	assert_bool(_view.visible).is_true()
 
 
-func test_load_game_opens_the_real_nml_file_dialog() -> void:
+## Load game opens the save list; the engine's file dialog only behind "Browse files…" (red on main: the click
+## showed the file dialog at once).
+func test_load_game_shows_no_file_dialog_until_browse_files_is_pressed() -> void:
 	await _click(_button("Load game"))
-	assert_object(_menu._load_dialog).is_not_null()
-	assert_bool(_menu._load_dialog.visible).is_true()
-	assert_int(_menu._load_dialog.file_mode).is_equal(FileDialog.FILE_MODE_OPEN_FILE)
-	assert_str(str(_menu._load_dialog.filters)).contains("nml")
+	assert_int(_menu.find_children("*", "FileDialog", true, false).size()).is_equal(0)
+	var browser: Variant = _menu.get("_save_browser")
+	assert_object(browser).override_failure_message("no save list").is_not_null()
+	if browser == null:
+		return
+	await _click(browser.browse_button)
+	var dialog: FileDialog = browser.file_dialog
+	assert_bool(dialog.visible).is_true()
+	assert_int(dialog.file_mode).is_equal(FileDialog.FILE_MODE_OPEN_FILE)
+	assert_str(str(dialog.filters)).contains("nml")
+	dialog.hide()
 
 
 func test_online_route_lists_its_three_actions_and_closes_on_a_pick() -> void:

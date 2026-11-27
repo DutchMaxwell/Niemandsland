@@ -59,8 +59,9 @@ func test_menu_load_dialog_pins_english_open_cancel_and_the_nml_filter() -> void
 	menu.set_script(MenuProbe)
 	add_child(menu)
 	await _runner.simulate_frames(2)
-	menu._open_load_battle_dialog()
-	var d: FileDialog = menu._load_dialog
+	menu._on_load_battle_pressed()
+	menu._save_browser.browse_button.pressed.emit()
+	var d: FileDialog = menu._save_browser.file_dialog
 	assert_int(d.file_mode).is_equal(FileDialog.FILE_MODE_OPEN_FILE)
 	assert_str(d.ok_button_text).is_equal("Open")
 	assert_str(d.cancel_button_text).is_equal("Cancel")
@@ -75,8 +76,9 @@ func test_all_three_dialogs_carry_the_house_theme() -> void:
 	menu.set_script(MenuProbe)
 	add_child(menu)
 	await _runner.simulate_frames(2)
-	menu._open_load_battle_dialog()
-	assert_object(menu._load_dialog.theme).is_same(HouseStyle.theme())
+	menu._on_load_battle_pressed()
+	menu._save_browser.browse_button.pressed.emit()
+	assert_object(menu._save_browser.file_dialog.theme).is_same(HouseStyle.theme())
 
 
 func test_inventory_check_names_a_missing_filter() -> void:
