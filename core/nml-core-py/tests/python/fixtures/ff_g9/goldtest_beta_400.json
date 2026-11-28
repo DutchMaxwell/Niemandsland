@@ -1,0 +1,219 @@
+{
+ "name": "Golden G9 beta",
+ "gameSystem": "gff",
+ "pointsLimit": 400,
+ "units": [
+  {
+   "id": "gb1",
+   "selectionId": "gb1-0",
+   "name": "Brute Pack",
+   "size": 5,
+   "cost": 130,
+   "quality": 5,
+   "defense": 5,
+   "bases": {
+    "round": "25",
+    "square": "20"
+   },
+   "rules": [],
+   "items": [],
+   "weapons": [
+    {
+     "name": "Test Club",
+     "count": 5,
+     "range": 0,
+     "attacks": 2,
+     "type": "ArmyBookWeapon",
+     "specialRules": [
+      {
+       "name": "AP",
+       "type": "ArmyBookRule",
+       "rating": 1
+      }
+     ]
+    },
+    {
+     "name": "Test Shooter",
+     "count": 5,
+     "range": 12,
+     "attacks": 1,
+     "type": "ArmyBookWeapon",
+     "specialRules": []
+    }
+   ],
+   "loadout": [
+    {
+     "name": "Test Club",
+     "count": 5,
+     "range": 0,
+     "attacks": 2,
+     "type": "ArmyBookWeapon",
+     "specialRules": [
+      {
+       "name": "AP",
+       "type": "ArmyBookRule",
+       "rating": 1
+      }
+     ]
+    },
+    {
+     "name": "Test Shooter",
+     "count": 5,
+     "range": 12,
+     "attacks": 1,
+     "type": "ArmyBookWeapon",
+     "specialRules": []
+    }
+   ],
+   "selectedUpgrades": []
+  },
+  {
+   "id": "gb2",
+   "selectionId": "gb2-0",
+   "name": "Brute Boss",
+   "size": 1,
+   "cost": 90,
+   "quality": 4,
+   "defense": 4,
+   "bases": {
+    "round": "25",
+    "square": "20"
+   },
+   "rules": [
+    {
+     "name": "Hero",
+     "label": "Hero"
+    },
+    {
+     "name": "Tough",
+     "label": "Tough(3)",
+     "rating": 3
+    }
+   ],
+   "items": [],
+   "weapons": [
+    {
+     "name": "Test Cleaver",
+     "count": 1,
+     "range": 0,
+     "attacks": 3,
+     "type": "ArmyBookWeapon",
+     "specialRules": [
+      {
+       "name": "AP",
+       "type": "ArmyBookRule",
+       "rating": 1
+      }
+     ]
+    }
+   ],
+   "loadout": [
+    {
+     "name": "Test Cleaver",
+     "count": 1,
+     "range": 0,
+     "attacks": 3,
+     "type": "ArmyBookWeapon",
+     "specialRules": [
+      {
+       "name": "AP",
+       "type": "ArmyBookRule",
+       "rating": 1
+      }
+     ]
+    }
+   ],
+   "selectedUpgrades": []
+  },
+  {
+   "id": "gb3",
+   "selectionId": "gb3-0",
+   "name": "Long Gun",
+   "size": 1,
+   "cost": 80,
+   "quality": 4,
+   "defense": 4,
+   "bases": {
+    "round": "25",
+    "square": "20"
+   },
+   "rules": [
+    {
+     "name": "Tough",
+     "label": "Tough(3)",
+     "rating": 3
+    }
+   ],
+   "items": [],
+   "weapons": [
+    {
+     "name": "Test Long Rifle",
+     "count": 1,
+     "range": 30,
+     "attacks": 2,
+     "type": "ArmyBookWeapon",
+     "specialRules": [
+      {
+       "name": "AP",
+       "type": "ArmyBookRule",
+       "rating": 1
+      }
+     ]
+    }
+   ],
+   "loadout": [
+    {
+     "name": "Test Long Rifle",
+     "count": 1,
+     "range": 30,
+     "attacks": 2,
+     "type": "ArmyBookWeapon",
+     "specialRules": [
+      {
+       "name": "AP",
+       "type": "ArmyBookRule",
+       "rating": 1
+      }
+     ]
+    }
+   ],
+   "selectedUpgrades": []
+  },
+  {
+   "id": "gb4",
+   "selectionId": "gb4-0",
+   "name": "Runners",
+   "size": 3,
+   "cost": 70,
+   "quality": 5,
+   "defense": 6,
+   "bases": {
+    "round": "25",
+    "square": "20"
+   },
+   "rules": [],
+   "items": [],
+   "weapons": [
+    {
+     "name": "Test Knife",
+     "count": 3,
+     "range": 0,
+     "attacks": 1,
+     "type": "ArmyBookWeapon",
+     "specialRules": []
+    }
+   ],
+   "loadout": [
+    {
+     "name": "Test Knife",
+     "count": 3,
+     "range": 0,
+     "attacks": 1,
+     "type": "ArmyBookWeapon",
+     "specialRules": []
+    }
+   ],
+   "selectedUpgrades": []
+  }
+ ]
+}
