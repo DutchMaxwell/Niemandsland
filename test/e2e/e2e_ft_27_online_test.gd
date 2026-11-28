@@ -6,8 +6,7 @@ extends GdUnitTestSuite
 ##   ("It is P2's turn"); the host's off-turn drag of that unit snaps back with no fact on the wire; the guest's activation
 ##   fact arrives (the real receive door) -> the host hands the token back: `sync_turn_state` [1].
 ## - aofs: during deployment the host's Band (Banner) picks Xan and Yor -> the pick travels in the unit-property sync
-##   frame `command_picks`. FINDING #3878 (R-FT2): it does not - `command_picks` is not a syncable unit property (the
-##   manager refuses it with a warning); the case stays, skipped with that issue.
+##   frame `command_picks` (#3878 fixed: it was not a syncable unit property, the manager refused it).
 ## Real: the main scene, the REAL NetworkManager (transport only swapped), the card's Activate / End, the real drag, the
 ## receive door `sync_unit_activation`, the pick door.
 
@@ -58,8 +57,7 @@ func test_gff_the_token_alternates_with_the_guest(timeout := 120000) -> void:
 
 
 @warning_ignore("unused_parameter")
-func test_aofs_the_command_picks_travel_in_the_unit_property_sync(timeout := 120000, do_skip := true,
-		skip_reason := "FINDING #3878: command_picks is not a syncable unit property - the pick never reaches the wire") -> void:
+func test_aofs_the_command_picks_travel_in_the_unit_property_sync(timeout := 120000) -> void:
 	_t.main.opr_army_manager.set_game_phase(OPRArmyManager.GamePhase.DEPLOYMENT)
 	var band := _t.unit("aofs", 1, "Band", 1, 1, -20.0, 0.0, {}, ["Banner"])
 	var x := _t.unit("aofs", 1, "Xan", 1, 1, -20.0, 5.0)

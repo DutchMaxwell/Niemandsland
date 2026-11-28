@@ -132,6 +132,7 @@ const SYNCABLE_UNIT_PROPERTIES: PackedStringArray = [
 	"limited_used",         # names of the Limited weapons already fired (Array of String)
 	"ambush_redeploy_used", # Ambush Re-Deployment, once per game (bool)
 	"ambush_return_round",  # the round a re-deployed unit is due back in (int; null = spent)
+	"command_picks",        # AoF: Skirmish command group: the unit ids its Banner / Musician reaches (Array of String, #3878)
 ]
 
 ## Latches whose key is BUILT from a rule name (one per rule), so no fixed list can name them all. Only these
