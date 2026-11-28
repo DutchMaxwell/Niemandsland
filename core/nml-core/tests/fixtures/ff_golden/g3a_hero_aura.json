@@ -1,0 +1,312 @@
+{
+  "answers": {},
+  "book": "Firefight 3.6 Hero (our words): a friendly unit taking a morale test within 6 in of a Hero may use the Hero's Quality. Here the Captain stands 6.0 in (base edge to base edge) from the Trooper, which takes 2 wounds of Tough(3) and tests morale with a 4.",
+  "dice": {
+    "attack": [
+      [
+        6,
+        6
+      ]
+    ],
+    "defense": [
+      [
+        1,
+        1
+      ]
+    ],
+    "morale": [
+      [
+        4
+      ]
+    ]
+  },
+  "epoch": 104,
+  "golden": "g3a_hero_aura_morale_at_6_in",
+  "header": {
+    "kind": "header",
+    "knobs": {},
+    "profiles": {
+      "p1_0_a": {
+        "attached_hero_rules": [],
+        "base_radius": 0.0127,
+        "caster_value": 0,
+        "defense": 5,
+        "faction_folder": "robot_legions",
+        "game_system": "gff",
+        "item_grants": [],
+        "model_count": 1,
+        "move_bands": {
+          "advance": 6.0,
+          "rush": 12.0
+        },
+        "name": "Shooter",
+        "quality": 3,
+        "special_rules": [],
+        "tough": 1,
+        "unit_id": "p1_0_a",
+        "weapons": [
+          {
+            "ap": 0,
+            "attacks": 2,
+            "count": 1,
+            "name": "Rifle",
+            "range": 24,
+            "rules": []
+          }
+        ],
+        "wounds_max": [
+          1
+        ]
+      },
+      "p2_0_u": {
+        "attached_hero_rules": [],
+        "base_radius": 0.0127,
+        "caster_value": 0,
+        "defense": 6,
+        "faction_folder": "robot_legions",
+        "game_system": "gff",
+        "item_grants": [],
+        "model_count": 1,
+        "move_bands": {
+          "advance": 6.0,
+          "rush": 12.0
+        },
+        "name": "Trooper",
+        "quality": 5,
+        "special_rules": [
+          "Tough(3)"
+        ],
+        "tough": 3,
+        "unit_id": "p2_0_u",
+        "weapons": [],
+        "wounds_max": [
+          3
+        ]
+      },
+      "p2_1_h": {
+        "attached_hero_rules": [],
+        "base_radius": 0.0127,
+        "caster_value": 0,
+        "defense": 5,
+        "faction_folder": "robot_legions",
+        "game_system": "gff",
+        "item_grants": [],
+        "model_count": 1,
+        "move_bands": {
+          "advance": 6.0,
+          "rush": 12.0
+        },
+        "name": "Captain",
+        "quality": 3,
+        "special_rules": [
+          "Hero"
+        ],
+        "tough": 1,
+        "unit_id": "p2_1_h",
+        "weapons": [],
+        "wounds_max": [
+          1
+        ]
+      }
+    }
+  },
+  "intent": {
+    "kind": 0,
+    "shoot": "p2_0_u"
+  },
+  "pinned": {
+    "final": [
+      {
+        "alive": 1,
+        "at_in": [
+          [
+            -10.0,
+            0.0
+          ]
+        ],
+        "shaken": false,
+        "unit": "p1_0_a",
+        "wounds": [
+          1
+        ]
+      },
+      {
+        "alive": 1,
+        "at_in": [
+          [
+            10.0,
+            0.0
+          ]
+        ],
+        "shaken": false,
+        "unit": "p2_0_u",
+        "wounds": [
+          1
+        ]
+      },
+      {
+        "alive": 1,
+        "at_in": [
+          [
+            10.0,
+            7.0
+          ]
+        ],
+        "shaken": false,
+        "unit": "p2_1_h",
+        "wounds": [
+          1
+        ]
+      }
+    ],
+    "lines": [
+      "Shooter fires at Trooper",
+      "Shooter fires Rifle at Trooper — 2 hits",
+      "Trooper saves on 6+",
+      "Trooper takes 2 wounds (1/3 wounds)",
+      "Trooper is at half its tough value (1/3) — morale test ({cite})",
+      "Captain (Tough 9+) lends its Quality to Trooper's morale test (Q3+)",
+      "Trooper passes morale"
+    ],
+    "rolls": [
+      [
+        "attack",
+        [
+          6,
+          6
+        ]
+      ],
+      [
+        "defense",
+        [
+          1,
+          1
+        ]
+      ],
+      [
+        "morale",
+        [
+          4
+        ]
+      ]
+    ]
+  },
+  "plant": "the aura reach read 1 in short (sim.rs hero_aura_quality_for_book) - the Trooper at 6 in fails its test",
+  "state": {
+    "round": 1,
+    "rounds_total": 4,
+    "scoring": "end",
+    "units": {
+      "p1_0_a": {
+        "activated": false,
+        "aircraft": false,
+        "alive": 1,
+        "ambush_arrived_round": -1,
+        "bands": {
+          "advance": 6.0,
+          "rush": 12.0
+        },
+        "casts": 0,
+        "dormant": false,
+        "earliest_arrival_round": -1,
+        "fatigued": false,
+        "in_cover": false,
+        "mods": {},
+        "mods_base": {},
+        "morale_bonus": 0,
+        "player": 1,
+        "positions": [
+          [
+            -0.254,
+            0.0,
+            0.0
+          ]
+        ],
+        "radii": [
+          0.0127
+        ],
+        "shaken": false,
+        "wound_frac": 1.0,
+        "wounds": [
+          1
+        ]
+      },
+      "p2_0_u": {
+        "activated": false,
+        "aircraft": false,
+        "alive": 1,
+        "ambush_arrived_round": -1,
+        "bands": {
+          "advance": 6.0,
+          "rush": 12.0
+        },
+        "casts": 0,
+        "dormant": false,
+        "earliest_arrival_round": -1,
+        "fatigued": false,
+        "in_cover": false,
+        "mods": {},
+        "mods_base": {},
+        "morale_bonus": 0,
+        "player": 2,
+        "positions": [
+          [
+            0.254,
+            0.0,
+            0.0
+          ]
+        ],
+        "radii": [
+          0.0127
+        ],
+        "shaken": false,
+        "wound_frac": 1.0,
+        "wounds": [
+          3
+        ]
+      },
+      "p2_1_h": {
+        "activated": false,
+        "aircraft": false,
+        "alive": 1,
+        "ambush_arrived_round": -1,
+        "bands": {
+          "advance": 6.0,
+          "rush": 12.0
+        },
+        "casts": 0,
+        "dormant": false,
+        "earliest_arrival_round": -1,
+        "fatigued": false,
+        "in_cover": false,
+        "mods": {},
+        "mods_base": {},
+        "morale_bonus": 0,
+        "player": 2,
+        "positions": [
+          [
+            0.254,
+            0.0,
+            0.17779999999999999
+          ]
+        ],
+        "radii": [
+          0.0127
+        ],
+        "shaken": false,
+        "wound_frac": 1.0,
+        "wounds": [
+          1
+        ]
+      }
+    }
+  },
+  "terrain": {
+    "cells": [],
+    "table_feet": [
+      4,
+      4
+    ]
+  },
+  "unit": "p1_0_a"
+}

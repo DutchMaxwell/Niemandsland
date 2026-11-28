@@ -1,0 +1,226 @@
+{
+  "answers": {},
+  "book": "Firefight 3.6 dangerous terrain (our words): a model that moves through dangerous terrain tests it and takes a wound per 1 rolled. A single Tough(3) model advances 6 in into one dangerous cell; the core asks one die per point of Tough (3 dice) and the dice show 1, 4, 6.",
+  "dice": {
+    "dangerous": [
+      [
+        1,
+        4,
+        6
+      ]
+    ]
+  },
+  "epoch": 104,
+  "golden": "g4_dangerous_terrain_on_one_tough_model",
+  "header": {
+    "kind": "header",
+    "knobs": {},
+    "profiles": {
+      "p1_0_a": {
+        "attached_hero_rules": [],
+        "base_radius": 0.0127,
+        "caster_value": 0,
+        "defense": 5,
+        "faction_folder": "robot_legions",
+        "game_system": "gff",
+        "item_grants": [],
+        "model_count": 1,
+        "move_bands": {
+          "advance": 6.0,
+          "rush": 12.0
+        },
+        "name": "Walker",
+        "quality": 4,
+        "special_rules": [
+          "Tough(3)"
+        ],
+        "tough": 3,
+        "unit_id": "p1_0_a",
+        "weapons": [],
+        "wounds_max": [
+          3
+        ]
+      },
+      "p2_0_b": {
+        "attached_hero_rules": [],
+        "base_radius": 0.0127,
+        "caster_value": 0,
+        "defense": 5,
+        "faction_folder": "robot_legions",
+        "game_system": "gff",
+        "item_grants": [],
+        "model_count": 1,
+        "move_bands": {
+          "advance": 6.0,
+          "rush": 12.0
+        },
+        "name": "Watcher",
+        "quality": 4,
+        "special_rules": [],
+        "tough": 1,
+        "unit_id": "p2_0_b",
+        "weapons": [],
+        "wounds_max": [
+          1
+        ]
+      }
+    }
+  },
+  "intent": {
+    "kind": 1
+  },
+  "pinned": {
+    "final": [
+      {
+        "alive": 1,
+        "at_in": [
+          [
+            -1.5,
+            1.5
+          ]
+        ],
+        "shaken": false,
+        "unit": "p1_0_a",
+        "wounds": [
+          2
+        ]
+      },
+      {
+        "alive": 1,
+        "at_in": [
+          [
+            15.0,
+            15.0
+          ]
+        ],
+        "shaken": false,
+        "unit": "p2_0_b",
+        "wounds": [
+          1
+        ]
+      }
+    ],
+    "lines": [],
+    "rolls": [
+      [
+        "dangerous",
+        [
+          1,
+          4,
+          6
+        ]
+      ]
+    ]
+  },
+  "placed": {
+    "at": [
+      [
+        -1.5,
+        0.0,
+        1.5
+      ]
+    ],
+    "trails": [
+      [
+        [
+          -7.5,
+          1.5
+        ],
+        [
+          -1.5,
+          1.5
+        ]
+      ]
+    ]
+  },
+  "plant": "dangerous_wounds counts 1-4 instead of 1 (sim.rs) - the pinned wounds move",
+  "state": {
+    "round": 1,
+    "rounds_total": 4,
+    "scoring": "end",
+    "units": {
+      "p1_0_a": {
+        "activated": false,
+        "aircraft": false,
+        "alive": 1,
+        "ambush_arrived_round": -1,
+        "bands": {
+          "advance": 6.0,
+          "rush": 12.0
+        },
+        "casts": 0,
+        "dormant": false,
+        "earliest_arrival_round": -1,
+        "fatigued": false,
+        "in_cover": false,
+        "mods": {},
+        "mods_base": {},
+        "morale_bonus": 0,
+        "player": 1,
+        "positions": [
+          [
+            -0.1905,
+            0.0,
+            0.038099999999999995
+          ]
+        ],
+        "radii": [
+          0.0127
+        ],
+        "shaken": false,
+        "wound_frac": 1.0,
+        "wounds": [
+          3
+        ]
+      },
+      "p2_0_b": {
+        "activated": false,
+        "aircraft": false,
+        "alive": 1,
+        "ambush_arrived_round": -1,
+        "bands": {
+          "advance": 6.0,
+          "rush": 12.0
+        },
+        "casts": 0,
+        "dormant": false,
+        "earliest_arrival_round": -1,
+        "fatigued": false,
+        "in_cover": false,
+        "mods": {},
+        "mods_base": {},
+        "morale_bonus": 0,
+        "player": 2,
+        "positions": [
+          [
+            0.381,
+            0.0,
+            0.381
+          ]
+        ],
+        "radii": [
+          0.0127
+        ],
+        "shaken": false,
+        "wound_frac": 1.0,
+        "wounds": [
+          1
+        ]
+      }
+    }
+  },
+  "terrain": {
+    "cells": [
+      [
+        11,
+        12,
+        4
+      ]
+    ],
+    "table_feet": [
+      4,
+      4
+    ]
+  },
+  "unit": "p1_0_a"
+}
