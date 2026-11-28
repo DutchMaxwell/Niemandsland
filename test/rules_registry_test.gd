@@ -898,3 +898,16 @@ func test_the_lagging_books_encode_the_same_mechanics_as_their_current_siblings(
 					p[0], p[1], rule_name]) \
 				.is_equal(JSON.stringify(current.get("params", {})))
 	RulesRegistry.reset_cache()
+
+
+## PENDING_EPOCH_SKIRMISH_SHOT_MODS: a catalogue row with `since_epoch` answers only from that recorder epoch on (the core's
+## `Entry::since_epoch`). RED: `_live` returning true -> the 108 leg finds the row.
+func test_a_since_epoch_row_answers_only_from_its_epoch() -> void:
+	var was := AiActRecorder.rules_epoch
+	AiActRecorder.rules_epoch = 108
+	var below := RulesRegistry.lookup("gff", "orc_marauders", "Precision Charge")
+	AiActRecorder.rules_epoch = 109
+	var from := RulesRegistry.lookup("gff", "orc_marauders", "Precision Charge")
+	AiActRecorder.rules_epoch = was
+	assert_dict(below).override_failure_message("gff at 108: %s" % [below]).is_empty()
+	assert_str(str(from.get("primitive", ""))).override_failure_message("gff at 109: %s" % [from]).is_equal("Shot Modifier")

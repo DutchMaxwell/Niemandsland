@@ -107,10 +107,16 @@ static func lookup(system: String, faction: String, rule_name: String) -> Dictio
 		key = SpellsRegistry.book_key(s, faction)
 	if not key.is_empty() and key != COMMON and factions.has(key):
 		var fmap: Dictionary = factions[key]
-		if fmap.has(rule_name):
+		if fmap.has(rule_name) and _live(fmap[rule_name]):
 			return fmap[rule_name]
 	var common: Dictionary = m.get("common", {})
-	return common.get(rule_name, {})
+	var e: Dictionary = common.get(rule_name, {})
+	return e if _live(e) else {}
+
+
+## An entry with `since_epoch` answers only from that rules epoch on (the recorder's, as the core's `Entry::since_epoch`).
+static func _live(e: Dictionary) -> bool:
+	return int(e.get("since_epoch", 0)) <= AiActRecorder.rules_epoch
 
 
 ## Whether the map resolves `rule_name` to an automating primitive for (system, faction).

@@ -36,7 +36,7 @@ SYSTEMS = ["gf", "gff", "aof", "aofs", "aofr"]
 
 # Keys that may appear in an emitted rule entry. Anything else is a bug (and a
 # potential text leak), so the hygiene guard hard-fails on it.
-ALLOWED_ENTRY_KEYS = {"primitive", "params", "rated", "book_version"}
+ALLOWED_ENTRY_KEYS = {"primitive", "params", "rated", "book_version", "since_epoch"}
 
 # Registry keys whose VALUES must never reach the output (rule bodies / notes).
 FORBIDDEN_SOURCE_KEYS = {"official_text", "text", "description", "reason", "note", "citation", "_license", "_note"}
@@ -379,6 +379,32 @@ SYSTEM_SCOPED_PRIMITIVES = {
     "Aircraft": {"gf"},
 }
 
+# Skirmish rows the registry has no primitive for, copied from the mass-battle sibling's entry where the 3.6 army-book
+# text of the skirmish faction reads the same (checked per faction, quoted in the PR that adds the row). Each row carries
+# `since_epoch`: records stamped below it replay without it. (system, faction or "common", rule) -> (sibling, epoch).
+SKIRMISH_SIBLING_ROWS = {
+    ("gff", "common", "Precision Charge"): ("gf", 109),
+    ("aofs", "common", "Precision Charge"): ("aof", 109),
+    ("gff", "alien_hives", "Imprecise"): ("gf", 109),
+    ("gff", "eternal_dynasty", "Imprecise"): ("gf", 109),
+    ("gff", "goblin_reclaimers", "Imprecise"): ("gf", 109),
+    ("gff", "robot_legions", "Imprecise"): ("gf", 109),
+    ("aofs", "shadow_stalkers", "Imprecise"): ("aof", 109),
+}
+
+
+def add_sibling_rows(system: str, common: dict, factions: dict, sibling_maps: dict) -> None:
+    """SKIRMISH_SIBLING_ROWS: the sibling's entry plus `since_epoch`, where the registry left the skirmish row unautomated."""
+    for (s, faction, name), (sib, epoch) in SKIRMISH_SIBLING_ROWS.items():
+        if s != system:
+            continue
+        src = sibling_maps[sib]["common" if faction == "common" else "factions"]
+        entry = dict((src if faction == "common" else src[faction])[name], since_epoch=epoch)
+        target = common if faction == "common" else factions.setdefault(faction, {})
+        if not (target.get(name) or {}).get("primitive"):
+            target[name] = entry
+
+
 # Rules the solo layer models although NO army-book lists them as a book rule:
 # game-state tokens ("Fatigue" is a condition, not a book entry) and rules only
 # granted by items ("Medical Training"). Kept so the derived modeled set stays
@@ -470,7 +496,7 @@ def hygiene_check(system_map: dict) -> None:
             raise SystemExit("HYGIENE: forbidden key %r leaked into the output" % needle)
 
 
-def build_system_map(registry: str, system: str) -> dict:
+def build_system_map(registry: str, system: str, sibling_maps: dict | None = None) -> dict:
     sys_dir = os.path.join(registry, system)
     core_files = sorted(glob.glob(os.path.join(sys_dir, "core_*.json")))
     faction_files = sorted(
@@ -527,6 +553,8 @@ def build_system_map(registry: str, system: str) -> dict:
             fmap[rule["name"]] = entry
         if fmap:
             factions[slug] = fmap
+    if sibling_maps is not None:
+        add_sibling_rows(system, common, factions, sibling_maps)
 
     for name, entry in common.items():
         if entry["primitive"]:
@@ -570,8 +598,10 @@ def main() -> int:
 
     os.makedirs(args.out, exist_ok=True)
     stale = []
+    built: dict = {}   # SYSTEMS lists each mass-battle sibling before its skirmish book
     for system in SYSTEMS:
-        system_map = build_system_map(args.registry, system)
+        system_map = build_system_map(args.registry, system, built)
+        built[system] = system_map
         out_path = os.path.join(args.out, "rules_mechanics_%s.json" % system)
         payload = json.dumps(system_map, indent=1, ensure_ascii=False, sort_keys=False) + "\n"
         if args.check:

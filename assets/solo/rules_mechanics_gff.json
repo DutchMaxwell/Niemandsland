@@ -764,6 +764,16 @@
     "rating": "X"
    }
   },
+  "Precision Charge": {
+   "primitive": "Shot Modifier",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1,
+    "when": "charge"
+   },
+   "since_epoch": 109
+  },
   "Regeneration": {
    "primitive": "Regeneration",
    "rated": false,
@@ -1051,6 +1061,15 @@
     "params": {
      "grants": "Hive Bond Boost"
     }
+   },
+   "Imprecise": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": -1
+    },
+    "since_epoch": 109
    },
    "Increased Shooting Range Aura": {
     "primitive": "Royal Legion",
@@ -4259,6 +4278,15 @@
      "lost_if_bearer_killed": true
     }
    },
+   "Imprecise": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": -1
+    },
+    "since_epoch": 109
+   },
    "Melee Evasion": {
     "primitive": "Melee Evasion",
     "rated": false,
@@ -4490,6 +4518,15 @@
     "params": {
      "hit_bonus": 1
     }
+   },
+   "Imprecise": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": -1
+    },
+    "since_epoch": 109
    },
    "Instinctive": {
     "primitive": "Instinctive",
@@ -8256,6 +8293,15 @@
      "ap_bonus": 4,
      "bypass_regen": false
     }
+   },
+   "Imprecise": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": -1
+    },
+    "since_epoch": 109
    },
    "Infiltrate": {
     "primitive": "Infiltrate",
