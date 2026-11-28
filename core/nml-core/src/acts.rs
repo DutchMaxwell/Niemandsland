@@ -1138,12 +1138,15 @@ pub const EPOCH_107_RUIN_LEDGES: u32 = 107;
 ///   on the target: 2 hits of Blast(3) over two units with room are 3 + 3, not 4 + 2; the remainder goes where the target's
 ///   owner picks (29b). A single hit, or no neighbour, lands as before. Only where a book spreads Blast (the skirmish books).
 pub const EPOCH_108_BLAST_EVEN: u32 = 108;
-/// PENDING (epoch 109, plan SKIRMISH-CATALOGUE; frozen as `EPOCH_109_SKIRMISH_SHOT_MODS` by the bump): the skirmish catalogues (`rules_mechanics_gff/aofs.json`) had no
-/// primitive for Precision Charge (+1 to hit on the charge) or the unit-borne Imprecise (-1 to hit), so both never fired
-/// in a Firefight / AoF: Skirmish game. Their rows, copied from the gf / aof sibling where the 3.6 army-book text reads the
-/// same, carry `"since_epoch": 109` (`rules::Entry::since_epoch`): records stamped 108 or below replay byte-exact.
-pub const PENDING_EPOCH_SKIRMISH_SHOT_MODS: u32 = 109;
-pub const CURRENT_RULES_EPOCH: u32 = 108;
+/// The EPOCH 109 BATCH (plan SKIRMISH-CATALOGUE): the change that sat behind the `PENDING_EPOCH_SKIRMISH_SHOT_MODS` (109)
+/// placeholder is now one frozen constant, and `CURRENT_RULES_EPOCH` is bumped to 109 in the same change. Records stamped 108
+/// or below replay byte-exact. The recorder mirror (`act_recorder.gd`) stamps 109 in the same change.
+/// - SKIRMISH_SHOT_MODS: the skirmish catalogues (`rules_mechanics_gff/aofs.json`) had no primitive for Precision Charge
+///   (+1 to hit on the charge) or the unit-borne Imprecise (-1 to hit), so both never fired in a Firefight / AoF: Skirmish
+///   game. Their rows, copied from the gf / aof sibling where the 3.6 army-book text reads the same, carry
+///   `"since_epoch": 109` (`rules::Entry::since_epoch`).
+pub const EPOCH_109_SKIRMISH_SHOT_MODS: u32 = 109;
+pub const CURRENT_RULES_EPOCH: u32 = 109;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2598,7 +2601,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 108, "the live epoch is EPOCH_108_BLAST_EVEN");
+        assert_eq!(CURRENT_RULES_EPOCH, 109, "the live epoch is EPOCH_109_SKIRMISH_SHOT_MODS");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2608,11 +2611,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":108}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":109}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 108"
+            "a fresh play_game() now stamps the bumped epoch, 109"
         );
     }
 
