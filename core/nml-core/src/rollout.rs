@@ -527,10 +527,12 @@ impl<'a> Rollout<'a> {
         // afpoints P1 — `strength_by_points` weights the presence term of
         // WHICHEVER arm is selected (it composes, it does not pick arm 5).
         let by_points = self.knobs.strength_by_points;
+        // ... and `leaf_frac_strength` subtracts the sub-wound remainder from it.
+        let frac = self.knobs.leaf_frac_strength;
         if (mode == 1 && opener_seat) || (mode == 2 && !opener_seat) {
             let last = &ends[ends.len() - 1];
             let incoming = self.end_threat(last, player);
-            let s = score_with_variant(last, self.statics(), player, &incoming, self.policy.fit, variant, by_points, false);
+            let s = score_with_variant(last, self.statics(), player, &incoming, self.policy.fit, variant, by_points, frac);
             return leaf(ends.len() - 1, s);
         }
         let dd = self.depth_discount();
@@ -545,7 +547,7 @@ impl<'a> Rollout<'a> {
         let mut dw = 1.0f64;
         for (k, end) in ends.iter().enumerate() {
             let incoming = self.end_threat(end, player);
-            let s = score_with_variant(end, self.statics(), player, &incoming, self.policy.fit, variant, by_points, false);
+            let s = score_with_variant(end, self.statics(), player, &incoming, self.policy.fit, variant, by_points, frac);
             total += dw * leaf(k, s);
             weights += dw;
             dw *= dd;

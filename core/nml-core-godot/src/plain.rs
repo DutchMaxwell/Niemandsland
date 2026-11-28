@@ -1259,6 +1259,8 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // `Knobs::default()` = OFF and honours the key if a header carries it —
         // the same shape as `eval_variant` above.
         strength_by_points: dflag(d, "strength_by_points"),
+        // Header-only like `strength_by_points`: no recorder writes it, absent = OFF.
+        leaf_frac_strength: dflag(d, "leaf_frac_strength"),
         // W2 S0. Header-only, like `sighting`: no recorder writes this key yet,
         // so an absent one is `Knobs::default()` = `MeleeReach::All`.
         melee_reach: match d.get("melee_reach").map(|v| v.to_string()).as_deref() {
