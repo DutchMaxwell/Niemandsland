@@ -9,7 +9,7 @@ signal changed
 const DEFAULT_WAY := "empty"
 const FILE := "user://pending_layout.json"
 const LABELS := {"empty": "Empty table", "generated": "Auto-generated", "theme": "Ruined Borderland",
-	"file": "Loaded layout", "edited": "Edited layout"}
+	"file": "Loaded layout", "edited": "Edited layout", "board": "Generated board"}
 const THEME_ID := "ruined_borderland"
 const CHECK := "✓"
 const CROSS := "✗"
@@ -17,6 +17,8 @@ const CROSS := "✗"
 var way := DEFAULT_WAY
 var editor: Control
 var note := ""   # one line under the way cards: why a layout was dropped
+var board := {}   # GEN-5: the generated board's record on way "board" (GeneratedBoard), else {}
+var system := ""   # the setup's game system (set_table)
 
 
 func _init() -> void:
@@ -51,10 +53,15 @@ func _on_editor_closed() -> void:
 ## The setup's table size and game system; a generated layout is laid out again for a new size.
 func set_table(size_feet: Vector2, system_id: String) -> void:
 	var resized: bool = editor.table_size_feet != size_feet
+	system = system_id
 	editor.set_table_size(size_feet)
 	editor.set_game_system(system_id, "Chosen in step 01")
 	if way == "theme" and not TableTheme.load_theme(THEME_ID).fits(size_feet):
 		way = DEFAULT_WAY   # the ready-made table needs 6 x 4 ft; the step-04 row says so by its new name
+	elif way == "board" and not board_offered():
+		way = DEFAULT_WAY
+		board = {}
+		note = "A generated board needs a 4 x 4 ft table."
 	elif way == "file" and resized:
 		way = DEFAULT_WAY
 		note = "The layout was made for another table size."
@@ -64,18 +71,33 @@ func set_table(size_feet: Vector2, system_id: String) -> void:
 		changed.emit()
 
 
-## Chooses a way; the ready-made table is refused off 6 x 4 ft (false).
+## Chooses a way; the ready-made table is refused off 6 x 4 ft, a generated board off 4 x 4 ft or for a system
+## without one (false). A generated board starts with a fresh record and Front Line deployment.
 func choose(new_way: String) -> bool:
 	if new_way == "theme" and not TableTheme.load_theme(THEME_ID).fits(editor.table_size_feet):
 		return false
+	if new_way == "board":
+		var fresh := GeneratedBoard.random(GameSystem.generated_boards(system)[0]) if board_offered() else {}
+		if fresh.is_empty():
+			return false
+		board = fresh
+	else:
+		board = {}
 	way = new_way
 	note = ""
 	if way == "generated":
 		generate()
 		return true
 	editor._clear_terrain()
+	if way == "board":
+		editor._on_deployment_type_selected(1)   # Front Line: the board's deployment bands face the long edges
 	changed.emit()
 	return true
+
+
+## True when the setup's table is 4 x 4 ft and its system is offered a generated board.
+func board_offered() -> bool:
+	return editor.table_size_feet == Vector2(4, 4) and not GameSystem.generated_boards(system).is_empty()
 
 
 ## A layout file saved in the editor; one made for another table size is refused with its line, nothing changes.
@@ -106,7 +128,13 @@ func set_deployment(type: int) -> void:
 
 
 ## The editor's own generator (unseeded): another press gives another layout.
+## On way "board" it draws a new generated board of the same id instead.
 func generate() -> void:
+	if way == "board":
+		var fresh := GeneratedBoard.random(str(board.get("id", "")))
+		board = fresh if not fresh.is_empty() else board
+		changed.emit()
+		return
 	editor._on_autogen_pressed()
 	changed.emit()
 
@@ -140,4 +168,4 @@ func commit() -> void:
 		PendingLayout.store({})
 		return
 	editor.save_layout(FILE)
-	PendingLayout.store({"path": FILE})
+	PendingLayout.store({"board": board, "path": FILE} if way == "board" else {"path": FILE})

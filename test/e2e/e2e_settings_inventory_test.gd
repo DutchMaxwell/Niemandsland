@@ -614,3 +614,61 @@ func test_the_menus_audio_page_is_one_row_per_volume() -> void:
 	for key: String in ["Master Volume", "Music Volume"]:
 		var lines := page.find_children("*", "Label", true, false).filter(func(l: Node) -> bool: return (l as Label).text == help[key])
 		assert_int(lines.size()).override_failure_message("%s has %d help lines" % [key, lines.size()]).is_equal(1)
+
+
+## In the menu Display and Gameplay stand as rows too (step 79, the rest): the page's name as an eyebrow (no "DISPLAY:"),
+## one row per setting in the page's order, a slider with its value in mono beside it, one help line each (red before:
+## the old list with the help under each control).
+func test_the_menus_display_and_gameplay_pages_are_one_row_per_setting() -> void:
+	_panel.set_modal(true)
+	var expected := {"Display": ["RowUIScale", "RowFullscreen"], "Gameplay": ["RowShowMoveTrails",
+		"RowShowRuleTextsattheTable", "RowGore", "RowCombatStage(pacestheresolution)", "RowStagebeat",
+		"RowEnforceMovementLimit", "RowAIExplanationsStayUp"]}
+	for page_name: String in expected:
+		var page: Node = _panel._page(page_name)
+		var names: Array = page.get_children().filter(func(n: Node) -> bool: return String(n.name).begins_with("Row")).map(
+			func(r: Node) -> String: return String(r.name)).filter(func(n: String) -> bool: return n != "RowMonitor")
+		assert_array(names).override_failure_message("%s: %s" % [page_name, str(names)]).is_equal(expected[page_name])
+		var colon := page.find_children("*", "Label", true, false).filter(func(l: Node) -> bool: return (l as Label).text.ends_with(":"))
+		assert_array(colon).override_failure_message("%s keeps a heading with a colon" % page_name).is_empty()
+	var help: Dictionary = _panel.get_script().get_script_constant_map().get("HELP", {})
+	for key: String in ["UI Scale", "Fullscreen", "Gore", "Show Move Trails"]:
+		var lines := _panel.find_children("*", "Label", true, false).filter(func(l: Node) -> bool: return (l as Label).text == help[key])
+		assert_int(lines.size()).override_failure_message("%s has %d help lines" % [key, lines.size()]).is_equal(1)
+	var beat: HSlider = null
+	for n: Node in _panel._page("Gameplay").find_children("*", "HSlider", true, false):
+		beat = n as HSlider
+	if beat == null:
+		return
+	var value := beat.get_parent().get_child(1) as Label
+	assert_object(value.get_theme_font("font")).is_same(HouseStyle.mono())
+	var before: float = GraphicsSettings.combat_stage_hold_s
+	beat.value = 6.0 if before != 6.0 else 1.0
+	assert_str(value.text).is_equal("%.1fs" % beat.value)
+	assert_float(GraphicsSettings.combat_stage_hold_s).is_equal_approx(beat.value, 0.01)
+	beat.value = before
+
+
+## Sheet 05: Quality is one joined group of 40 px segments, a dropdown in a row is 44 px high (red before: five loose
+## 26 px buttons, 30 px dropdowns).
+func test_the_menus_quality_is_one_group_and_dropdowns_are_44_px() -> void:
+	_panel.set_modal(true)
+	var row := _panel.find_child("QualityRow", true, false) as HBoxContainer
+	assert_int(row.get_theme_constant(&"separation")).is_equal(0)
+	assert_float((row.get_child(0) as Control).custom_minimum_size.y).is_equal(40.0)
+	var frame := _panel.find_child("TableFrameOption", true, false) as Control
+	assert_float(frame.custom_minimum_size.y).is_equal(44.0)
+
+
+## Gap review 28.11. (sheet 05): in the menu the rail is set off - a darker column with a hairline at its right - and the
+## Graphics page carries its heading "How the table looks" under the eyebrow (red before: neither).
+func test_the_menus_rail_is_set_off_and_graphics_has_its_heading() -> void:
+	_panel.set_modal(true)
+	await get_tree().process_frame
+	var column := _panel.find_child("RailColumn", true, false) as PanelContainer
+	var box := column.get_theme_stylebox(&"panel") as StyleBoxFlat if column != null else null
+	assert_bool(box != null and box.border_width_right >= 1 and box.bg_color.a > 0.0).override_failure_message(
+		"the rail is not set off").is_true()
+	var heading := _panel.find_child("PageHeading", true, false) as Label
+	assert_str(heading.text if heading != null else "").is_equal("How the table looks")
+	_panel.set_modal(false)

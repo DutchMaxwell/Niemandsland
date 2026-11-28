@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Plan step 27-pre-R R3: from PENDING_EPOCH_RUIN_LEDGES the core sees a free ruin's floors as ledges, so a player's
+## Plan step 27-pre-R R3: from EPOCH_107_RUIN_LEDGES the core sees a free ruin's floors as ledges, so a player's
 ## skirmish model that walks off a ruin floor in its open activation is rolled ONCE - by the core, when the activation
 ## resolves; its drop check lists the jump, so the table's JumpRules branch stands aside (P3's guard). One run observes both
 ## halves: the table's line ("<unit> jumps ...") and the core's ("Jump: <unit> model 1 jumps down ...").
@@ -70,7 +70,7 @@ static func _walk_off(slabs: Array) -> Array:
 @warning_ignore('unused_parameter')
 func test_a_ruin_floor_jump_is_rolled_once(do_skip := not ClassDB.class_exists("NmlCore"),
 		skip_reason := "NmlCore extension not loaded") -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_RUIN_LEDGES
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_107_RUIN_LEDGES
 	_main.object_manager.spawn_sandbox_terrain("ruin_large_3f", ObjectManager.SandboxPropKind.RUIN, Vector3.ZERO, false, 7401)
 	await _runner.simulate_frames(2)
 	var shapes: Array = _main.terrain_overlay._sandbox_shapes()

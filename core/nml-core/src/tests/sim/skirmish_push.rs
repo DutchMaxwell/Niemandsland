@@ -1,5 +1,6 @@
 //! The skirmish Pushing rule (3.6 Firefight / AoF: Skirmish p.15): "When a unit is Shaken after being attacked, the
-//! attacker may try to push it." The attacker's offer is `activation::Input::Push`, resolved at the end of the attack.
+//! attacker may try to push it." The attacker decides after the dice (step 29d: the `push:`/`push_to:` choices); here a
+//! push decided up front (`Tray::offer_push`) stands for that answer.
 use super::*;
 use crate::activation::PushInput;
 
@@ -54,10 +55,11 @@ fn a_push_holds_only_against_the_target_this_attack_shook() {
     let shook = (0..200).find(|&s| push_line(&push_game("gff", e, s, "b", false)).is_some_and(|l| l.starts_with("Push: Gunners rolls")))
         .expect("a seed where the volley shakes b");
     assert!(push_line(&push_game("aofs", e, shook, "b", false)).is_some_and(|l| l.starts_with("Push: Gunners rolls")), "aofs holds too");
-    let steady = (0..200).find(|&s| push_line(&push_game("gff", e, s, "b", false)).is_some_and(|l| l.contains("no push")))
+    // Step 29d: the attacker decides after the dice, so a target this attack did not shake asks nothing and says nothing.
+    let steady = (0..200).find(|&s| push_line(&push_game("gff", e, s, "b", false)).is_none() && !push_game("gff", e, s, "b", false).rolls.iter().any(|r| r.kind == "push"))
         .expect("a seed where b holds");
-    assert_eq!(push_line(&push_game("gff", e, steady, "b", false)).map(String::as_str), Some("Push: no push - Target is not Shaken by this attack"));
-    assert_eq!(push_line(&push_game("gff", e, shook, "b", true)).map(String::as_str), Some("Push: no push - Target is not Shaken by this attack"), "Shaken before");
+    assert_eq!(push_line(&push_game("gff", e, steady, "b", false)), None);
+    assert_eq!(push_line(&push_game("gff", e, shook, "b", true)), None, "Shaken before: no push to decide");
     for (sys, epoch) in [("gff", e - 1), ("gf", e)] {
         assert_eq!(push_line(&push_game(sys, epoch, shook, "b", false)), None, "{sys} at {epoch}");
     }
@@ -169,7 +171,7 @@ fn a_target_shaken_by_a_damage_spell_may_be_pushed() {
     assert_eq!((st.alive[2], st.shaken[2]), (1, true), "the spell shook the target: {:?}", shot.log);
     assert!(shot.log.iter().any(|l| l.starts_with("Push: Mystic rolls 5 and pushes Target model 1")), "the push holds, rolls and moves: {:?}", shot.log);
     let (_, shot) = game(false);
-    assert!(shot.log.iter().any(|l| l == "Push: no push - Target is not Shaken by this attack"), "a failed cast hits nothing: {:?}", shot.log);
+    assert!(!shot.log.iter().any(|l| l.starts_with("Push:")), "a failed cast hits nothing, so there is no push to decide: {:?}", shot.log);
 }
 
 /// Ruling D14: after the push the unit's other models stand within 1 in of the moved one - a model already that close
@@ -239,6 +241,12 @@ fn a_landed_push_regroups_the_rest_of_the_unit() {
 /// The spell-and-push fixture on a tier board: "Mystic" at the centre on the ground casts a 3-hit Bolt (no sight needed) at
 /// the two-model "Target" standing on a raised strip x 9..12 in of `strip` in; the push moves its model 1 to `to_x` (z 0).
 fn ledge_push(strip: f64, to_x: f64, dice: Vec<Vec<u8>>) -> (State, ShootResult) {
+    let (st, shot, _) = ledge_push_tray(strip, to_x, dice);
+    (st, shot)
+}
+
+/// `ledge_push` with the tray after it (its landings: what the table lands).
+fn ledge_push_tray(strip: f64, to_x: f64, dice: Vec<Vec<u8>>) -> (State, ShootResult, Tray) {
     let mut st = four_unit_line();
     let keys = st.roster.keys.clone();
     st.roster = Rc::new(Roster { index: keys.iter().cloned().zip(0..).collect(), keys, profile: vec![0, 1, 2, 3] });
@@ -264,7 +272,22 @@ fn ledge_push(strip: f64, to_x: f64, dice: Vec<Vec<u8>>) -> (State, ShootResult)
     tray.offer_casts(vec![crate::activation::CastInput { seq: 0, caster: "a".into(), spell: "Bolt".into(), targets: vec!["b".into()], base: 2, threshold: 1, ..Default::default() }]);
     tray.offer_push(Some(PushInput { target: "b".into(), model: 0, to: at(to_x, 0.0, 0.0) }));
     let seams = Seams { rules_epoch: crate::acts::EPOCH_101_SKIRMISH_PUSH, tray_exact: true, ..Seams::default() };
-    resolve_stochastic_tray_on_board(&statics, &st, &action, &t, seams, &mut GodotRng::new(0), &mut tray).unwrap()
+    let (st, shot) = resolve_stochastic_tray_on_board(&statics, &st, &action, &t, seams, &mut GodotRng::new(0), &mut tray).unwrap();
+    (st, shot, tray)
+}
+
+/// #3961 (FT-17): the fall's wounds on the pushed model are a landing of their own - the table lands only landings, so
+/// without one the pushed model stayed alive on the table while the core had it dead. After the push's move landing,
+/// one landing on Target marks the pushed survivor (slot 1) dead.
+#[test]
+fn a_pushed_models_fall_wounds_land_on_the_table() {
+    let (st, _shot, tray) = ledge_push_tray(3.0, 8.7, vec![vec![6], vec![1, 6, 6], vec![1], vec![5], vec![1, 6, 6]]);
+    assert_eq!(st.alive[2], 0, "the core: the fall killed it");
+    let landings = tray.landings_upto(usize::MAX);
+    let push_move = landings.iter().position(|l| l.unit == 2 && !l.moved_to.is_empty()).expect("the push's move landing");
+    // (the volley's own landing killed slot 0 before; the pushed survivor is slot 1)
+    let dead = landings.iter().enumerate().skip(push_move + 1).find(|(_, l)| l.unit == 2 && l.moved_to.is_empty() && l.models.iter().any(|m| m.dead && m.slot == 1));
+    assert!(dead.is_some(), "a landing kills Target's pushed model after its move: {landings:?}");
 }
 
 /// GFF/AOFS-E12-01: pushed off a 3 in strip the model falls - three dice, each 1-3 a wound on it ([1, 6, 6]: one, its last).

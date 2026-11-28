@@ -615,8 +615,8 @@ def bearers_sidecar(list_path, player: int) -> dict[str, dict[str, int]]:
 
 
 def named_bearers(list_p1, list_p2, rules_epoch: int) -> dict[str, dict[str, int]]:
-    """K3: both seats' named bearers, only from `PENDING_EPOCH_TWO_BEARERS`; below it {} - the core's last slot, as recorded."""
-    if rules_epoch < nml_core.PENDING_EPOCH_TWO_BEARERS:
+    """K3: both seats' named bearers, only from `EPOCH_104_TWO_BEARERS`; below it {} - the core's last slot, as recorded."""
+    if rules_epoch < nml_core.EPOCH_104_TWO_BEARERS:
         return {}
     return {**bearers_sidecar(list_p1, 1), **bearers_sidecar(list_p2, 2)}
 
@@ -769,6 +769,14 @@ def load_board(
             "(the result file's `terrain` is that drawing list and cannot be "
             "rebuilt from the header shape)" % path
         )
+    params = board["terrain"].get("cell_params", {})
+    want = [TABLE_W_IN / 12.0, TABLE_D_IN / 12.0]
+    if params and list(params.get("table_size_feet", want)) != want:
+        t = board["terrain"]
+        if any(t.get(k) for k in ("cells", "sandbox", "walls")) or board["pieces"]:
+            raise ValueError("banked board %s is %s ft, this game's book plays %s ft - no terrain bank for that table" % (
+                path, params.get("table_size_feet"), want))
+        params["table_size_feet"] = want   # SELFPLAY-BOARD: an empty board takes the book's table
     return nml_core.board(board["terrain"]), board["terrain"], board["pieces"]
 
 
@@ -927,6 +935,32 @@ FRONT_LINE_ZONES = {
         "2": [[[-36, 12], [36, 12], [36, 24], [-36, 24]]],
     }
 }
+
+
+@contextlib.contextmanager
+def _book_table(list_path: str | Path):
+    """SELFPLAY-BOARD: the game is played on the table of its list's rules book (`nml_core.book_board_in`: gf / aof 72 x 48,
+    the skirmish books 48 x 48), not on a fixed 72 x 48. For the game's duration the module's table width / depth and the
+    front-line zones follow that book (every helper reads them at call time), and they are restored after it. A 72 x 48
+    book leaves the module untouched, so a gf / aof game plays byte-identical. Not re-entrant: one game at a time per process."""
+    global TABLE_W_IN, TABLE_D_IN, FRONT_LINE_ZONES
+    try:
+        with open(list_path, encoding="utf-8") as f:
+            w_in, d_in = nml_core.book_board_in(str(json.load(f).get("gameSystem", "")))
+    except (OSError, ValueError, AttributeError):
+        w_in, d_in = TABLE_W_IN, TABLE_D_IN   # an unreadable list: `_play_game` reports it (or the caller's bad argument)
+    saved = (TABLE_W_IN, TABLE_D_IN, FRONT_LINE_ZONES)
+    if (w_in, d_in) != (TABLE_W_IN, TABLE_D_IN):
+        hw, hd = w_in / 2.0, d_in / 2.0
+        TABLE_W_IN, TABLE_D_IN = w_in, d_in
+        FRONT_LINE_ZONES = {"zones": {
+            "1": [[[-hw, -hd], [hw, -hd], [hw, -hd + 12.0], [-hw, -hd + 12.0]]],
+            "2": [[[-hw, hd - 12.0], [hw, hd - 12.0], [hw, hd], [-hw, hd]]],
+        }}
+    try:
+        yield
+    finally:
+        TABLE_W_IN, TABLE_D_IN, FRONT_LINE_ZONES = saved
 
 
 def resolve_objectives(objectives: str) -> str:
@@ -2524,7 +2558,13 @@ def core_with_knob_overrides(
     return core
 
 
-def play_game(
+def play_game(seed: int, list_p1: str | Path, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    """`_play_game` on the table of `list_p1`'s rules book (`_book_table`)."""
+    with _book_table(list_p1):
+        return _play_game(seed, list_p1, *args, **kwargs)
+
+
+def _play_game(
     seed: int,
     list_p1: str | Path,
     list_p2: str | Path,
@@ -4080,6 +4120,9 @@ def main(argv: list[str]) -> int:
         )
     return 0
 
+
+# `play_game` is the book-table wrapper; its signature is `_play_game`'s (inspect follows `__wrapped__`).
+play_game.__wrapped__ = _play_game  # type: ignore[attr-defined]
 
 if __name__ == "__main__":
     import sys

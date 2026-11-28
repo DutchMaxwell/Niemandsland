@@ -2406,6 +2406,13 @@ fn vocab_version_of_header(header: &Bound<'_, PyAny>) -> PyResult<i64> {
 
 /// NML-1134 — the vocabulary version THIS build reads, i.e. the one a FRESH
 /// game (and a freshly recorded corpus) is slotted with.
+/// `rules::book(system).default_board_in`: the table a game of `system` is played on, `[width, depth]` in inches (gf/aof
+/// 72 x 48, the skirmish books 48 x 48). Self-play deploys and scores on it.
+#[pyfunction]
+fn book_board_in(system: &str) -> [f64; 2] {
+    nmlcore::rules::book(system).default_board_in
+}
+
 /// `rules::hero_join_refusal`: the reason a list's joined Hero is refused in `system` at `rules_epoch`, or `None`.
 #[pyfunction]
 fn hero_join_refusal(system: &str, rules_epoch: u32) -> Option<&'static str> {
@@ -3248,6 +3255,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // NML-1134: the rule vocabulary's version — this build's, and one corpus's.
     m.add_function(wrap_pyfunction!(vocab_version_of_header, m)?)?;
     m.add_function(wrap_pyfunction!(rule_vocab_version, m)?)?;
+    m.add_function(wrap_pyfunction!(book_board_in, m)?)?;
     m.add_function(wrap_pyfunction!(hero_join_refusal, m)?)?;
     m.add_function(wrap_pyfunction!(command_limit, m)?)?;
     m.add_function(wrap_pyfunction!(default_command_picks, m)?)?;
@@ -3256,7 +3264,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // The CLASS FIX (external review 03.09. item 3 / F9): the epoch a fresh
     // `play_game()` stamps. See `acts::rule_on`.
     m.add("CURRENT_RULES_EPOCH", nmlcore::CURRENT_RULES_EPOCH)?;
-    m.add("PENDING_EPOCH_TWO_BEARERS", nmlcore::acts::PENDING_EPOCH_TWO_BEARERS)?;
+    m.add("EPOCH_104_TWO_BEARERS", nmlcore::acts::EPOCH_104_TWO_BEARERS)?;
     m.add("EPOCH_66_DISTANCE_TRUTH", nmlcore::acts::EPOCH_66_DISTANCE_TRUTH)?;
     // Rules 3.6 (MOR-19b): the py-side band fold's gate for Ethereal's optional placement.
     m.add("EPOCH_73_V36", nmlcore::acts::EPOCH_73_V36)?;

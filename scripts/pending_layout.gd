@@ -1,6 +1,7 @@
 class_name PendingLayout
 ## The layout the table setup chose (step 04, "Lay out the table"), carried to the table beside
-## `niemandsland/pending_table_setup`: {} for the empty table, {"theme": id} for a ready-made table, or
+## `niemandsland/pending_table_setup`: {} for the empty table, {"theme": id} for a ready-made table, {"board": record,
+## "path": file} for a generated board (`GeneratedBoard.resolve`) with the editor's file of its deployment, or
 ## {"path": file} - a file the setup wrote with the layout editor's own save. The reveal gate applies it on a new
 ## table; a load and a join never do.
 
@@ -24,12 +25,17 @@ static func apply(main: Node) -> bool:
 	ProjectSettings.set_setting(KEY, null)
 	if not choice is Dictionary:
 		return false
+	var board_laid := false
+	if choice.has("board") and main.has_method("apply_generated_board"):   # GEN-4: a generated board, through its door
+		board_laid = main.apply_generated_board(choice.board)
+		if not choice.has("path"):
+			return board_laid
 	if choice.has("theme") and main.has_method("apply_table_theme"):
 		main.apply_table_theme(str(choice.theme))
 		return true
 	var path := str(choice.get("path", ""))
 	if path.is_empty():
-		return false
+		return board_laid
 	if not FileAccess.file_exists(path):
 		print("[Setup] The chosen layout file is gone; the table opens empty: %s" % path)
 		return false
@@ -38,4 +44,4 @@ static func apply(main: Node) -> bool:
 	if laid:
 		editor._on_close_pressed()
 	DirAccess.remove_absolute(path)
-	return laid
+	return laid or board_laid

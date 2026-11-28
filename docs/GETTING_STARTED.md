@@ -63,7 +63,7 @@ The game **autosaves** every 5 minutes and at every round change into three rota
 
 To play a full game against the built-in AI opponent:
 
-1. Give NACHTMAHR an army — either **import a second list** and tick **AI-controlled (Solo)**, or press **AI Opponent** and let NACHTMAHR bring one of its own pre-built lists (pick a faction and 1000–3000 pts; the list is fetched from the asset CDN and cached for offline play).
+1. Give NACHTMAHR an army — either pick **Solo against NACHTMAHR** in step 04 of the table setup ("Who is at the table?") and let NACHTMAHR bring one of its own pre-built lists (pick a faction, 1000–3000 pts and the seat it plays; the list is fetched from the asset CDN, cached for offline play, and stands in its seat when the table opens), or **import a second list** at the table and tick **AI-controlled (Solo)**.
 2. Follow the **guided deployment**: a roll-off decides who picks a table edge and deploys first, then both sides place units alternately with explicit hand-over clicks (Scout, Ambush and Infiltrate reserves are handled for you).
 3. On **Start Game**, play alternates unit by unit. You act through the **radial menu** — **Shoot**, **Fight** or **Cast**, and you move by hand (the one-click Charge, Advance & Shoot and Rush verbs are switched off in this version while their move preview and target selection are reworked, issue #1828) — with real dice in the tray for both sides; NACHTMAHR takes its own activations, and **every applied rule writes a battle-log line** so you can follow (and audit) each decision. The remaining uncovered special rules are a small residue; the battle log names any rule it applies (or asks for manual handling) per unit, so you can apply the rest by hand.
 

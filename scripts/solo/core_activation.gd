@@ -58,7 +58,7 @@ static func applies(main) -> bool:
 ## (or "off") is the way back until the switch and the #172 guard are deleted. Tests set the entry per kind. CC-14a: `interference`
 ## (a foe's token spend against an AI cast, `interference:<seq>:<caster>:<slot>`) starts OFF like the Takedown pick.
 const CHOICE_KINDS := ["takedown_model", "wound_alloc", "interference", "strike_back"]
-const CHOICE_DEFAULT_ON := ["wound_alloc", "strike_back", "versatile_mode", "spot_markers"]
+const CHOICE_DEFAULT_ON := ["wound_alloc", "strike_back", "versatile_mode", "spot_markers", "blast_split", "push", "push_to", "push_replace"]
 static var _choice_on: Dictionary = {}
 
 
@@ -280,7 +280,7 @@ static func pending_choices(main, unit: GameUnit, transcript: Array) -> Array:
 		if charged is GameUnit:
 			if choice_enabled("strike_back") and not main._solo_is_ai_unit(charged):
 				ids.append("strike_back:%s:%s" % [unit.unit_id, (charged as GameUnit).unit_id])
-			return ids
+			return ids + _push_probes(main, unit)
 		var target = main.opr_army_manager.game_units.get(str(e.get("shoot", "")))
 		if not target is GameUnit:
 			return ids
@@ -288,6 +288,10 @@ static func pending_choices(main, unit: GameUnit, transcript: Array) -> Array:
 			ids.append("takedown_model:%s:%s" % [unit.unit_id, (target as GameUnit).unit_id])
 		if choice_enabled("wound_alloc"):
 			ids.append("wound_alloc:%s:%s:0" % [unit.unit_id, (target as GameUnit).unit_id])
+		# Step 29c (D-29-R1): a human-owned skirmish target's owner places the even Blast split's remainder; the core asks
+		# only where a remainder has a choice, so the probe is unseen like the wound allocation's.
+		if choice_enabled("blast_split") and CoherencyChecker.is_skirmish_system(target) and not main._solo_is_ai_unit(target):
+			ids.append("blast_split:%s:%s" % [unit.unit_id, (target as GameUnit).unit_id])
 		# Step 22b (OD-2: a player's pick is asked through the core): a human Versatile Attack shooter picks the mode (22a).
 		if choice_enabled("versatile_mode") and not main._solo_is_ai_unit(unit) \
 				and not RulesRegistry.unit_rules_of_primitive(unit, "Versatile Attack").is_empty():
@@ -297,7 +301,7 @@ static func pending_choices(main, unit: GameUnit, transcript: Array) -> Array:
 		if choice_enabled("spot_markers") and not main._solo_is_ai_unit(unit) \
 				and int((target as GameUnit).unit_properties.get("spot_markers", 0)) > 0:
 			ids.append("spot_markers:%s:%s" % [unit.unit_id, (target as GameUnit).unit_id])
-		return ids
+		return ids + _push_probes(main, unit)
 	return ids
 
 
@@ -335,6 +339,131 @@ static func _takedown_weapon(unit: GameUnit) -> bool:
 	return false
 
 
+## Step 29e-1 (D-29-R2): a human skirmish attacker may push any enemy unit its attack shakes - probed unseen per enemy unit
+## (the core asks only where a push holds): `push:<attacker>:<unit>` and its spot `push_to:<attacker>:<unit>`.
+static func _push_probes(main, unit: GameUnit) -> Array:
+	var ids: Array = []
+	if main._solo_is_ai_unit(unit) or not CoherencyChecker.is_skirmish_system(unit) or not choice_enabled("push"):
+		return ids
+	var side := int(unit.unit_properties.get("player_id", 0))
+	for u in main.opr_army_manager.game_units.values():
+		var gu := u as GameUnit
+		if gu.get_alive_count() > 0 and int(gu.unit_properties.get("player_id", 0)) != side:
+			ids.append_array(["push:%s:%s" % [unit.unit_id, gu.unit_id], "push_to:%s:%s" % [unit.unit_id, gu.unit_id]])
+			if choice_enabled("push_replace") and not main._solo_is_ai_unit(gu):   # 29e-2a: a human defender places the rest
+				ids.append("push_replace:%s" % gu.unit_id)
+	return ids
+
+
+## Step 29e-1 (D-29 Q2): the attacker's push spot - every living model of `target` wears a ring 2 in past its base; the
+## attacker drags one, and the drop is the answer `<slot>:<x>,<y>,<z>` (the model goes back to its spot: the core moves it
+## when it takes the push). Esc skips ("skip"). The drag is the table's own; nothing takes the mouse.
+static var push_pick: Dictionary = {}
+
+
+static func pick_push_spot(main, target: GameUnit) -> String:
+	if target == null:
+		return "skip"
+	push_pick = {"target": target, "out": [], "rings": []}
+	for m in target.get_alive_models():
+		var ring: MeshInstance3D = main._solo_spawn_picked_ring((m as ModelInstance).node.global_position)
+		var r := SoloController.model_base_radius_m(m) + 2.0 * 0.0254
+		(ring.mesh as TorusMesh).inner_radius = r - 0.003
+		(ring.mesh as TorusMesh).outer_radius = r + 0.003
+		(push_pick["rings"] as Array).append(ring)
+	main._log_rule_event(BattleLog.Category.MOVEMENT, "Push: drag one of %s's models up to 2 in - Esc skips" % target.get_name())
+	var out: Array = push_pick["out"]
+	while out.is_empty() and is_instance_valid(main) and main.is_inside_tree() and not push_pick.is_empty():
+		await main.get_tree().process_frame
+	for ring in push_pick.get("rings", []):
+		if is_instance_valid(ring):
+			(ring as Node).queue_free()
+	push_pick = {}
+	return str(out[0]) if not out.is_empty() else "skip"
+
+
+## A table drop while the push spot is asked: a model of the target is the answer (true, the drop is taken and the model
+## restored); anything else is an ordinary drop (false).
+static func take_push_drop(main, mv: Dictionary) -> bool:
+	if push_pick.is_empty():
+		return false
+	var node := mv.get("node") as Node3D
+	var gu := UnitUtils.get_game_unit(node)
+	if gu == null or gu != push_pick["target"]:
+		return false
+	var m: ModelInstance = gu.get_model_for_node(node)
+	var slot := gu.get_alive_models().find(m)
+	if slot < 0:
+		return false
+	var p := node.global_position
+	main.solo_controller._apply_model_positions([m], [mv.get("from_raw", p)])
+	(push_pick["out"] as Array).append("%d:%f,%f,%f" % [slot, p.x, p.y, p.z])
+	return true
+
+
+## Step 29e-2a (3.6 p.15 "then the opponent must place any other models from the unit within 1" of it"; Q3 by the book): the
+## DEFENDER's answer. "Place for me" = "auto" (the core's D14 placer); "I place" rings the pushed model 1 in past its base,
+## the owner drags the others (their drags are exempt from the turn and activation locks) and Enter answers their spots;
+## Esc takes "auto". `hints` carries the core's `pushed:<slot>`.
+static var replace_pick: Dictionary = {}
+
+
+static func pick_push_replace(main, gu: GameUnit, hints: Array) -> String:
+	var slot := -1
+	for h in hints:
+		if str(h).begins_with("pushed:"):
+			slot = int(str(h).get_slice(":", 1))
+	var alive := gu.get_alive_models() if gu != null else []
+	if slot < 0 or slot >= alive.size():
+		return "auto"
+	var pushed: ModelInstance = alive[slot]
+	if not await main._solo_ask("Place the rest", "%s's model %d was pushed.\nPlace the other models within 1 in of it?" % [gu.get_name(), slot + 1],
+			"I place", "Place for me"):
+		return "auto"
+	var ring: MeshInstance3D = main._solo_spawn_picked_ring(pushed.node.global_position)
+	var r := SoloController.model_base_radius_m(pushed) + 0.0254
+	(ring.mesh as TorusMesh).inner_radius = r - 0.003
+	(ring.mesh as TorusMesh).outer_radius = r + 0.003
+	replace_pick = {"unit": gu, "out": []}
+	main._log_rule_event(BattleLog.Category.MOVEMENT, "Push: drag %s's other models within 1 in of model %d, then Enter - Esc places for you" % [gu.get_name(), slot + 1])
+	var out: Array = replace_pick["out"]
+	while out.is_empty() and is_instance_valid(main) and main.is_inside_tree() and not replace_pick.is_empty():
+		await main.get_tree().process_frame
+	if is_instance_valid(ring):
+		ring.queue_free()
+	replace_pick = {}
+	if out.is_empty() or str(out[0]) != "done":
+		return "auto"
+	var spots := PackedStringArray()
+	for k in alive.size():
+		if k != slot and (alive[k] as ModelInstance).node != null:
+			var p: Vector3 = (alive[k] as ModelInstance).node.global_position
+			spots.append("%d:%f,%f,%f" % [k, p.x, p.y, p.z])
+	return ";".join(spots) if not spots.is_empty() else "auto"
+
+
+## True while `gu`'s owner places the rest after a push - or after a fall, while the fall lock stands (#3872, 3.6 p.15: the
+## others are PLACED within 1 in): its drags pass the locks and are no move of its own; End measures the 1 in.
+static func replacing(gu: GameUnit) -> bool:
+	return gu != null and ((not replace_pick.is_empty() and gu == replace_pick.get("unit")) or fall_pending(gu.unit_id))
+
+
+## Enter (true) or Esc (false) while the rest is placed; true = the key is taken.
+static func finish_replace_pick(done: bool) -> bool:
+	if replace_pick.is_empty():
+		return false
+	(replace_pick["out"] as Array).append("done" if done else "auto")
+	return true
+
+
+## Esc while the push spot is asked: no push (true = the key is taken).
+static func skip_push_pick() -> bool:
+	if push_pick.is_empty():
+		return false
+	(push_pick["out"] as Array).append("skip")
+	return true
+
+
 ## Step 22b: what the owner's Versatile prompt shows - the weapon and the mode the AI's own EV would pick (the recommended button), as the
 ## table's `_solo_prompt_versatile` did; {} for any other choice.
 static func _versatile_context(main, unit: GameUnit, transcript: Array, id: String) -> Dictionary:
@@ -361,6 +490,14 @@ static func choice_purpose(id: String, transcript: Array = []) -> String:
 			return "Versatile Attack mode"
 		"spot_markers":
 			return "Precision Spotter markers"
+		"blast_split":
+			return "Blast split"
+		"push":
+			return "push"
+		"push_to":
+			return "push spot"
+		"push_replace":
+			return "placement after the push"
 		"interference":
 			return _cast_spell_of(transcript, id.get_slice(":", 2)) if not transcript.is_empty() else "interference"   # the table's request names the spell
 	return "choice"
@@ -377,6 +514,8 @@ static func failed_saves(faces: Array, target: int) -> int:
 static func answer_fits(id: String, options: Array, option: String) -> bool:
 	if option.is_empty():
 		return false
+	if id.get_slice(":", 0) in ["push_to", "push_replace"]:
+		return true   # a free answer (a spot or spots); the core referees it and refuses with the reason
 	if id.get_slice(":", 0) != "wound_alloc":
 		return options.has(option)
 	for slot in option.split(","):
@@ -435,6 +574,15 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		await land_step(main, unit, r.get("landings", []), start_models, landed)
 		if not cx.is_empty() and bool(cx["pre_due"]):
 			_cast_leg_end(main, cx)
+		# Step 29e-1: a push spot the core refuses is said once and asked again (the dice are in the transcript, nothing rerolls).
+		if str(r["step"]) == "refused" and int(r["index"]) < transcript.size():
+			var bad: Dictionary = transcript[int(r["index"])]
+			if str(bad.get("t", "")) == "choice" and str(bad.get("id", "")).get_slice(":", 0) in ["push_to", "push_replace"]:
+				main._log_rule_event(BattleLog.Category.MOVEMENT, str(r["reason"]), ai)
+				main._show_toast(str(r["reason"]))
+				transcript.remove_at(int(r["index"]))
+				probes.append(str(bad["id"]))
+				continue
 		if str(r["step"]) == "need_choice":
 			var options: Array = r.get("options", [])
 			# The choice's owner is a roster KEY (the Takedown shooter, the wounded target): never the shooter by default.
@@ -502,6 +650,10 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		if str(r["kind"]) == "defense" and roller != unit and not main._solo_is_ai_unit(roller) \
 				and main._solo_i_own_unit(roller):   # step 42 (O21): a local defender sees its saves coming, as on the table
 			await main._solo_ask_saves(unit, roller, _shot_weapon(unit, lines), int(r["faces"]), int(r["target"]), 0)
+		if kind == "dangerous" and not ai:
+			# #3858: the core rolls a player's Dangerous test with no sentence (P4.D-19); the table names the test the core
+			# asked for, with its dice count, before the dice line (`run_ai`'s beat writes the same line for the AI).
+			main._solo_log_dangerous_test(unit, int(r["faces"]))
 		var leg_before: String = main._solo_leg
 		if not mapped.is_empty():
 			main._solo_leg = str(mapped[1])   # AI-G4 H1a: dice.jsonl's `leg` of the roll

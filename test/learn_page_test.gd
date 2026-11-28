@@ -162,7 +162,10 @@ func test_tick_finale_and_reset() -> void:
 	assert_int(cards[0].find_children("Tick", "TextureRect", true, false).size()).is_equal(1)
 	assert_int(cards[3].find_children("Tick", "TextureRect", true, false).size()).is_equal(0)
 	var finale := cards[10] as Control
-	assert_array(_texts(finale)).contains(["11 · FINALE", "Finale"])
+	assert_array(_texts(finale)).contains(["11 · FINALE", "FINALE"])
+	var tag := finale.find_children("*", "Label", true, false).filter(func(l: Node) -> bool: return (l as Label).text == "FINALE")
+	assert_bool(not tag.is_empty() and (tag[0] as Node).get_parent() is PanelContainer) \
+		.override_failure_message("FINALE is not a chip (sheet 07)").is_true()
 	assert_float(finale.size.x).is_greater(1.9 * (cards[8] as Control).size.x)
 	page.call("select", "ClassicTrack")
 	var reset := page.find_child("ResetTutorial", true, false) as Button
@@ -195,3 +198,20 @@ func test_tab_walks_the_page_in_reading_order() -> void:
 		expected.append("Lesson%02d" % (i + 1))
 	expected.append_array(["ResetTutorial", "WayBack"])
 	assert_array(order).is_equal(expected)
+
+
+## Sheet 07 (.ch.next): the next lesson's card has the lighter fill #253035, drawn (red before: the 10 % accent wash of a
+## hovered row, never drawn - the card was darker than its neighbours, as the setup's cards before #3838).
+func test_the_next_lesson_has_the_sheets_fill() -> void:
+	var page := await _page(2, 1)
+	if page == null:
+		return
+	await get_tree().process_frame
+	page.call("select", "ClassicTrack")
+	await get_tree().process_frame
+	var next: Array = _lesson_cards(page).filter(func(c: Node) -> bool: return (c as Control).has_theme_stylebox_override(&"normal"))
+	assert_int(next.size()).is_equal(1)
+	if next.size() == 1:
+		var box := (next[0] as Control).get_theme_stylebox(&"normal") as StyleBoxFlat
+		assert_str(box.bg_color.to_html(false)).is_equal("253035")
+		assert_bool(box.draw_center).is_true()

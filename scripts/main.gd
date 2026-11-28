@@ -56,6 +56,7 @@ const FEET_TO_METERS: float = 0.3048
 var undo_manager: UndoManager = null
 @onready var table: StaticBody3D = $Table
 var _board_look: Node = null   # the dev-view board the door in _ready drew (generated_board reads its seed)
+var _board_record := {}   # GEN-4: the record of the board apply_generated_board laid ({} for the dev door's board)
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var directional_light: DirectionalLight3D = $DirectionalLight3D
 @onready var fill_light: DirectionalLight3D = $FillLight
@@ -392,10 +393,7 @@ var _solo_game_finished: bool = false        # summary shown after SOLO_GAME_ROU
 var _solo_cargo_hint_round: int = -1         # #338: passengers-left hint printed once per round
 var _solo_ai_banner: Label = null            # non-blocking "NACHTMAHR is taking its turn…" banner during the tail
 var _solo_dream_overlay: Control = null      # centred "NACHTMAHR dreams…" + spinner while the AI computes
-var _ai_opponent_btn: Button = null          # "AI Opponent" — NACHTMAHR builds its own army
-const AI_LISTS_DIR := "res://assets/ai_lists"          # dev/arena bundle — NEVER in the public repo
-const AI_LISTS_CDN_PATH := "ai_lists_v36"               # <AssetCdn.HOST>/ai_lists_v36/… (rules 3.6; 0.3.14 keeps ai_lists/)
-const AI_LISTS_CACHE_DIR := "user://ai_lists_cache_v36" # offline replay of fetched 3.6 lists (a 3.5 cache is never read)
+var _ai_lists: AiLists = null               # where NACHTMAHR's lists come from (bundle, cache, CDN)
 var _solo_fast: bool = false                 # fast-forward: shrink pacing holds + skip move animation
 var _solo_auto_saves: bool = false           # A3 (NML-202): skip _solo_prompt_saves' dialog, roll straight to the tray
 var _solo_batch: bool = false                # headless sweeps: instant (non-physics) dice + zero pacing holds (implies fast)
@@ -547,7 +545,7 @@ func _ready() -> void:
 
 	# The slide-out game menu (under the hamburger): the glassmorphism theme stays on the column for the
 	# sections not yet in the house style (solo, deployment); GameMenu.style dresses the shell and the
-	# table / multiplayer / save sections once the AI Opponent line exists (below).
+	# table / multiplayer / save sections (below).
 	if has_node("/root/ThemeManager"):
 		left_panel_scroll.theme = get_node("/root/ThemeManager").get_current_theme()
 
@@ -795,6 +793,7 @@ func _ready() -> void:
 	opr_import_dialog = OPRImportDialog.new()
 	get_tree().root.add_child(opr_import_dialog)
 	opr_import_dialog.army_imported.connect(_on_opr_army_imported)
+	opr_import_dialog.army_manager = opr_army_manager
 	opr_import_dialog.hide()
 
 	# Initialize OPR Stats Tooltip
@@ -814,16 +813,18 @@ func _ready() -> void:
 	# Connect OPR import button
 	import_opr_btn.pressed.connect(_on_import_opr_army)
 
-	# AI-opponent setup (maintainer): next to the import button, a "let NACHTMAHR bring its own list"
-	# entry. The alternative — hand the AI YOUR imported list — is the existing per-slot AI checkbox.
-	_ai_opponent_btn = Button.new()
-	_ai_opponent_btn.name = "AiOpponentBtn"
-	_ai_opponent_btn.text = "AI Opponent"
-	_ai_opponent_btn.tooltip_text = "NACHTMAHR builds its own list: pick a faction and a points bracket. (To hand the AI an imported list instead, tick the AI box on import.)"
-	_ai_opponent_btn.pressed.connect(_open_ai_opponent_dialog)
+	# NACHTMAHR's own lists (bundle, cache, CDN): the setup's step 04 chooses one, the table loads it; "Opponent…"
+	# opens that same page at the table (TableOpponentLayer) to bring NACHTMAHR or a second player later.
+	_ai_lists = AiLists.new()
+	add_child(_ai_lists)
+	var opponent_btn := Button.new()
+	opponent_btn.name = "OpponentBtn"
+	opponent_btn.text = "Opponent…"
+	opponent_btn.tooltip_text = "Who is at the table: NACHTMAHR with a list of its own, a second player, or an online room."
+	opponent_btn.pressed.connect(func() -> void: TableOpponentLayer.open(self))
 	if import_opr_btn.get_parent() != null:
-		import_opr_btn.get_parent().add_child(_ai_opponent_btn)
-		import_opr_btn.get_parent().move_child(_ai_opponent_btn, import_opr_btn.get_index() + 1)
+		import_opr_btn.get_parent().add_child(opponent_btn)
+		import_opr_btn.get_parent().move_child(opponent_btn, import_opr_btn.get_index() + 1)
 	GameMenu.style(left_panel_scroll, [import_opr_btn.get_parent(), host_button.get_parent(), save_game_btn.get_parent(),
 		graphics_quality_option.get_parent(), end_battle_btn.get_parent()], [end_battle_btn])
 	GameMenu.set_status(network_status_label, "Offline", HouseStyle.TONE_MUTED)
@@ -3549,7 +3550,7 @@ func hotseat_off_turn_drag(unit: GameUnit) -> bool:
 	if unit == null or opr_army_manager == null \
 			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING:
 		return false
-	if hotseat_turn_refusal(unit_owner_slot(unit.unit_properties)) == "":
+	if hotseat_turn_refusal(unit_owner_slot(unit.unit_properties)) == "" or CoreActivation.replacing(unit):
 		return false
 	var text := "%s is not on turn — moved back" % unit.get_name()
 	hotseat_log_refusal(text)
@@ -3562,8 +3563,8 @@ func hotseat_off_turn_drag(unit: GameUnit) -> bool:
 ## caller filters plain clicks) and name the refusal once.
 func attacked_unit_drag_refused(unit: GameUnit, distance_in := 0.0) -> bool:
 	if unit == null or opr_army_manager == null \
-			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING:
-		return false
+			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING or CoreActivation.replacing(unit):
+		return false   # #3872 / 29e-2a: placing the rest after a fall or a push is no move - End measures the 1 in
 	# One-core P3 step 34 (N2 b): a move-path unit's drop inside its open activation is re-checked by the core at the
 	# declared mode. A unit that already shot this round keeps the shot lock below.
 	if int(unit.unit_properties.get("shot_round", -1)) != opr_army_manager.current_round \
@@ -3630,6 +3631,8 @@ func core_activation_start(gu: GameUnit) -> bool:
 ## Step 40b: `for_drag` (the drag machine's gate) lets a unit that already activated through while "Enforce Movement Limit"
 ## is off - the escape hatch of O1/O2; the doors keep the lock.
 func core_drag_blocked(gu: GameUnit, for_drag := false) -> bool:
+	if CoreActivation.replacing(gu):
+		return false   # step 29e-2a: the owner places the rest after a push
 	if not CoreActivation.is_lifecycle_unit(self, gu) or CoreActivation.session_open(gu.unit_id) \
 			or CoreActivation.session_open(_solo_combat_unit(gu).unit_id):
 		return false
@@ -9602,10 +9605,6 @@ func _solo_ask(title: String, text: String, ok_text: String, cancel_text: String
 	return await card.answer(unanswered)
 
 
-## Fixed width for the dialogs that are still native windows (UI audit): data text never decides it.
-const SOLO_DIALOG_MIN_WIDTH := 420
-
-
 ## The defender's strike-back choice dialog. With `counter_first` the prompt explains that Counter weapons
 ## strike BEFORE the charger (GF/AoF v3.5.1 p.13); one choice covers the whole melee (Counter phase now,
 ## remaining weapons in the normal slot).
@@ -11732,6 +11731,9 @@ func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String, 
 	if id.begins_with("interference:"):   # CC-14a (O3): the table's own words for a foe nobody answers for (`_solo_remote_interference`)
 		_log_rule_event(BattleLog.Category.COMBAT, ("%s: %s's seat is empty — no interference" if owner_peer == 0
 			else "%s: no answer from %s — no interference") % [purpose, _solo_owner_name(unit)], true)
+	elif id.begins_with("push_replace:"):   # step 29e-2a/b: the timeout is named on both tables, the core places the rest
+		_log_rule_event(BattleLog.Category.MOVEMENT, ("Push: %s's seat is empty - the core places the rest within 1 in" if owner_peer == 0
+			else "Push: no answer from %%s within %d s - the core places the rest within 1 in" % ceili(_owner_roll_timeout_s)) % _solo_owner_name(unit), true)
 	elif battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: no answer to the %s — the automatic pick stands" % [_solo_owner_name(unit), purpose], true)
@@ -11760,6 +11762,16 @@ func _solo_choice_local(unit: GameUnit, id: String, options: Array, wounds := 0,
 	if id.get_slice(":", 0) == "versatile_mode":   # step 22b: the table's own Versatile prompt, the answer as the core's option
 		var vm: Dictionary = await _solo_prompt_versatile(str(ctx.get("weapon", "Weapon")), ctx.get("recommended", {"ap": 1, "hit_mod": 0}))
 		return "ap" if int(vm.get("ap", 0)) > 0 else "hit"
+	if id.get_slice(":", 0) == "push":   # step 29e-1 (D-29-R2): the attacker decides after the dice
+		var pushed := opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2))
+		return "push" if await _solo_ask("Push?", "%s is Shaken after your attack.\nTry to push one of its models up to 2 in (4+)?" % (
+			pushed.get_name() if pushed else "The target"), "Try to push", "No") else "no"
+	if id.get_slice(":", 0) == "push_to":
+		return await CoreActivation.pick_push_spot(self, opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2)))
+	if id.get_slice(":", 0) == "push_replace":   # step 29e-2a: the defender places the rest
+		return await CoreActivation.pick_push_replace(self, opr_army_manager.get_game_unit_by_id(id.get_slice(":", 1)), options)
+	if id.get_slice(":", 0) == "blast_split":   # step 29c: the defender picks which units take the Blast remainder
+		return await _solo_ask_blast_split(opr_army_manager.get_game_unit_by_id(id.get_slice(":", 1)), options)
 	if id.get_slice(":", 0) == "spot_markers":   # the table's own marker dialog; the count is one of the core's options "0".."N"
 		var marked := opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2))
 		if marked == null or options.is_empty():
@@ -14636,6 +14648,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	# LAST fallback, every window, ghost, radial, drag and pick mode before it keeps its own Esc.
 	var key := event as InputEventKey
 	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
+		if CoreActivation.skip_push_pick() or CoreActivation.finish_replace_pick(false):   # 29e-1/2a: Esc skips / places for me
+			get_viewport().set_input_as_handled()
+			return
+	if key != null and key.pressed and not key.echo and key.keycode in [KEY_ENTER, KEY_KP_ENTER] and CoreActivation.finish_replace_pick(true):
+		get_viewport().set_input_as_handled()   # step 29e-2a: Enter answers the placed spots
+		return
+	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
 		if not _esc_owned:
 			# maintainer test 7, 26.10.2026: Esc with a selection deselects first; the menu opens on the next Esc.
 			if not left_panel_scroll.visible and object_manager != null \
@@ -15223,6 +15242,23 @@ func _solo_split_fire_choice(target_a: GameUnit, names: Array) -> Dictionary:
 		if not picked.has(n):
 			rest.append(n)
 	return {"split": true, "names": picked, "rest": rest}
+
+
+## Step 29c (D-29-R1, "defender picks how"): the Blast hits split evenly; the owner picks which of its units take the extra
+## ones. One button per core option (its units by name); Esc / × keeps the core's own (target first).
+func _solo_ask_blast_split(shooter: GameUnit, options: Array) -> String:
+	var card := PromptCard.new("Blast split",
+		"%s's Blast hits split evenly over your units in reach. Which take the extra hit?" % (shooter.get_name() if shooter else "The"),
+		"", "Automatic")
+	card.cancel_value = ""
+	for o in options:
+		var names := PackedStringArray()
+		for k in str(o).split(","):
+			var u := opr_army_manager.get_game_unit_by_id(k)
+			names.append(u.get_name() if u != null else k)
+		card.add_action(" and ".join(names), str(o))
+	add_child(card)
+	return str(await card.answer(""))
 
 
 ## The split-fire question itself (#226): one check box per weapon group; returns the checked names
@@ -20919,131 +20955,17 @@ func _on_import_opr_army() -> void:
 	opr_import_dialog.show()
 
 
-## The AI-opponent dialog (maintainer request): NACHTMAHR builds its own list — pick faction + points,
-## the game loads the matching pre-built AI list into the chosen slot as an AI army. Delivery
-## (solo rollout S6): dev/arena builds read the local bundle (assets/ai_lists — NEVER in the public
-## repo); public builds fetch index + list from the CDN at runtime with a user:// cache for offline
-## replay. No source at all → toast; the own-army import with the AI checkbox stays the fallback.
-func _open_ai_opponent_dialog() -> void:
-	if _engine_refused_without_core():
-		return
-	var manifest := await _load_ai_list_manifest()
-	if manifest.is_empty():
-		_solo_show_toast("No AI lists available (no connection yet?) — import any list with the AI checkbox instead")
-		return
-	_show_ai_opponent_dialog(manifest)
-
-
-## The AI Opponent question over an already loaded manifest. `loader(file, slot)` runs on OK
-## (default: _load_ai_opponent_list) so the dialog can be driven without the network.
-## Only the lists of the table's game system are offered, exactly (an entry without "system" is "gf"; no gff / aofs / aofr
-## folding onto the battle-size families); with no system named yet every list is offered, suffixed " (GF)" / " (AoF)" ...
-## when the manifest mixes systems.
-func _show_ai_opponent_dialog(manifest: Dictionary, loader: Callable = Callable()) -> void:
-	var played := _table_system_or_empty()   # "" = nothing names a game system yet: every AI list is on offer
-	var system_of := {}
-	for fk in manifest:
-		system_of[fk] = GameSystem.normalize(str((manifest[fk] as Dictionary).get("system", "gf")))
-	var fac_keys: Array = GameSystem.manifest_keys(manifest, played)
-	if fac_keys.is_empty():
-		_solo_show_toast("No AI lists for this game system yet — import any list with the AI checkbox instead")
-		return
-	var distinct := {}
-	for v in system_of.values():
-		distinct[v] = true
-	var mixed: bool = played.is_empty() and distinct.size() > 1
-	var parts := HouseStyle.overlay_sheet("AI Opponent", SOLO_DIALOG_MIN_WIDTH)
-	var layer := CanvasLayer.new()
-	layer.name = "AiOpponentLayer"
-	layer.layer = 90
-	var box: VBoxContainer = parts["body"]
-	box.add_child(HouseStyle.label("NACHTMAHR builds its own list.", HouseStyle.BODY))
-	var fac_opt := OptionButton.new()
-	fac_opt.theme_type_variation = HouseStyle.BUTTON
-	fac_keys.sort()
-	for i in fac_keys.size():
-		var fk: String = fac_keys[i]
-		var fac_name := str((manifest[fk] as Dictionary).get("name", fk))
-		fac_opt.add_item(fac_name + ((" (%s)" % GameSystem.short(system_of[fk])) if mixed else ""), i)
-	box.add_child(HouseStyle.field_row("Faction:", fac_opt))
-
-	var pts_opt := OptionButton.new()
-	pts_opt.theme_type_variation = HouseStyle.BUTTON
-	box.add_child(HouseStyle.field_row("Points:", pts_opt))
-	var refresh_points := func() -> void:
-		pts_opt.clear()
-		var fk: String = fac_keys[maxi(0, fac_opt.selected)]
-		var lists: Array = (manifest[fk] as Dictionary).get("lists", [])
-		for j in lists.size():
-			pts_opt.add_item("%d points" % int((lists[j] as Dictionary).get("points", 0)), j)
-		pts_opt.select(mini(lists.size() - 1, lists.size() - 1))   # default: the largest bracket
-		var mine := _solo_army_points(solo_controller.human_slot if solo_controller != null else 1)
-		if _solo_points_factor() > 1.0 and mine > 0 and not lists.is_empty():
-			var sizes: Array = []
-			for l in lists:
-				sizes.append(int((l as Dictionary).get("points", 0)))
-			pts_opt.select(SoloController.bracket_at_or_above(sizes, int(round(mine * _solo_points_factor()))))
-	refresh_points.call()
-	fac_opt.item_selected.connect(func(_i: int) -> void: refresh_points.call())
-
-	var slot_opt := OptionButton.new()
-	slot_opt.theme_type_variation = HouseStyle.BUTTON
-	slot_opt.add_item("Player 2 (Red)", 2)
-	slot_opt.add_item("Player 1 (Blue)", 1)
-	# #196 — slots a connected human occupies are not on offer.
-	for i in slot_opt.item_count:
-		if network_manager != null and network_manager.slot_has_human_peer(slot_opt.get_item_id(i)):
-			slot_opt.set_item_disabled(i, true)
-			slot_opt.set_item_text(i, slot_opt.get_item_text(i) + " — human player")
-	for i in slot_opt.item_count:
-		if not slot_opt.is_item_disabled(i):
-			slot_opt.select(i)
-			break
-	box.add_child(HouseStyle.field_row("AI plays as:", slot_opt))
-
-	var actions := HBoxContainer.new()
-	actions.add_theme_constant_override(&"separation", HouseStyle.GAP_CONTROL)
-	box.add_child(actions)
-	var cancel := HouseStyle.button("Cancel", HouseStyle.BUTTON, HouseStyle.H_ACTION)
-	cancel.name = "CancelButton"
-	actions.add_child(cancel)
-	var ok := HouseStyle.button("Build & deploy list", HouseStyle.PRIMARY)
-	ok.name = "OkButton"
-	ok.focus_mode = Control.FOCUS_ALL
-	actions.add_child(ok)
-	var close := func() -> void: layer.queue_free()
-	cancel.pressed.connect(close)
-	(parts["close"] as Button).pressed.connect(close)
-	ok.gui_input.connect(func(e: InputEvent) -> void:
-		if e.is_action_pressed("ui_cancel"):
-			close.call())
-	ok.pressed.connect(func() -> void:
-		var fk: String = fac_keys[maxi(0, fac_opt.selected)]
-		var lists: Array = (manifest[fk] as Dictionary).get("lists", [])
-		if pts_opt.selected < 0 or pts_opt.selected >= lists.size():
-			close.call()
-			return
-		var file: String = str((lists[pts_opt.selected] as Dictionary).get("file", ""))
-		var slot: int = slot_opt.get_item_id(slot_opt.selected)
-		(loader if loader.is_valid() else Callable(self, &"_load_ai_opponent_list")).call(file, slot)
-		close.call())
-	layer.add_child(parts["root"] as Control)
-	add_child(layer)
-	ok.grab_focus()
-
-
 ## Load + parse an AI list (bundle → user-cache → CDN, in that order) and route it through the
 ## normal import path as an AI army.
 func _load_ai_opponent_list(file: String, slot: int) -> void:
-	# #196 final gate (the dialog may have been open while the peer joined).
+	# #196 final gate (a peer may have joined since the setup chose this seat).
 	if network_manager != null and network_manager.slot_has_human_peer(slot):
 		_solo_show_toast("P%d is a connected human player — NACHTMAHR stays out" % slot)
 		return
-	var text := _ai_lists_local_text(file)
-	if text.is_empty():
-		text = await _fetch_cdn_text("%s/%s" % [AI_LISTS_CDN_PATH, file])
-		if not text.is_empty():
-			_ai_lists_cache_write(file, text)
+	if opr_army_manager != null and ArmyReplaceConfirm.occupied(opr_army_manager.armies, slot) \
+			and not await ArmyReplaceConfirm.ask(opr_army_manager.armies, slot):
+		return   # Keep (maintainer 27.11.: replacing an army asks first)
+	var text: String = await _ai_lists.list_text(file)
 	if text.is_empty():
 		_solo_show_toast("AI list not found: %s (no bundle, no cache, no connection)" % file)
 		return
@@ -21055,57 +20977,6 @@ func _load_ai_opponent_list(file: String, slot: int) -> void:
 	# Same path an imported army takes, flagged AI-controlled → the AI slot + difficulty wire up.
 	await _on_opr_army_imported(army, slot, true)
 	_solo_show_toast("NACHTMAHR: %s ready (player %d)" % [army.name, slot])
-
-
-## Local sources for an AI-list file: the dev/arena bundle first, then the user cache of earlier
-## CDN downloads (offline replay). "" when neither exists.
-func _ai_lists_local_text(file: String) -> String:
-	var text := FileAccess.get_file_as_string("%s/%s" % [AI_LISTS_DIR, file])
-	if not text.is_empty():
-		return text
-	return FileAccess.get_file_as_string("%s/%s" % [AI_LISTS_CACHE_DIR, file])
-
-
-func _ai_lists_cache_write(file: String, text: String) -> void:
-	DirAccess.make_dir_recursive_absolute(AI_LISTS_CACHE_DIR)
-	var f := FileAccess.open("%s/%s" % [AI_LISTS_CACHE_DIR, file], FileAccess.WRITE)
-	if f != null:
-		f.store_string(text)
-
-
-## One-shot CDN text fetch (browser UA — the R2 host rejects bare clients). "" on any failure;
-## callers fall back to bundle/cache/toast.
-func _fetch_cdn_text(rel_path: String) -> String:
-	var http := HTTPRequest.new()
-	http.timeout = 15.0
-	add_child(http)
-	var err := http.request("%s/%s" % [AssetCDN.HOST, rel_path],
-		["User-Agent: Mozilla/5.0 (X11; Linux x86_64) Niemandsland"])
-	if err != OK:
-		http.queue_free()
-		return ""
-	var res: Array = await http.request_completed
-	http.queue_free()
-	if int(res[0]) != HTTPRequest.RESULT_SUCCESS or int(res[1]) != 200:
-		return ""
-	return (res[3] as PackedByteArray).get_string_from_utf8()
-
-
-## Read the bundled AI-list manifest (faction → display name + point-bracket files). {} when absent.
-## AI-list index: bundle → CDN (fresh) → user cache (offline). The CDN copy wins over a stale
-## cache; a successful fetch refreshes the cache for the next offline session.
-func _load_ai_list_manifest() -> Dictionary:
-	var text := FileAccess.get_file_as_string("%s/_manifest.json" % AI_LISTS_DIR)
-	if text.is_empty():
-		text = await _fetch_cdn_text("%s/_manifest.json" % AI_LISTS_CDN_PATH)
-		if not text.is_empty():
-			_ai_lists_cache_write("_manifest.json", text)
-		else:
-			text = FileAccess.get_file_as_string("%s/_manifest.json" % AI_LISTS_CACHE_DIR)
-	if text.is_empty():
-		return {}
-	var parsed = JSON.parse_string(text)
-	return parsed if parsed is Dictionary else {}
 
 
 ## Handle army imported from dialog
@@ -21122,6 +20993,11 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_contro
 	if not version_warning.is_empty():
 		print("VERSION WARNING: %s" % version_warning)
 		_solo_show_toast(version_warning, 8.0)
+	# #3862 (O-FT-1): a list over its book's command-upgrade limit imports with one warning line, never a refusal.
+	var command_warning := CommandPicks.limit_warning(army)
+	if not command_warning.is_empty():
+		_log_rule_event(BattleLog.Category.GENERAL, command_warning)
+		_solo_show_toast(command_warning, 8.0)
 	# #196 — a slot a connected human occupies can never be designated as the AI's.
 	if ai_controlled and network_manager != null and network_manager.slot_has_human_peer(player_id):
 		ai_controlled = false
@@ -22754,6 +22630,11 @@ func _on_units_dropped(moves: Array) -> void:
 	if opr_army_manager == null or opr_army_manager.is_deployment_phase():
 		return
 	for mv in moves:
+		if CoreActivation.take_push_drop(self, mv):   # step 29e-1: the push spot is the drop, not a move of that unit
+			return
+		if CoreActivation.replacing(UnitUtils.get_game_unit((mv as Dictionary).get("node") as Node3D)):
+			return   # step 29e-2a: placing the rest after a push is no move of that unit
+	for mv in moves:
 		if float((mv as Dictionary).get("inches", 0.0)) <= 0.1:
 			continue
 		var unit := UnitUtils.get_game_unit((mv as Dictionary).get("node") as Node3D)
@@ -22762,22 +22643,69 @@ func _on_units_dropped(moves: Array) -> void:
 	await _solo_human_strafing(moves)
 
 
-## Plan step 27-pre P2: the generated board on the table as the rules see it - `{"seed", "theme"}` of the board the door
-## above drew (the theme lower-cased, as `NmlCore.boardgen_tiers` takes it), or {} when none stands. Data only, so the rules
+## Plan step 27-pre P2 / GEN-4: the generated board on the table as the rules see it - the record the release door
+## below laid (`{id, theme, seed, version, digest}`, `GeneratedBoard.resolve`), or for the dev door's board `{"seed",
+## "theme"}` (the theme lower-cased, as `NmlCore.boardgen_tiers` takes it), or {} when none stands. Data only, so the rules
 ## side never names a board-look class (tools/ci_path_classes.py).
 func generated_board() -> Dictionary:
 	if _board_look == null or not is_instance_valid(_board_look):
 		return {}
+	if not _board_record.is_empty():
+		return _board_record.duplicate()
 	return {"seed": int(_board_look.get("layout_seed")), "theme": str(_board_look.get("layout_theme")).to_lower()}
 
 
-## Plan step 27-pre P3, TEST-ONLY door (lead 26.11.; remove when the player-facing generate path D-GEN exists - the e2e then
-## uses that path): a rules e2e puts a drawn generated board of `seed_value` / `theme` on the table without the dev flag the
-## class keeps to itself. Debug builds only, like the dev-view door above.
-func _attach_generated_board_for_test(seed_value: int, theme: String) -> void:
-	if not OS.is_debug_build() or not ClassDB.class_exists("NmlCore"):
+## GEN-13 door (lead 28.11.: the one door from the setup): the board card asks `BoardgenKit.wait_state` before a table
+## exists - the menu has no main, so it calls this static through the script. Data only to the caller.
+static func board_kit_state(holder: Node, kit_theme: String) -> Dictionary:
+	return BoardgenKit.wait_state(holder, kit_theme)
+
+
+## GEN-4, the release door: lays the generated board `record` (`GeneratedBoard.resolve`) on the table. Refused with a
+## toast off a 4 x 4 ft table, without the core or with models on the table; a board already standing is replaced.
+func apply_generated_board(record: Dictionary) -> bool:
+	if not record.has("seed") or not record.has("theme"):
+		return false
+	if not ClassDB.class_exists("NmlCore"):
+		_show_toast("Generated boards need the game's rules core")
+		return false
+	if table.table_size != Vector2(4, 4):
+		_show_toast("A generated board needs a 4 x 4 ft table")
+		return false
+	var standing := get_tree().get_nodes_in_group("miniature").filter(func(m: Node) -> bool:
+		return m is Node3D and m.is_visible_in_tree() and not bool(m.get_meta("deleted", false)))
+	if not standing.is_empty():
+		_show_toast("Clear the models from the table first, then lay the generated board")
+		return false
+	return _lay_generated_board(record)
+
+
+## The release door's laying without its checks (the test door's too): frees a standing board, draws `record`'s, keeps it.
+func _lay_generated_board(record: Dictionary) -> bool:
+	if _board_look != null and is_instance_valid(_board_look):
+		_board_look.queue_free()
+	var layout: Dictionary = (ClassDB.instantiate("NmlCore") as Object).call("boardgen_layout_themed", int(record["seed"]), str(record["theme"]))
+	_board_look = BoardgenGreybox.attach(table, layout)
+	_board_record = record.duplicate()
+	return _board_look != null
+
+
+## GEN-10: a load or a join lays the board its table block carries, or takes a standing board away ({}). Without
+## the models check: a load's models arrive after its table. GEN-11: a board this build makes differently is refused.
+func restore_generated_board(record: Dictionary) -> void:
+	if not record.has("seed") or not ClassDB.class_exists("NmlCore"):
+		if _board_look != null and is_instance_valid(_board_look):
+			_board_look.queue_free()
+		_board_look = null
+		_board_record = {}
 		return
-	_board_look = BoardgenGreybox.attach(table, (ClassDB.instantiate("NmlCore") as Object).call("boardgen_layout_themed", seed_value, theme))
+	var refused := GeneratedBoard.verify(record)   # GEN-11: another build's board is not laid, and says so
+	if not refused.is_empty():
+		print("[Board] " + refused)
+		_show_toast(refused)
+		restore_generated_board({})
+		return
+	_lay_generated_board(record)
 
 
 ## Check coherency for all currently selected units

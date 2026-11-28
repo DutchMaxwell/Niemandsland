@@ -1,0 +1,182 @@
+{
+	"orc_marauders": {
+		"name": "Orc Marauders",
+		"system": "gf",
+		"lists": [
+			{
+				"points": 1000,
+				"file": "orc_marauders_1000.json",
+				"fitness": 1007.3,
+				"caster": true
+			},
+			{
+				"points": 1500,
+				"file": "orc_marauders_1500.json",
+				"fitness": 1119.4,
+				"caster": true
+			},
+			{
+				"points": 2000,
+				"file": "orc_marauders_2000.json",
+				"fitness": 1260.2,
+				"caster": true
+			},
+			{
+				"points": 2500,
+				"file": "orc_marauders_2500.json",
+				"fitness": 1313.4,
+				"caster": true
+			},
+			{
+				"points": 3000,
+				"file": "orc_marauders_3000.json",
+				"fitness": 1431.5,
+				"caster": false
+			}
+		]
+	},
+	"robot_legions": {
+		"name": "Robot Legions",
+		"system": "gf",
+		"lists": [
+			{
+				"points": 1000,
+				"file": "robot_legions_1000.json",
+				"fitness": 891.2,
+				"caster": true
+			},
+			{
+				"points": 1500,
+				"file": "robot_legions_1500.json",
+				"fitness": 990.3,
+				"caster": true
+			},
+			{
+				"points": 2000,
+				"file": "robot_legions_2000.json",
+				"fitness": 1045.8,
+				"caster": true
+			},
+			{
+				"points": 2500,
+				"file": "robot_legions_2500.json",
+				"fitness": 1112.3,
+				"caster": true
+			},
+			{
+				"points": 3000,
+				"file": "robot_legions_3000.json",
+				"fitness": 1166.8,
+				"caster": true
+			}
+		]
+	},
+	"aof_goblins": {
+		"name": "Goblins",
+		"system": "aof",
+		"lists": [
+			{
+				"points": 1000,
+				"file": "aof_goblins_1000.json",
+				"fitness": 917.9,
+				"caster": false
+			},
+			{
+				"points": 1500,
+				"file": "aof_goblins_1500.json",
+				"fitness": 987.7,
+				"caster": true
+			},
+			{
+				"points": 2000,
+				"file": "aof_goblins_2000.json",
+				"fitness": 1031.9,
+				"caster": true
+			},
+			{
+				"points": 2500,
+				"file": "aof_goblins_2500.json",
+				"fitness": 1094.5,
+				"caster": true
+			},
+			{
+				"points": 3000,
+				"file": "aof_goblins_3000.json",
+				"fitness": 1139.8,
+				"caster": true
+			}
+		]
+	},
+	"gff_orc_marauders": {
+		"name": "Orc Marauders",
+		"system": "gff",
+		"lists": [
+			{
+				"points": 400,
+				"file": "gff_orc_marauders_400.json",
+				"fitness": 771.4,
+				"caster": false
+			},
+			{
+				"points": 800,
+				"file": "gff_orc_marauders_800.json",
+				"fitness": 866.8,
+				"caster": true
+			}
+		]
+	},
+	"gff_robot_legions": {
+		"name": "Robot Legions",
+		"system": "gff",
+		"lists": [
+			{
+				"points": 400,
+				"file": "gff_robot_legions_400.json",
+				"fitness": 516.2,
+				"caster": false
+			},
+			{
+				"points": 800,
+				"file": "gff_robot_legions_800.json",
+				"fitness": 783.2,
+				"caster": true
+			}
+		]
+	},
+	"aofs_goblins": {
+		"name": "Goblins",
+		"system": "aofs",
+		"lists": [
+			{
+				"points": 300,
+				"file": "aofs_goblins_300.json",
+				"fitness": 698.2,
+				"caster": false
+			},
+			{
+				"points": 600,
+				"file": "aofs_goblins_600.json",
+				"fitness": 733.2,
+				"caster": true
+			}
+		]
+	},
+	"aofs_havoc_dwarves": {
+		"name": "Havoc Dwarves",
+		"system": "aofs",
+		"lists": [
+			{
+				"points": 300,
+				"file": "aofs_havoc_dwarves_300.json",
+				"fitness": 691.0,
+				"caster": false
+			},
+			{
+				"points": 600,
+				"file": "aofs_havoc_dwarves_600.json",
+				"fitness": 764.9,
+				"caster": true
+			}
+		]
+	}
+}

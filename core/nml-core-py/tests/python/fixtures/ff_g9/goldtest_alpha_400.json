@@ -1,0 +1,223 @@
+{
+ "name": "Golden G9 alpha",
+ "gameSystem": "gff",
+ "pointsLimit": 400,
+ "units": [
+  {
+   "id": "ga1",
+   "selectionId": "ga1-0",
+   "name": "Line Squad",
+   "size": 5,
+   "cost": 120,
+   "quality": 4,
+   "defense": 5,
+   "bases": {
+    "round": "25",
+    "square": "20"
+   },
+   "rules": [],
+   "items": [],
+   "weapons": [
+    {
+     "name": "Test Rifle",
+     "count": 5,
+     "range": 24,
+     "attacks": 1,
+     "type": "ArmyBookWeapon",
+     "specialRules": []
+    },
+    {
+     "name": "Test Blade",
+     "count": 5,
+     "range": 0,
+     "attacks": 1,
+     "type": "ArmyBookWeapon",
+     "specialRules": []
+    }
+   ],
+   "loadout": [
+    {
+     "name": "Test Rifle",
+     "count": 5,
+     "range": 24,
+     "attacks": 1,
+     "type": "ArmyBookWeapon",
+     "specialRules": []
+    },
+    {
+     "name": "Test Blade",
+     "count": 5,
+     "range": 0,
+     "attacks": 1,
+     "type": "ArmyBookWeapon",
+     "specialRules": []
+    }
+   ],
+   "selectedUpgrades": []
+  },
+  {
+   "id": "ga2",
+   "selectionId": "ga2-0",
+   "name": "Heavy Gunner",
+   "size": 1,
+   "cost": 90,
+   "quality": 4,
+   "defense": 4,
+   "bases": {
+    "round": "25",
+    "square": "20"
+   },
+   "rules": [
+    {
+     "name": "Tough",
+     "label": "Tough(3)",
+     "rating": 3
+    }
+   ],
+   "items": [],
+   "weapons": [
+    {
+     "name": "Test Mortar",
+     "count": 1,
+     "range": 24,
+     "attacks": 1,
+     "type": "ArmyBookWeapon",
+     "specialRules": [
+      {
+       "name": "Blast",
+       "type": "ArmyBookRule",
+       "rating": 3
+      }
+     ]
+    }
+   ],
+   "loadout": [
+    {
+     "name": "Test Mortar",
+     "count": 1,
+     "range": 24,
+     "attacks": 1,
+     "type": "ArmyBookWeapon",
+     "specialRules": [
+      {
+       "name": "Blast",
+       "type": "ArmyBookRule",
+       "rating": 3
+      }
+     ]
+    }
+   ],
+   "selectedUpgrades": []
+  },
+  {
+   "id": "ga3",
+   "selectionId": "ga3-0",
+   "name": "Field Captain",
+   "size": 1,
+   "cost": 80,
+   "quality": 3,
+   "defense": 4,
+   "bases": {
+    "round": "25",
+    "square": "20"
+   },
+   "rules": [
+    {
+     "name": "Hero",
+     "label": "Hero"
+    },
+    {
+     "name": "Tough",
+     "label": "Tough(3)",
+     "rating": 3
+    }
+   ],
+   "items": [],
+   "weapons": [
+    {
+     "name": "Test Pistol",
+     "count": 1,
+     "range": 12,
+     "attacks": 2,
+     "type": "ArmyBookWeapon",
+     "specialRules": []
+    },
+    {
+     "name": "Test Sabre",
+     "count": 1,
+     "range": 0,
+     "attacks": 3,
+     "type": "ArmyBookWeapon",
+     "specialRules": [
+      {
+       "name": "AP",
+       "type": "ArmyBookRule",
+       "rating": 1
+      }
+     ]
+    }
+   ],
+   "loadout": [
+    {
+     "name": "Test Pistol",
+     "count": 1,
+     "range": 12,
+     "attacks": 2,
+     "type": "ArmyBookWeapon",
+     "specialRules": []
+    },
+    {
+     "name": "Test Sabre",
+     "count": 1,
+     "range": 0,
+     "attacks": 3,
+     "type": "ArmyBookWeapon",
+     "specialRules": [
+      {
+       "name": "AP",
+       "type": "ArmyBookRule",
+       "rating": 1
+      }
+     ]
+    }
+   ],
+   "selectedUpgrades": []
+  },
+  {
+   "id": "ga4",
+   "selectionId": "ga4-0",
+   "name": "Scout Pair",
+   "size": 2,
+   "cost": 60,
+   "quality": 4,
+   "defense": 5,
+   "bases": {
+    "round": "25",
+    "square": "20"
+   },
+   "rules": [],
+   "items": [],
+   "weapons": [
+    {
+     "name": "Test Carbine",
+     "count": 2,
+     "range": 18,
+     "attacks": 1,
+     "type": "ArmyBookWeapon",
+     "specialRules": []
+    }
+   ],
+   "loadout": [
+    {
+     "name": "Test Carbine",
+     "count": 2,
+     "range": 18,
+     "attacks": 1,
+     "type": "ArmyBookWeapon",
+     "specialRules": []
+    }
+   ],
+   "selectedUpgrades": []
+  }
+ ]
+}

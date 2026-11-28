@@ -145,7 +145,7 @@ func _on_table_child(node: Node) -> void:
 func request_rebuild(reason: String = "") -> void:
 	if reason == "layout" and _in_play():
 		return
-	if _rebuild_queued:
+	if _rebuild_queued or not is_inside_tree():   # a board leaving the table at teardown: no tree, nothing to rebuild
 		return
 	_rebuild_queued = true
 	await get_tree().create_timer(REBUILD_DELAY_S).timeout

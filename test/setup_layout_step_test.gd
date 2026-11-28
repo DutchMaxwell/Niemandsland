@@ -7,17 +7,17 @@ const SCRIPT := "res://scripts/setup_layout_step.gd"
 var _layout: SetupLayout
 
 
-func _step(size_feet: Vector2) -> Control:
+func _step(size_feet: Vector2, system := "gf") -> Control:
 	assert_bool(ResourceLoader.exists(SCRIPT)).override_failure_message("no step 04 page").is_true()
 	if not ResourceLoader.exists(SCRIPT):
 		return null
 	_layout = auto_free(SetupLayout.new())
 	add_child(_layout)
-	_layout.set_table(size_feet, "gf")
+	_layout.set_table(size_feet, system)
 	var step: Control = auto_free((load(SCRIPT) as GDScript).new())
 	step.size = Vector2(1920, 1080)
 	add_child(step)
-	step.call("setup", _layout, ["Grimdark Future", "Urban ruins", "72 × 48 in"])
+	step.call("setup", _layout, ["Grimdark Future", "Urban ruins", "72 × 48 in", "Two players, one screen"])
 	return step
 
 
@@ -179,6 +179,10 @@ func test_state_two_fits_a_720p_window() -> void:
 		if control.is_visible_in_tree() and control.get_global_rect().has_area():
 			assert_bool(window.encloses(control.get_global_rect())).override_failure_message(
 				"%s at %s" % [control.name, control.get_global_rect()]).is_true()
+	var keys: Control = step.get("_keys")
+	var left: Control = step.get("left")
+	assert_float(keys.get_global_rect().position.y).override_failure_message("the key legend overlaps the left column"
+		).is_greater_equal(left.get_global_rect().end.y)
 
 
 func test_the_way_cards_keep_196_px_at_1080p() -> void:
@@ -186,3 +190,155 @@ func test_the_way_cards_keep_196_px_at_1080p() -> void:
 	if step == null:
 		return
 	assert_float((step.find_child("Way_empty", true, false) as Control).size.y).is_greater_equal(196.0)
+
+
+func test_a_folded_row_is_built_alone() -> void:
+	var calls: Array = []
+	var row: PanelContainer = auto_free(SetupLayoutStep.folded_row(4, "Opponent", "Two players, one screen",
+		func() -> void: calls.append(4)))
+	var texts: Array = row.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	assert_array(texts).is_equal(["04", "Opponent", "Two players, one screen"])
+	(row.find_child("Change4", true, false) as Button).pressed.emit()
+	assert_array(calls).is_equal([4])
+
+
+## Spec 97 (step 97.8): "Lay out the table" is step 05 - the opponent (step 04) is the fourth folded row and has a
+## rail row (red before: heading "04", three folded rows, no OPPONENT).
+func test_lay_out_the_table_is_step_05_after_the_opponent() -> void:
+	var step := _step(Vector2(6, 4))
+	var texts: Array = step.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	assert_array(texts).contains(["05", "Opponent", "OPPONENT", "Two players, one screen"])
+	assert_int(texts.count("04")).is_equal(1)   # the folded row 04 (Opponent), no longer the heading
+	var asked: Array = []
+	step.connect("change_requested", func(index: int) -> void: asked.append(index))
+	var change := step.find_child("Change4", true, false) as Button
+	assert_object(change).override_failure_message("no folded row 04").is_not_null()
+	if change != null:
+		change.pressed.emit()
+		assert_array(asked).is_equal([4])
+
+
+## The chosen way card is as light as on sheet 03c (#253035, `.w.on`), not the never-drawn 10 % accent wash of a
+## hovered row that left it darker than its neighbours (red before; the same cause as the opponent cards).
+func test_the_chosen_way_card_has_the_sheets_fill() -> void:
+	var step := _step(Vector2(6, 4))
+	if step == null:
+		return
+	var box := _way(step, SetupLayout.DEFAULT_WAY).get_theme_stylebox(&"normal") as StyleBoxFlat
+	assert_str(box.bg_color.to_html(false)).is_equal("253035")
+	assert_bool(box.draw_center).override_failure_message("the fill is not drawn").is_true()
+
+
+## Gap review 27.11. (sheet 03c): at 1080p the deployment zones are a compact joined group at the left, and the cards
+## of the page stand 14 px apart with 20 px inside (red before: three stretched buttons, 8 px gaps, 10 px inside).
+func test_the_tools_and_zones_have_room_at_1080p() -> void:
+	var step := _step(Vector2(6, 4))
+	if step == null:
+		return
+	await get_tree().process_frame
+	var none := step.find_child("ZoneNone", true, false) as Control
+	var custom := step.find_child("ZoneCustom", true, false) as Control
+	var group := none.get_parent() as Control
+	assert_float(group.size.x).override_failure_message("the zones stretch across the card").is_less(group.get_parent().size.x * 0.8)
+	assert_float(custom.get_global_rect().position.x - none.get_global_rect().end.x).is_less(200.0)
+	assert_int((step.get("left") as Control).get_theme_constant(&"separation")).is_equal(14)
+	var tools := (step.find_child("GenerateAgain", true, false) as Node).get_parent().get_parent() as PanelContainer
+	assert_float(tools.get_theme_stylebox(&"panel").content_margin_left).is_equal(20.0)
+
+
+## GEN-6: the board card - offered for gff on 4 x 4 ft, "New board" (and G) changes the code in the rail; gf has no
+## card; off 4 x 4 ft the card is there but off.
+@warning_ignore('unused_parameter')
+func test_the_generated_board_card(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
+	var step := _step(Vector2(4, 4), "gff")
+	if step == null:
+		return
+	var card := _way(step, "board")
+	assert_object(card).override_failure_message("no board card").is_not_null()
+	if card == null:
+		return
+	assert_bool(card.visible and not card.disabled).is_true()
+	card.pressed.emit()
+	assert_str(_layout.way).is_equal("board")
+	var again := step.find_child("GenerateAgain", true, false) as Button
+	assert_str(again.text).is_equal("New board")
+	var facts: Array = step.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	var code := GeneratedBoard.code(_layout.board)
+	assert_str(code).starts_with("TW-")
+	assert_array(facts).contains(["BOARD " + code])
+	assert_bool((step.find_child("CopyBoardCode", true, false) as Button).visible).is_true()
+	assert_bool((step.find_child("ZoneCustom", true, false) as Button).visible).is_false()
+	again.pressed.emit()
+	assert_str(GeneratedBoard.code(_layout.board)).is_not_equal(code)
+	_layout.set_table(Vector2(6, 4), "gff")
+	assert_bool(card.visible and card.disabled).is_true()
+	assert_str(_layout.way).is_equal("empty")
+	var plain := _step(Vector2(4, 4), "gf")
+	assert_bool(_way(plain, "board").visible).override_failure_message("gf was offered a board").is_false()
+
+
+## GEN-13: the board card waits for its kit - downloading (a stub door says "waiting") -> off with the share in its caption;
+## cached ("ready") -> on; not used in this run ("not_used": headless, low preset, Compatibility) -> on, nothing to wait for.
+func test_the_board_card_waits_for_its_kit() -> void:
+	var step := _step(Vector2(4, 4), "gff")
+	if step == null or _way(step, "board") == null:
+		return
+	var card := _way(step, "board")
+	var answer := {"state": "waiting", "pct": 37}
+	var asked: Array = []
+	step.set("kit_state", func(kit_theme: String) -> Dictionary:
+		asked.append(kit_theme)
+		return answer)
+	step.call("poll_kit")
+	assert_array(asked).contains(["tiefwerk"])
+	assert_bool(card.disabled).override_failure_message("a board without its kit can be chosen").is_true()
+	var texts: Array = card.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	assert_array(texts).contains(["Downloading the board kit ... 37 %"])
+	answer.merge({"state": "ready", "pct": 100}, true)   # in place: the stub holds this dictionary
+	step.call("poll_kit")
+	assert_bool(card.disabled).is_false()
+	answer.merge({"state": "not_used", "pct": 100}, true)
+	step.call("poll_kit")
+	assert_bool(card.disabled).is_false()
+
+
+## At 1280x720 nothing of the left column runs under the rail (the 28.11. capture: Change, the Load card and Deploy
+## Objectives stood under it; red before).
+func test_at_720p_the_left_column_stays_left_of_the_rail() -> void:
+	var step := _step(Vector2(6, 4))
+	if step == null:
+		return
+	step.size = Vector2(1280, 720)
+	for _i in 3:
+		await get_tree().process_frame
+	var rail := (step.find_child("Rail", true, false) as Control).get_global_rect()
+	for control: Node in (step.get("left") as Control).find_children("*", "Button", true, false):
+		if (control as Control).is_visible_in_tree():
+			assert_float((control as Control).get_global_rect().end.x).override_failure_message(
+				"%s ends at %d, the rail starts at %d" % [control.name, int((control as Control).get_global_rect().end.x), int(rail.position.x)]) \
+				.is_less_equal(rail.position.x)
+
+
+## Gap review 28.11.: at 1280x720 the GENERATED way (Generate again + the mirror switch in the tools row) pushed the
+## left column under the rail, and "No objectives placed" was cut to "No ob" (red before: both).
+func test_at_720p_the_generated_way_stays_left_of_the_rail_and_says_its_objectives() -> void:
+	for way: String in ["generated", "empty"]:
+		var step := await _sized_step(Vector2(1280, 720))
+		if step == null:
+			return
+		_layout.choose(way)
+		for _i in 3:
+			await get_tree().process_frame
+		var rail := (step.find_child("Rail", true, false) as Control).get_global_rect()
+		var left: Control = step.get("left")
+		assert_float(left.get_global_rect().end.x).override_failure_message("%s: the left column ends at %d, the rail starts at %d" % [
+			way, int(left.get_global_rect().end.x), int(rail.position.x)]).is_less_equal(rail.position.x)
+		var said: Label = step.get("_objectives")
+		var needed := said.get_theme_font("font").get_string_size(said.text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			said.get_theme_font_size("font_size")).x
+		assert_float(said.size.x).override_failure_message("%s: '%s' needs %d px, has %d" % [way, said.text, int(needed),
+			int(said.size.x)]).is_greater_equal(needed)
+		var keys: Control = step.get("_keys")
+		assert_float(keys.get_global_rect().position.y).override_failure_message("%s: the key legend overlaps the left column" % way
+			).is_greater_equal(left.get_global_rect().end.y)

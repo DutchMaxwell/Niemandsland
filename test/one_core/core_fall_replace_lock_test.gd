@@ -73,7 +73,7 @@ func _ledge(layout: Dictionary) -> Array:
 ## cell's back, so after the fall they stand more than 1 in from it. Model 1 is dropped off the ledge (seed 0: it misses the
 ## jump). Returns the unit; `foe` adds an enemy on the low ground in rifle range.
 func _fallen_leaper(foe := false) -> Array:
-	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_CORE_TIERS
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_106_CORE_TIERS
 	var core: Object = ClassDB.instantiate("NmlCore")
 	var layout: Dictionary = core.boardgen_layout_themed(7, "")
 	SoloHarness.generated_board(_main, 7, "")
@@ -142,6 +142,33 @@ func test_end_locks_until_the_others_stand_within_1_in_and_never_rolls_again(
 	assert_int(activated[0]).override_failure_message("(3) the End ends it now: one activation, after the lock").is_equal(1)
 	assert_int(_count("Jump: Leaper model 1 jumps")).override_failure_message("(1) still one jump roll").is_equal(1)
 	_main.radial_menu_controller.unit_activated.disconnect(on_act)
+
+
+## #3872: the owner DRAGS models 2-3 beside the fallen model through the real drop door - a placement within 1 in, not a
+## move of the activation: no jump, no move allowance; the positions stand and the End lifts the lock.
+@warning_ignore('unused_parameter')
+func test_placing_the_others_by_hand_is_no_move(
+		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "NmlCore extension not loaded") -> void:
+	var att: GameUnit = (await _fallen_leaper())[0]
+	await _press_end(att)
+	assert_int(_count(LOCK)).override_failure_message("the lock line: %s" % [_lines]).is_equal(1)
+	var ms: Array = att.models
+	var at: Vector3 = (ms[0] as ModelInstance).node.global_position
+	var step := 2.0 * SoloController.model_base_radius_m(ms[0] as ModelInstance) + 0.2 * INCH
+	for k in [1, 2]:
+		var n: Node3D = (ms[k] as ModelInstance).node
+		var from := n.global_position
+		var to := at + Vector3(0, 0, step * (1 if k == 1 else -1))
+		n.global_position = to
+		assert_bool(_main.attacked_unit_drag_refused(att, from.distance_to(to) / INCH)).override_failure_message("model %d's drag refused: %s" % [k + 1, _lines]).is_false()
+		await SoloHarness.drop(_main, [{"node": n, "inches": from.distance_to(to) / INCH, "from_raw": from,
+			"path": PackedVector2Array([Vector2(from.x, from.z), Vector2(to.x, to.z)])}])
+		assert_float(n.global_position.distance_to(to)).override_failure_message("model %d's spot stands: %s" % [k + 1, _lines]).is_less(0.001)
+	assert_int(_count("Leaper: model 2 jumps") + _count("Leaper: model 3 jumps")).override_failure_message("no jump: %s" % [_lines]).is_equal(0)
+	assert_bool(_lines.any(func(l: String) -> bool: return l.contains("Advance allowance"))).override_failure_message("no allowance: %s" % [_lines]).is_false()
+	await _press_end(att)
+	assert_int(_count(LOCK)).override_failure_message("lifted by the hand placement: %s" % [_lines]).is_equal(1)
+	assert_int(_count("Leaper activated")).override_failure_message("the End ends the activation: %s" % [_lines]).is_equal(1)
 
 
 @warning_ignore('unused_parameter')

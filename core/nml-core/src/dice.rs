@@ -128,7 +128,7 @@ impl Tray {
     /// instead of drawing. Past the last group it serves 1s and records where it
     /// first ran dry (`starved_at`) — the step API turns that into `NeedRoll`.
     pub fn supplied(groups: Vec<Vec<u8>>) -> Tray {
-        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), interference_choices: Vec::new(), strike_back_choices: Vec::new(), blast_choices: Vec::new(), blast_at: None, choice_seq: 0, casts: Vec::new(), cast_refused: None, paid: (false, false), no_step: false };
+        let feed = Feed { groups, next: 0, starved_at: None, mismatch: None, placed: None, placed_trails: None, kinds: Vec::new(), owners: Vec::new(), wound_choices: Vec::new(), interference_choices: Vec::new(), strike_back_choices: Vec::new(), blast_choices: Vec::new(), free_choices: Vec::new(), blast_at: None, choice_seq: 0, casts: Vec::new(), cast_refused: None, paid: (false, false), no_step: false };
         Tray { rng: GodotRng::new(0), feed: Some(feed), zero_draws: false, lines: Vec::new(), landings: Vec::new(), outcome_at: None, aimed: None, consolidate: Vec::new(), push: None }
     }
 
@@ -307,6 +307,51 @@ impl Tray {
         }
     }
 
+    /// Step 29d: the transcript names a free-answer choice `id` (`None` = only asked). A seeded tray ignores the call.
+    pub fn offer_free(&mut self, id: String, answer: Option<String>) {
+        if let Some(feed) = self.feed.as_mut() {
+            feed.free_choices.push(FreeChoice { id, hints: Vec::new(), answer, reached: None, bad: None, lines: Vec::new(), landings: Vec::new(), order: 0 });
+        }
+    }
+
+    /// Step 29d: the resolution reaches the free choice `id` (owner = the answering unit's key): its answer, or `None`
+    /// (nothing offered, or only asked).
+    pub fn reach_free(&mut self, id: &str, owner: &str) -> Option<String> {
+        let feed = self.feed.as_mut()?;
+        let c = feed.free_choices.iter_mut().find(|c| c.id == id)?;
+        if c.reached.is_none() {
+            c.reached = Some((feed.next, owner.to_string()));
+            c.order = feed.choice_seq;
+            feed.choice_seq += 1;
+            if c.answer.is_none() {
+                c.lines = self.lines.iter().map(|(_, l)| l.clone()).collect();
+                c.landings = self.landings.iter().map(|(_, l)| l.clone()).collect();
+            }
+        }
+        c.answer.clone()
+    }
+
+    /// [`Tray::reach_free`] with `hints` the owner's side reads (step 29e-2a: `pushed:<slot>`, the model the rest gather at).
+    pub fn reach_free_hinted(&mut self, id: &str, owner: &str, hints: Vec<String>) -> Option<String> {
+        if let Some(c) = self.feed.as_mut().and_then(|f| f.free_choices.iter_mut().find(|c| c.id == id)) {
+            c.hints = hints;
+        }
+        self.reach_free(id, owner)
+    }
+
+    /// Step 29d: the core refuses the free answer of `id` with `why` (the step answers Refused at that input).
+    pub fn refuse_free(&mut self, id: &str, why: String) {
+        if let Some(c) = self.feed.as_mut().and_then(|f| f.free_choices.iter_mut().find(|c| c.id == id)) {
+            c.bad = Some(why);
+        }
+    }
+
+    /// Step 29d (D-29-R2): the attacker's push choice `id` (`push:<attacker>:<target>`), reached after the attack's dice:
+    /// `Some(true)` = push, `Some(false)` = no, `None` = nothing offered or only asked (no push).
+    pub fn push_choice(&mut self, id: &str, owner: &str) -> Option<bool> {
+        self.reach_two_way(|c| c.id == id, owner)
+    }
+
     /// Step 29b: the shooting leg names its Blast choice id and the spread's units (target first) before the volley.
     pub fn blast_units(&mut self, id: String, keys: Vec<String>) {
         if let Some(feed) = self.feed.as_mut() {
@@ -368,7 +413,7 @@ impl Tray {
 
     /// meleefix: the planner's consolidation inputs, one per melee unit: the step path's `Input::Consolidate`, or a replay that
     /// read them off the record's `consolidate` line. Nobody else offers any, so every other path keeps the core's own goal.
-    /// The step path's `Input::Push`, offered for this activation; nobody else offers one.
+    /// A push decided up front (a replay or a test): the same answer as the `push:` + `push_to:` choices.
     pub fn offer_push(&mut self, push: Option<crate::activation::PushInput>) {
         self.push = push;
     }
@@ -526,6 +571,8 @@ pub struct Feed {
     pub strike_back_choices: Vec<StrikeBackChoice>,
     /// Step 29b: the transcript's Blast split choices (`Tray::offer_blast_split`).
     pub blast_choices: Vec<BlastChoice>,
+    /// Step 29d: the transcript's free-answer choices (`push_to:`), `Tray::offer_free`.
+    pub free_choices: Vec<FreeChoice>,
     /// Step 29b: the shooting leg's open Blast choice id and the units its spread reaches, target first (`Tray::blast_units`).
     blast_at: Option<(String, Vec<String>)>,
     /// Monotonic reach ordinal across both choice families (breaks ties when two choices occur at the same draw).
@@ -570,6 +617,20 @@ pub struct InterferenceChoice {
 
 /// E-24: the step API's strike-back choice as the melee sees it. `reached` = (draws so far, owner key) once the melee came
 /// to the defender's strike-back; `lines` / `landings` = everything before that point (when `answer` is `None`).
+#[derive(Debug, Clone)]
+pub struct FreeChoice {
+    pub id: String,
+    pub hints: Vec<String>,
+    pub answer: Option<String>,
+    pub reached: Option<(usize, String)>,
+    pub bad: Option<String>,
+    pub lines: Vec<LogLine>,
+    pub landings: Vec<Landing>,
+    pub order: usize,
+}
+
+/// Step 29d: a choice whose answer is free text (the push spot), not one of a list. `reached` = (draws so far, owner key);
+/// `bad` = why the core refused the answer.
 #[derive(Debug, Clone)]
 pub struct BlastChoice {
     pub id: String,
@@ -1090,12 +1151,12 @@ pub fn blast_split(hits: i64, x: i64, target_models: i64, neighbour_models: &[i6
     one.iter().map(|n| n * hits.max(0)).collect()
 }
 
-/// [`blast_split`] at `rules_epoch`: from `PENDING_EPOCH_BLAST_EVEN` (ruling D-29-R1) the whole attack's hits split evenly -
+/// [`blast_split`] at `rules_epoch`: from `EPOCH_108_BLAST_EVEN` (ruling D-29-R1) the whole attack's hits split evenly -
 /// every unit the same share up to its room (`hits` x its models, as a hit's X never put more than one hit per model on a
 /// unit), what a full unit cannot take shared among the rest, the remainder one each in unit order (target first). The total
 /// stays `hits x min(X, all models)`, so a single hit or a lone target lands exactly as before; below the epoch, `blast_split`.
 pub fn blast_split_at(hits: i64, x: i64, target_models: i64, neighbour_models: &[i64], rules_epoch: u32) -> Vec<i64> {
-    if !rule_on(rules_epoch, crate::acts::PENDING_EPOCH_BLAST_EVEN) {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_108_BLAST_EVEN) {
         return blast_split(hits, x, target_models, neighbour_models);
     }
     let (out, caps, left) = blast_even_base(hits, x, target_models, neighbour_models);
@@ -2492,7 +2553,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         // (main.gd `_solo_hits`, TC-023) and the save reads the pick's own square.
         if hits > 0 && p.blast > 1 && !blast_spread.is_empty() && !unit_of_one {
             let cap = def.blast_models.unwrap_or(def.models).max(1);
-            let split = if rule_on(att.rules_epoch, crate::acts::PENDING_EPOCH_BLAST_EVEN) {
+            let split = if rule_on(att.rules_epoch, crate::acts::EPOCH_108_BLAST_EVEN) {
                 // Step 29b (D-29-R1 "defender picks how"): the remainder goes where the target's owner says.
                 let (base, caps, left) = blast_even_base(hits, p.blast, cap, blast_spread);
                 let open: Vec<usize> = (0..base.len()).filter(|&i| base[i] < caps[i]).collect();

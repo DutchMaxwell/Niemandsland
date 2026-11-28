@@ -9,14 +9,15 @@ the full change history is in `git log`.
 ## Works today
 
 **Solo mode — a full game against NACHTMAHR** — mark any imported army as AI-controlled
-(checkbox at import, or later in the solo panel), or press **AI Opponent** and let
-NACHTMAHR bring a list of its own (faction and 1000–3000 pts selectable). On Linux, Windows and macOS
+(checkbox at import, or later in the solo panel), or pick **Solo against NACHTMAHR** in step 04 of the table
+setup ("Who is at the table?") and let NACHTMAHR bring a list of its own (faction, 1000–3000 pts and its seat
+selectable). On Linux, Windows and macOS
 builds NACHTMAHR searches its moves with a **trained neural network (value net)** that ships with
 the game, inside the bundled Rust rules core; when that core does not load, it plays
 the **rule-based decision tree**. No language model, and **every decision is made offline**: the same inputs produce the same decisions, and
 nothing about a turn leaves the machine. One qualification, because "no network call" was too broad:
 if you let NACHTMAHR bring **its own** list, that list is fetched from the asset CDN the first time
-and cached (see below), so the very first use of **AI Opponent** needs a connection. Your own
+and cached (see below), so the very first Solo table with NACHTMAHR's own list needs a connection. Your own
 imported armies, and every decision NACHTMAHR makes, need none.
 **A four-grade difficulty ladder** (#1126 and
 #1127, shipped in 0.3.14.0): Dämmerung, Zwielicht and Finsternis play the decision tree; **Albtraum**, the default,

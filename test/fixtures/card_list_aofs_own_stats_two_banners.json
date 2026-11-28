@@ -1,0 +1,39 @@
+{
+	"name": "Own-stats Skirmish list with two Banners",
+	"gameSystem": "aofs",
+	"pointsLimit": 300,
+	"units": [
+		{
+			"id": "ownBand01",
+			"selectionId": "sel01",
+			"name": "First Band",
+			"size": 3,
+			"cost": 60,
+			"quality": 4,
+			"defense": 5,
+			"armyId": "ownStatsAofs",
+			"bases": {"round": "25", "square": "20"},
+			"rules": [{"name": "Banner", "label": "Banner"}],
+			"items": [],
+			"weapons": [{"name": "Hand Weapon", "count": 3, "range": 0, "attacks": 1, "specialRules": []}],
+			"loadout": [{"name": "Hand Weapon", "count": 3, "range": 0, "attacks": 1, "specialRules": [], "type": "ArmyBookWeapon"}],
+			"selectedUpgrades": []
+		},
+		{
+			"id": "ownBand02",
+			"selectionId": "sel02",
+			"name": "Second Band",
+			"size": 3,
+			"cost": 60,
+			"quality": 4,
+			"defense": 5,
+			"armyId": "ownStatsAofs",
+			"bases": {"round": "25", "square": "20"},
+			"rules": [{"name": "Banner", "label": "Banner"}],
+			"items": [],
+			"weapons": [{"name": "Hand Weapon", "count": 3, "range": 0, "attacks": 1, "specialRules": []}],
+			"loadout": [{"name": "Hand Weapon", "count": 3, "range": 0, "attacks": 1, "specialRules": [], "type": "ArmyBookWeapon"}],
+			"selectedUpgrades": []
+		}
+	]
+}

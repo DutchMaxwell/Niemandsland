@@ -49,7 +49,7 @@ var _north: Array[int] = []
 var _south: Array[int] = []
 var _manifest := {"stills": [], "plans": [], "godot": "", "gpu": "", "still_info": {}}
 var _grit_debug := 0   # grit_debug=1 (classes) / 2 (the raw map): a debug still beside every still
-var _soil_debug := 0   # soil_debug=1 (LOOK5 S5): a still beside every still with the soil branch's blend weights as flat colours (<still>_soil.png)
+var _soil_debug := 0   # soil_debug=1 / 2 (LOOK5 S6): a still beside every still with the soil's heaviest class (<still>_soil.png) / its blend-band share (<still>_soil2.png)
 var _cam_target := Vector3.ZERO
 var _mood := ""   # mood= : the look audit's mood (empty = the fixed bright Overcast of every other mode)
 var _mooded: Object = null   # the board the mood was last applied to (a new board re-applies the town's own dusk)
@@ -1000,12 +1000,12 @@ func _still(tag: String, cam: String) -> void:
 	if _grit_debug > 0:
 		await _grit_still(file.get_basename() + ("_grit.png" if _grit_debug == 1 else "_gritmap.png"))
 	if _soil_debug > 0:
-		await _grit_still(file.get_basename() + "_soil.png", true)
+		await _grit_still(file.get_basename() + ("_soil.png" if _soil_debug == 1 else "_soil2.png"), _soil_debug)
 
 
 ## The same frame with the board shader's `grit_debug` on: every light, the ambient, sky reflections, fog and glow off, a linear tonemap at exposure 1, the models hidden, so only the
 ## shader's flat class colours (emission) reach the image, unchanged. Everything is put back afterwards. Saved as PNG (no JPEG ringing on the class edges).
-func _grit_still(file: String, soil := false) -> void:   # soil: the shader's soil_debug too (the soil classes on the earth, the grit classes on the streets)
+func _grit_still(file: String, soil := 0) -> void:   # soil: the shader's soil_debug too (the soil classes on the earth, the grit classes on the streets)
 	var env: Environment = _main.world_environment.environment
 	var keys := ["background_mode", "background_color", "ambient_light_energy", "reflected_light_source", "tonemap_mode", "tonemap_exposure", "glow_enabled", "fog_enabled",
 		"volumetric_fog_enabled", "adjustment_enabled", "ssao_enabled", "ssil_enabled", "sdfgi_enabled", "ssr_enabled"]
@@ -1020,8 +1020,8 @@ func _grit_still(file: String, soil := false) -> void:   # soil: the shader's so
 	var shown: Array = _models.filter(func(m: Node3D) -> bool: return m.visible)
 	for m: Node3D in shown:
 		m.visible = false
-	_cur_board.get("_material").set_shader_parameter("grit_debug", maxi(_grit_debug, 1) if soil else _grit_debug)
-	_cur_board.get("_material").set_shader_parameter("soil_debug", 1.0 if soil else 0.0)
+	_cur_board.get("_material").set_shader_parameter("grit_debug", maxi(_grit_debug, 1) if soil > 0 else _grit_debug)
+	_cur_board.get("_material").set_shader_parameter("soil_debug", float(soil))
 	for _i in 6:
 		env.background_mode = Environment.BG_COLOR
 		env.background_color = Color.BLACK
