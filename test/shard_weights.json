@@ -192,6 +192,7 @@
 "test/e2e/e2e_file_dialogs_inventory_test.gd": 10.5,
 "test/e2e/e2e_fps_advisory_inventory_test.gd": 18.4,
 "test/e2e/e2e_free_terrain_rules_test.gd": 4.5,
+"test/e2e/e2e_ft_24_ai_vs_ai_test.gd": 131.0,
 "test/e2e/e2e_game_menu_inventory_test.gd": 29.6,
 "test/e2e/e2e_game_over_inventory_test.gd": 17.0,
 "test/e2e/e2e_game_record_collector_test.gd": 11.3,
