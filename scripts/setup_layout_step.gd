@@ -216,6 +216,8 @@ func _zones_and_objectives() -> HBoxContainer:
 	var line := HBoxContainer.new()
 	_objectives = _text("", 15, HouseStyle.font(400), HouseStyle.MUTED)
 	_objectives.size_flags_horizontal = SIZE_EXPAND_FILL
+	_objectives.clip_text = true   # gives way beside the rail at 720p, cut with an ellipsis
+	_objectives.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	line.add_child(_objectives)
 	var deploy := HouseStyle.button("Deploy Objectives", HouseStyle.BUTTON, 40)
 	deploy.name = "DeployObjectives"
@@ -476,13 +478,21 @@ static func folded_row(index: int, step_name: String, value: String, on_change: 
 	tick.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	tick.modulate = HouseStyle.OK
 	row.add_child(tick)
-	var name_label := _text(step_name, 18, HouseStyle.font(400), HouseStyle.MUTED)
-	name_label.size_flags_horizontal = SIZE_EXPAND_FILL
-	row.add_child(name_label)
-	row.add_child(_text(value, 18, HouseStyle.font(400), HouseStyle.INK))
+	row.add_child(_text(step_name, 18, HouseStyle.font(400), HouseStyle.MUTED))
+	var shown := _text(value, 18, HouseStyle.font(400), HouseStyle.INK)   # gives way first, cut with an ellipsis (720p)
+	shown.size_flags_horizontal = SIZE_EXPAND_FILL
+	shown.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	shown.clip_text = true
+	shown.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.add_child(shown)
 	var change := HouseStyle.button("Change", HouseStyle.BUTTON, 36)
 	change.name = "Change%d" % index
 	change.flat = true
+	var link := StyleBoxEmpty.new()   # a text link: not the 18 px padding of a menu button
+	link.content_margin_left = 6
+	link.content_margin_right = 6
+	for state: StringName in [&"normal", &"hover", &"pressed", &"hover_pressed", &"focus"]:
+		change.add_theme_stylebox_override(state, link)
 	change.focus_mode = FOCUS_ALL
 	change.size_flags_horizontal = SIZE_SHRINK_END
 	change.add_theme_color_override(&"font_color", HouseStyle.ACCENT)
