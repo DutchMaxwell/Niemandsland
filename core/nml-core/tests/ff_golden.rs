@@ -51,6 +51,10 @@ fn play(fx: &Value) -> Value {
                 .map(|tr| tr.as_array().unwrap().iter().map(|q| [inch(&q[0]), inch(&q[1])]).collect()).collect(),
         });
     }
+    // Answers the table sends up front with the transcript (its probes: a push, its spot, the defender's place).
+    for c in fx["choices"].as_array().into_iter().flatten() {
+        t.push(Input::Choice { id: c[0].as_str().unwrap().into(), option: c[1].as_str().unwrap().into() });
+    }
     let unit = fx["unit"].as_str().expect("unit");
     let mut rolls = vec![];
     for _ in 0..200 {
