@@ -212,7 +212,7 @@ fn activations_needed(
 /// `by_points`) its Army Forge cost times the remaining-wounds fraction
 /// (`cost * remaining / max`). `UnitStatic.cost`/`wounds_max` come from the
 /// army list; empty statics or a woundless unit fall back to the raw reading.
-fn unit_strength(state: &State, statics: &[UnitStatic], i: usize, by_points: bool) -> f64 {
+fn unit_strength(state: &State, statics: &[UnitStatic], i: usize, by_points: bool, _frac: bool) -> f64 {
     let mut strength = 0.0f64;
     for w in &state.wounds[i] {
         strength += *w as f64;
@@ -233,19 +233,21 @@ fn unit_strength(state: &State, statics: &[UnitStatic], i: usize, by_points: boo
 pub fn presence(
     state: &State, statics: &[UnitStatic], i: usize, obj_pos: [f64; 3], threat: f64,
 ) -> f64 {
-    presence_weighted(state, statics, i, obj_pos, threat, false, &RushCache::off())
+    presence_weighted(state, statics, i, obj_pos, threat, false, false, &RushCache::off())
 }
 
 /// `presence` with the strength term switchable — afpoints P1's
 /// `strength_by_points` arm reads it with `by_points = true`.
+// The strength switches (`by_points`, `frac`) travel as two flags next to the other eval inputs.
+#[allow(clippy::too_many_arguments)]
 fn presence_weighted(
     state: &State, statics: &[UnitStatic], i: usize, obj_pos: [f64; 3], threat: f64,
-    by_points: bool, rc: &RushCache,
+    by_points: bool, frac: bool, rc: &RushCache,
 ) -> f64 {
     let Some(needed) = activations_needed(state, statics, i, obj_pos, rc) else {
         return 0.0;
     };
-    (unit_strength(state, statics, i, by_points) - threat).max(0.0) * DISCOUNT.powf(needed as f64)
+    (unit_strength(state, statics, i, by_points, frac) - threat).max(0.0) * DISCOUNT.powf(needed as f64)
 }
 
 /// `AiMissionEval._objective_p` ai_mission_eval.gd:415-431 — the soft control
@@ -255,7 +257,7 @@ fn presence_weighted(
 #[allow(clippy::too_many_arguments)]
 fn objective_p(
     state: &State, statics: &[UnitStatic], obj_index: usize, player: i64, incoming: Incoming,
-    carry_term: bool, by_points: bool, rc: &RushCache,
+    carry_term: bool, by_points: bool, frac: bool, rc: &RushCache,
 ) -> f64 {
     let obj = state.objectives[obj_index];
     if let Some(marker) = state.markers_meta.get(obj_index).filter(|_| carry_term) {
@@ -273,7 +275,7 @@ fn objective_p(
     let mut mine = 0.0f64;
     let mut theirs = 0.0f64;
     for i in 0..state.units() {
-        let p = presence_weighted(state, statics, i, obj.pos, threat_of(incoming, i), by_points, rc);
+        let p = presence_weighted(state, statics, i, obj.pos, threat_of(incoming, i), by_points, frac, rc);
         if state.player[i] == player {
             mine += p;
         } else {
@@ -317,17 +319,19 @@ fn reserve_presence(state: &State, i: usize) -> f64 {
 }
 
 /// D13: `objective_p` with the reserves counted — twin of `AiMissionEval._objective_p_roles`.
+// The strength switches (`by_points`, `frac`) travel as two flags next to the other eval inputs.
+#[allow(clippy::too_many_arguments)]
 fn objective_p_roles(
     state: &State, statics: &[UnitStatic], i: usize, player: i64, incoming: Incoming,
-    by_points: bool, rc: &RushCache,
+    by_points: bool, frac: bool, rc: &RushCache,
 ) -> f64 {
     if state.markers_meta.get(i).is_some_and(|m| m.carry && m.carried_by >= 0) {
-        return objective_p(state, statics, i, player, incoming, true, by_points, rc);
+        return objective_p(state, statics, i, player, incoming, true, by_points, frac, rc);
     }
     let obj = state.objectives[i];
     let (mut mine, mut theirs) = (0.0f64, 0.0f64);
     for u in 0..state.units() {
-        let p = presence_weighted(state, statics, u, obj.pos, threat_of(incoming, u), by_points, rc)
+        let p = presence_weighted(state, statics, u, obj.pos, threat_of(incoming, u), by_points, frac, rc)
             + reserve_presence(state, u);
         if state.player[u] == player { mine += p } else { theirs += p }
     }
@@ -405,7 +409,7 @@ fn is_destroy_mission(state: &State) -> bool {
 pub fn score_hand(
     state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming,
 ) -> f64 {
-    score_hand_carry(state, statics, player, incoming, true, false)
+    score_hand_carry(state, statics, player, incoming, true, false, false)
 }
 
 /// `score_hand` with the C7 carry term switchable — `eval_variant = 2` (wave C
@@ -413,7 +417,7 @@ pub fn score_hand(
 /// priced by presence like any other, the hand eval exactly as before C7.
 fn score_hand_carry(
     state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, carry_term: bool,
-    by_points: bool,
+    by_points: bool, frac: bool,
 ) -> f64 {
     if state.objectives.is_empty() {
         return 0.5;
@@ -438,7 +442,7 @@ fn score_hand_carry(
                 }
                 continue;
             }
-            let pctrl = objective_p(state, statics, i, player, incoming, carry_term, by_points, rc);
+            let pctrl = objective_p(state, statics, i, player, incoming, carry_term, by_points, frac, rc);
             if ob == player {
                 deff = 1.0 - pctrl;
             } else {
@@ -450,13 +454,13 @@ fn score_hand_carry(
     if let Some(role) = role_term(state, player) {
         let n = state.objectives.len() as f64;
         let control: f64 = (0..state.objectives.len())
-            .map(|i| objective_p_roles(state, statics, i, player, incoming, by_points, rc))
+            .map(|i| objective_p_roles(state, statics, i, player, incoming, by_points, frac, rc))
             .sum::<f64>() / n;
         return ROLE_TERM_WEIGHT * role + (1.0 - ROLE_TERM_WEIGHT) * control;
     }
     let mut total = 0.0f64;
     for i in 0..state.objectives.len() {
-        total += objective_p(state, statics, i, player, incoming, carry_term, by_points, rc);
+        total += objective_p(state, statics, i, player, incoming, carry_term, by_points, frac, rc);
     }
     total / state.objectives.len() as f64
 }
@@ -536,12 +540,12 @@ fn objective_own(
 /// the held-marker `keep` term), every state variant 3 hands back to the hand
 /// eval gets the held-marker rule below instead.
 fn score_hand_vp_hold(
-    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, by_points: bool,
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, by_points: bool, frac: bool,
 ) -> f64 {
     if !state.objectives.is_empty() && &*state.scoring == "round_vp" && !is_destroy_mission(state) {
-        return score_hand_vp(state, statics, player, incoming, by_points);
+        return score_hand_vp(state, statics, player, incoming, by_points, frac);
     }
-    score_hand_hold(state, statics, player, incoming, by_points)
+    score_hand_hold(state, statics, player, incoming, by_points, frac)
 }
 
 /// The hand eval with a held marker that stays
@@ -553,17 +557,17 @@ fn score_hand_vp_hold(
 /// side that out-weighs the owner. Destroy and role missions are handed back
 /// to variant 0 whole.
 fn score_hand_hold(
-    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, by_points: bool,
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, by_points: bool, frac: bool,
 ) -> f64 {
     if state.objectives.is_empty()
         || (!state.markers_meta.is_empty() && is_destroy_mission(state))
         || role_term(state, player).is_some()
     {
-        return score_hand_carry(state, statics, player, incoming, true, by_points);
+        return score_hand_carry(state, statics, player, incoming, true, by_points, frac);
     }
     let rc = &RushCache::new(state.units());
     let total: f64 = (0..state.objectives.len())
-        .map(|i| hold_owner_p(state, objective_p(state, statics, i, player, incoming, true, by_points, rc), i, player))
+        .map(|i| hold_owner_p(state, objective_p(state, statics, i, player, incoming, true, by_points, frac, rc), i, player))
         .sum();
     total / state.objectives.len() as f64
 }
@@ -587,13 +591,13 @@ fn hold_owner_p(state: &State, share: f64, obj_index: usize, player: i64) -> f64
 /// sabotage branch is NOT this rung's business and is handed back to variant 0
 /// whole.
 fn score_hand_majority(
-    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, by_points: bool,
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, by_points: bool, frac: bool,
 ) -> f64 {
     if state.objectives.is_empty() {
         return 0.5;
     }
     if !state.markers_meta.is_empty() && is_destroy_mission(state) {
-        return score_hand_carry(state, statics, player, incoming, true, by_points);
+        return score_hand_carry(state, statics, player, incoming, true, by_points, frac);
     }
     let total_rounds = state.rounds_total.max(1) as f64;
     let left = (state.rounds_total - state.round).max(0) as f64;
@@ -601,7 +605,7 @@ fn score_hand_majority(
     let rc = &RushCache::new(state.units());
     let mut total = 0.0f64;
     for i in 0..state.objectives.len() {
-        let share = objective_p(state, statics, i, player, incoming, true, by_points, rc);
+        let share = objective_p(state, statics, i, player, incoming, true, by_points, frac, rc);
         let own = objective_own(state, statics, i, player, incoming, rc);
         total += (1.0 - w) * share + w * own;
     }
@@ -621,10 +625,10 @@ fn score_hand_majority(
 /// mission — END scoring, sabotage, the demolition flavour, no markers — is
 /// handed back to variant 0 whole, so those states score byte-identical.
 fn score_hand_vp(
-    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, by_points: bool,
+    state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, by_points: bool, frac: bool,
 ) -> f64 {
     if state.objectives.is_empty() || &*state.scoring != "round_vp" || is_destroy_mission(state) {
-        return score_hand_carry(state, statics, player, incoming, true, by_points);
+        return score_hand_carry(state, statics, player, incoming, true, by_points, frac);
     }
     let n = state.objectives.len() as f64;
     let vp = vp_of(state.vp.as_deref());
@@ -667,7 +671,7 @@ fn score_hand_vp(
 pub fn score_hand_variant(
     state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, eval_variant: i64,
 ) -> f64 {
-    score_hand_variant_pts(state, statics, player, incoming, eval_variant, false)
+    score_hand_variant_pts(state, statics, player, incoming, eval_variant, false, false)
 }
 
 /// `score_hand_variant` with the points weighting (`strength_by_points`)
@@ -679,15 +683,15 @@ pub fn score_hand_variant(
 /// (arm 0, `by_points = true`); no header can reach it.
 pub fn score_hand_variant_pts(
     state: &State, statics: &[UnitStatic], player: i64, incoming: Incoming, eval_variant: i64,
-    by_points: bool,
+    by_points: bool, frac: bool,
 ) -> f64 {
     match eval_variant {
-        0 => score_hand_carry(state, statics, player, incoming, true, by_points),
-        1 => score_hand_majority(state, statics, player, incoming, by_points),
-        2 => score_hand_carry(state, statics, player, incoming, false, by_points),
-        3 => score_hand_vp(state, statics, player, incoming, by_points),
-        4 => score_hand_vp_hold(state, statics, player, incoming, by_points),
-        5 => score_hand_carry(state, statics, player, incoming, true, true),
+        0 => score_hand_carry(state, statics, player, incoming, true, by_points, frac),
+        1 => score_hand_majority(state, statics, player, incoming, by_points, frac),
+        2 => score_hand_carry(state, statics, player, incoming, false, by_points, frac),
+        3 => score_hand_vp(state, statics, player, incoming, by_points, frac),
+        4 => score_hand_vp_hold(state, statics, player, incoming, by_points, frac),
+        5 => score_hand_carry(state, statics, player, incoming, true, true, false),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
@@ -722,13 +726,15 @@ pub fn score_with(
     incoming: Incoming,
     fit: Option<&Fitted>,
 ) -> f64 {
-    score_with_variant(state, statics, player, incoming, fit, 0, false)
+    score_with_variant(state, statics, player, incoming, fit, 0, false, false)
 }
 
 /// `score_with` at an explicit `eval_variant` — the evolved-eval lane's other
 /// read site (`Rollout::blend_score`). Every other caller keeps calling
 /// `score_with` above, unchanged, so this function existing moves nothing
 /// until something passes a nonzero variant.
+// The strength switches (`by_points`, `frac`) travel as two flags next to the other eval inputs.
+#[allow(clippy::too_many_arguments)]
 pub fn score_with_variant(
     state: &State,
     statics: &[UnitStatic],
@@ -736,20 +742,20 @@ pub fn score_with_variant(
     incoming: Incoming,
     fit: Option<&Fitted>,
     eval_variant: i64,
-    by_points: bool,
+    by_points: bool, frac: bool,
 ) -> f64 {
     let Some(fit) = fit else {
-        return score_hand_variant_pts(state, statics, player, incoming, eval_variant, by_points);
+        return score_hand_variant_pts(state, statics, player, incoming, eval_variant, by_points, frac);
     };
     match fit.mode {
         FitMode::Residual => combine_residual(
-            score_hand_variant_pts(state, statics, player, incoming, eval_variant, by_points),
+            score_hand_variant_pts(state, statics, player, incoming, eval_variant, by_points, frac),
             fit.score_fit(state, statics, player, incoming),
             fit.scale,
         ),
         FitMode::Blend => {
             let fb = fit.blend;
-            (1.0 - fb) * score_hand_variant_pts(state, statics, player, incoming, eval_variant, by_points)
+            (1.0 - fb) * score_hand_variant_pts(state, statics, player, incoming, eval_variant, by_points, frac)
                 + fb * fit.score_fit(state, statics, player, incoming)
         }
     }
@@ -840,7 +846,7 @@ mod tests {
 
     /// S02 helper: one arm with the points weighting composed on top.
     fn at(st: &crate::state::State, statics: &[UnitStatic], var: i64, pts: bool) -> f64 {
-        super::score_hand_variant_pts(st, statics, 1, NO_INCOMING, var, pts)
+        super::score_hand_variant_pts(st, statics, 1, NO_INCOMING, var, pts, false)
     }
 
     /// S02 fixture: my weak unit (cost 100) on a marker I hold, a strong enemy (cost 600) in reach.
@@ -862,13 +868,13 @@ mod tests {
     fn points_compose_identity_off_and_arm_0() {
         let (st, statics) = held_fixture();
         assert_eq!(at(&st, &statics, 0, false), score_hand(&st, &statics, 1, NO_INCOMING));
-        assert_eq!(at(&st, &statics, 2, false), super::score_hand_carry(&st, &statics, 1, NO_INCOMING, false, false));
-        assert_eq!(at(&st, &statics, 3, false), super::score_hand_vp(&st, &statics, 1, NO_INCOMING, false));
-        assert_eq!(at(&st, &statics, 4, false), super::score_hand_vp_hold(&st, &statics, 1, NO_INCOMING, false));
-        assert_eq!(at(&st, &statics, 1, false), super::score_hand_majority(&st, &statics, 1, NO_INCOMING, false));
+        assert_eq!(at(&st, &statics, 2, false), super::score_hand_carry(&st, &statics, 1, NO_INCOMING, false, false, false));
+        assert_eq!(at(&st, &statics, 3, false), super::score_hand_vp(&st, &statics, 1, NO_INCOMING, false, false));
+        assert_eq!(at(&st, &statics, 4, false), super::score_hand_vp_hold(&st, &statics, 1, NO_INCOMING, false, false));
+        assert_eq!(at(&st, &statics, 1, false), super::score_hand_majority(&st, &statics, 1, NO_INCOMING, false, false));
         assert_eq!(
             at(&st, &statics, 0, true),
-            super::score_hand_carry(&st, &statics, 1, NO_INCOMING, true, true),
+            super::score_hand_carry(&st, &statics, 1, NO_INCOMING, true, true, false),
             "points ON + arm 0 is the old arm 5"
         );
     }
@@ -1127,8 +1133,8 @@ mod tests {
         for pass in 0..2 {
             for o in 0..st.objectives.len() {
                 for player in [1, 2] {
-                    let hot = super::objective_p(&st, &[], o, player, &inc, true, false, &cache);
-                    let cold = super::objective_p(&st, &[], o, player, &inc, true, false, &super::RushCache::off());
+                    let hot = super::objective_p(&st, &[], o, player, &inc, true, false, false, &cache);
+                    let cold = super::objective_p(&st, &[], o, player, &inc, true, false, false, &super::RushCache::off());
                     assert_eq!(hot.to_bits(), cold.to_bits(), "objective_p marker {o} player {player} pass {pass}");
                     let own_hot = super::objective_own(&st, &[], o, player, &inc, &cache);
                     let own_cold = super::objective_own(&st, &[], o, player, &inc, &super::RushCache::off());
