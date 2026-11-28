@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## Feature test FT-7: jumping down, Firefight (gff), hot-seat table, PINNED to the pending epoch 106 (jump and fall reach
-## the core from PENDING_EPOCH_CORE_TIERS on; the table ships 103 - R-FT1, recorded in SkirmishTable.pins). FF36 p.15
+## the core from EPOCH_106_CORE_TIERS on; the table ships 103 - R-FT1, recorded in SkirmishTable.pins). FF36 p.15
 ## l.1276-1284 and the example l.1292-1293: a drop of up to 3 in is regular movement; up to 6 in is a jump - one die per
 ## inch, all 2+ or the model falls; the jump does not count toward the move.
 ## Scene: the drawn generated board 7 (3 in and 6 in ledges, no ladder) and board 2 (a 9 in ledge); a 1-model Tough(3)

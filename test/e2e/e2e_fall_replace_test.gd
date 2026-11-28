@@ -98,7 +98,7 @@ func _press(gu: GameUnit, text: String) -> void:
 @warning_ignore('unused_parameter')
 func test_a_fall_is_placed_for_me_and_ends_through_the_card(
 		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "NmlCore extension not loaded") -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_CORE_TIERS
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_106_CORE_TIERS
 	var core: Object = ClassDB.instantiate("NmlCore")
 	SoloHarness.generated_board(_main, 7, "")
 	var ledge := _ledge(core.boardgen_layout_themed(7, ""))

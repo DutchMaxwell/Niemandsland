@@ -7,6 +7,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Changed — rules corrections
+- **Rules epoch 106 is live: jumps and falls in the two skirmish games play on the board you see.** On a generated
+  board the core now knows its ledges, so a model that jumps or is pushed off a step rolls its jump and fall dice and
+  the others re-place within 1 in, the same online. Games recorded before epoch 106 replay unchanged (they played a
+  flat board), and tables without steps are unchanged.
 - **Rules epoch 105 is live: a deployment zone takes a model only when its whole base is inside.** On deployment maps
   with shaped zones (diagonals, discs, side bands) the AI no longer sets a base that overhangs the zone line; the
   standard front-line deployment already kept every base inside and is unchanged. Games recorded before epoch 105 replay
