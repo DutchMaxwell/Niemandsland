@@ -51,3 +51,19 @@ func test_the_tables_windows_keep_their_scale() -> void:
 func test_icon_buttons_keep_no_side_padding() -> void:
 	var b := _button(HouseStyle.menu_theme(), HouseStyle.ICON)
 	assert_float(b.get_theme_stylebox(&"normal").content_margin_left).is_equal(0.0)
+
+
+## A menu dropdown's arrow is the thin 12 px chevron of the mockups, 14 px from the edge (gap review 27.11.: about 24 px
+## bold on 03b, the engine's small arrow on 05; red before).
+func test_a_menu_dropdown_has_the_thin_chevron() -> void:
+	var holder: Control = auto_free(Control.new())
+	holder.theme = HouseStyle.menu_theme()
+	add_child(holder)
+	for variation: StringName in [&"", HouseStyle.BUTTON]:
+		var pick := OptionButton.new()
+		pick.theme_type_variation = variation
+		holder.add_child(pick)
+		var arrow := pick.get_theme_icon(&"arrow")
+		assert_int(arrow.get_width()).is_less_equal(14)
+		assert_object(arrow).is_same(HouseStyle.menu_theme().get_icon(&"arrow", &"OptionButton"))
+		assert_int(pick.get_theme_constant(&"arrow_margin")).is_equal(14)

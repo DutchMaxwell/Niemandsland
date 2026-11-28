@@ -59,6 +59,11 @@ func setup(opponent: SetupOpponent, values: Array) -> void:
 	for entry: Array in WHO:
 		cards.add_child(_who_card(entry[0], entry[1], entry[2], entry[3]))
 	_solo = _solo_card()
+	var air := Control.new()   # 12 px between the cards and the Solo fields (sheet 03b), on top of the column's 8
+	air.custom_minimum_size.y = 4
+	air.visible = false
+	_solo.visibility_changed.connect(func() -> void: air.visible = _solo.visible)
+	left.add_child(air)
 	left.add_child(_solo)
 	_off = SetupLayoutStep._text("", 15, HouseStyle.font(400), HouseStyle.MUTED)
 	left.add_child(_off)
