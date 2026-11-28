@@ -129,3 +129,37 @@ static func ai_deploys_all(main: Node, depth_in := 12.0, seed_value := 5) -> voi
 	}
 	await main._solo_deploy_begin_side(true)
 	await main._solo_deploy_human_out()
+
+
+## GEN-1: a player's Shoot at `target` through the radial's targeting door and a left click
+## from straight above its first live model (on a generated board a camera ray from the side
+## meets a raised block first). Pick bodies as SkirmishTable.aim gives spawned models.
+static func shoot_from_above(main: Node, att: GameUnit, target: GameUnit) -> void:
+	await main.solo_begin_targeting(att, false)
+	for m in target.get_alive_models():
+		var n: Node3D = (m as ModelInstance).node
+		if n.get_node_or_null("FtPick") == null:
+			var body := StaticBody3D.new()
+			body.name = "FtPick"
+			body.set_meta("game_unit", target)
+			var shape := CollisionShape3D.new()
+			var ball := SphereShape3D.new()
+			ball.radius = 0.016
+			shape.shape = ball
+			body.add_child(shape)
+			n.add_child(body)
+			body.position = Vector3(0, 0.03, 0)
+	var at: Vector3 = (
+		(target.get_alive_models()[0] as ModelInstance).node.global_position + Vector3(0, 0.03, 0)
+	)
+	var cam := main.get_viewport().get_camera_3d()
+	var above := Transform3D(Basis.looking_at(Vector3.DOWN, Vector3.FORWARD), at + Vector3(0, 1, 0))
+	for i in 3:  # the camera's own view tween may still run: set it again until it holds
+		cam.global_transform = above
+		await main.get_tree().physics_frame
+	cam.global_transform = above
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = cam.unproject_position(at)
+	await main._solo_targeting_input(click)
