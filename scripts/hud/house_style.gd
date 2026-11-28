@@ -122,6 +122,7 @@ const MENU_PAD_SEGMENT_X := 16
 const MENU_H_ACTION := 44
 const MENU_PAD_PANEL := 22
 const MENU_ICON_BUTTON := 32     # the close box of a menu window
+const MENU_SHEET_CLOSE := 44     # the close box of a full menu sheet (settings, saves): sheets 05 and 09
 const SWITCH_W := 46             # the menu's switch (CheckButton): a pill 46 x 26 with a 18 px knob
 const SWITCH_H := 26
 const MENU_KNOB := 20            # the menu's slider knob; its groove is 8 px high
@@ -649,6 +650,17 @@ static func panel_header(title: String, closes: bool = false) -> HBoxContainer:
 	b.size_flags_horizontal = Control.SIZE_SHRINK_END
 	row.add_child(b)
 	return row
+
+
+## A full menu sheet's close box (sheets 05, 09): 44 px with a framed rim and a thin drawn cross in place of the glyph.
+static func sheet_close_box(b: Button) -> void:
+	b.text = ""
+	b.icon = svg_icon("<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' "
+		+ "stroke='#fff' stroke-width='1.5' stroke-linecap='round'><path d='M6 6l12 12M18 6L6 18'/></svg>")
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.expand_icon = false
+	b.add_theme_constant_override(&"icon_max_width", 18)
+	b.custom_minimum_size = Vector2(MENU_SHEET_CLOSE, MENU_SHEET_CLOSE)
 
 
 ## A key of a shortcut hint ("Shift", "G") — a label, not a button.
