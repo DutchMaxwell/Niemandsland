@@ -162,7 +162,10 @@ func test_tick_finale_and_reset() -> void:
 	assert_int(cards[0].find_children("Tick", "TextureRect", true, false).size()).is_equal(1)
 	assert_int(cards[3].find_children("Tick", "TextureRect", true, false).size()).is_equal(0)
 	var finale := cards[10] as Control
-	assert_array(_texts(finale)).contains(["11 · FINALE", "Finale"])
+	assert_array(_texts(finale)).contains(["11 · FINALE", "FINALE"])
+	var tag := finale.find_children("*", "Label", true, false).filter(func(l: Node) -> bool: return (l as Label).text == "FINALE")
+	assert_bool(not tag.is_empty() and (tag[0] as Node).get_parent() is PanelContainer) \
+		.override_failure_message("FINALE is not a chip (sheet 07)").is_true()
 	assert_float(finale.size.x).is_greater(1.9 * (cards[8] as Control).size.x)
 	page.call("select", "ClassicTrack")
 	var reset := page.find_child("ResetTutorial", true, false) as Button
