@@ -134,7 +134,7 @@ func test_preview_shows_the_army_name_and_totals() -> void:
 func test_the_x_cancels_and_the_sheet_is_house_style_and_owns_its_clicks() -> void:
 	var root := _dlg.get_child(0) as Control
 	assert_int(root.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
-	assert_object(root.theme).is_same(HouseStyle.theme())
+	assert_object(root.theme).is_same(HouseStyle.menu_theme())   # sheet 04's scale (step 85)
 	assert_str(String(_button("Import army").theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
 	assert_str(String(_button("Load army").theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
 	assert_str(String(_button("Cancel").theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
@@ -217,3 +217,23 @@ func test_the_preview_is_one_row_per_unit() -> void:
 	var cost: Label = _dlg.army_preview.find_children("*", "Label", true, false).filter(
 		func(l: Node) -> bool: return (l as Label).text == "310")[0]
 	assert_object(cost.get_theme_font("font")).is_same(HouseStyle.mono())
+
+
+## Step 85 (sheet 04): in a wide window the import is one 1320 px sheet titled "Bring your army." with the inputs left
+## and the preview right, Cancel and Import army under the preview; a narrow window stacks them as before (red before:
+## one 620 px column).
+func test_a_wide_window_shows_two_columns() -> void:
+	_dlg._fit_to(Vector2(1920, 1080))
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_object(_label("Bring your army.")).override_failure_message("no title").is_not_null()
+	var sheet := _dlg.find_child("Sheet", true, false) as Control
+	assert_float(sheet.size.x).is_greater_equal(1300.0)
+	var link := _dlg.share_link_input.get_global_rect()
+	var preview: Rect2 = (_dlg.army_preview.get_parent() as Control).get_global_rect()
+	assert_float(preview.position.x).override_failure_message("the preview is not right of the link").is_greater(link.end.x)
+	assert_float(_button("Import army").get_global_rect().position.x).is_greater(link.end.x)
+	_dlg._fit_to(Vector2(1024, 768))
+	for _i in 2:
+		await get_tree().process_frame
+	assert_float(_dlg.army_preview.get_parent().get_global_rect().position.y).is_greater(_dlg.share_link_input.get_global_rect().end.y)
