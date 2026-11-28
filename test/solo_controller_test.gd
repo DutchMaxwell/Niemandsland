@@ -4135,3 +4135,20 @@ func test_eval_variant_follows_the_preset_and_the_env_override() -> void:
 	OS.set_environment("NML_EVAL_VARIANT", "3")
 	assert_int(solo._eval_variant_for(SoloDifficulty.for_grade("nachtmahr"))).is_equal(3)
 	OS.set_environment("NML_EVAL_VARIANT", "")
+
+
+## PLANNER-CHAIN: the AI planner's coherency cap reads the unit's book chain (CoherencyChecker.book_chain_in), not a fixed
+## 6 in for both skirmish games: a 7-model line of 32 mm bases (0.3 in links, 8.2 in edge to edge) is coherent for a
+## Firefight unit (9 in), torn for an AoF: Skirmish unit (6 in), coherent for Grimdark Future (9 in).
+@warning_ignore('unused_parameter')
+func test_the_planner_chain_is_the_book_chain(do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "NmlCore extension not loaded") -> void:
+	var line: Array = []
+	for k in 7:
+		line.append(Vector3(k * 0.04, 0, 0))
+	var solo: SoloController = auto_free(SoloController.new())
+	for sys_want in [["gff", true], ["aofs", false], ["gf", true]]:
+		var u := _unit(2, line)
+		u.unit_properties["game_system"] = sys_want[0]
+		assert_bool(solo.unit_coherent_now(u)).override_failure_message("%s" % sys_want[0]).is_equal(sys_want[1])
+		for m in u.models:
+			(m as ModelInstance).node.free()
