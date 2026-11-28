@@ -25,3 +25,26 @@ pub struct Landing {
     /// Empty for every wound / casualty landing.
     pub moved_to: Vec<[f64; 3]>,
 }
+
+/// LANDING-INVARIANT: the table lands a unit's wounds and losses ONLY from the step landings (the activation's final delta
+/// carries none), so the landings replayed onto the activation's start must give the core's end state. Replays them per unit
+/// by capture slot (a landing names each model by the slot it had at the start: its wounds left, or dead) and returns one line
+/// per unit whose living models or wound total then differ from `end` - a landing the core never emitted. Empty = covered.
+pub fn landing_gaps(start: &crate::state::State, end: &crate::state::State, landings: &[Landing]) -> Vec<String> {
+    let mut out = Vec::new();
+    for u in 0..start.wounds.len().min(end.wounds.len()) {
+        let mut slots: Vec<Option<i64>> = start.wounds[u].iter().map(|&w| Some(w)).collect();
+        for m in landings.iter().filter(|l| l.unit == u).flat_map(|l| &l.models) {
+            if let Some(s) = slots.get_mut(m.slot) {
+                *s = if m.dead { None } else { Some(m.wounds_left) };
+            }
+        }
+        let landed = (slots.iter().flatten().count(), slots.iter().flatten().sum::<i64>());
+        let core = (end.wounds[u].len(), end.wounds[u].iter().sum::<i64>());
+        if landed != core {
+            let key = end.roster.keys.get(u).cloned().unwrap_or_default();
+            out.push(format!("{key}: the landings leave {} models / {} wounds, the core ends at {} / {}", landed.0, landed.1, core.0, core.1));
+        }
+    }
+    out
+}

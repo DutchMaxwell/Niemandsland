@@ -246,6 +246,13 @@ fn ledge_push(strip: f64, to_x: f64, dice: Vec<Vec<u8>>) -> (State, ShootResult)
 }
 
 /// `ledge_push` with the tray after it (its landings: what the table lands).
+/// The ledge scene's start (its wounds and models only: the landings' replay base).
+fn ledge_push_start() -> State {
+    let mut st = four_unit_line();
+    st.wounds = vec![vec![1], vec![1], vec![1, 1], vec![1]];
+    st
+}
+
 fn ledge_push_tray(strip: f64, to_x: f64, dice: Vec<Vec<u8>>) -> (State, ShootResult, Tray) {
     let mut st = four_unit_line();
     let keys = st.roster.keys.clone();
@@ -274,6 +281,15 @@ fn ledge_push_tray(strip: f64, to_x: f64, dice: Vec<Vec<u8>>) -> (State, ShootRe
     let seams = Seams { rules_epoch: crate::acts::EPOCH_101_SKIRMISH_PUSH, tray_exact: true, ..Seams::default() };
     let (st, shot) = resolve_stochastic_tray_on_board(&statics, &st, &action, &t, seams, &mut GodotRng::new(0), &mut tray).unwrap();
     (st, shot, tray)
+}
+
+/// LANDING-INVARIANT: the push-off-a-ledge activation's landings, replayed onto its start, give the core's end state
+/// (`landing::landing_gaps` is empty). Red with #3961's landing taken out: Target ends with 0 models in the core, 1 landed.
+#[test]
+fn the_push_fall_leaves_no_landing_gap() {
+    let start = ledge_push_start();
+    let (end, _shot, tray) = ledge_push_tray(3.0, 8.7, vec![vec![6], vec![1, 6, 6], vec![1], vec![5], vec![1, 6, 6]]);
+    assert_eq!(crate::landing::landing_gaps(&start, &end, &tray.all_landings()), Vec::<String>::new());
 }
 
 /// #3961 (FT-17): the fall's wounds on the pushed model are a landing of their own - the table lands only landings, so

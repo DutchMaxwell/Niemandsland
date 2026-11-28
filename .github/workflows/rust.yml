@@ -132,6 +132,9 @@ jobs:
         env:
           CARGO_PROFILE_RELEASE_LTO: "false"
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+          # LANDING-INVARIANT: every step activation's landings must explain the core's end state (a missing landing = a
+          # table that keeps a model the core removed). `strict` panics in the step API.
+          NML_LANDING_INVARIANT: strict
 
   core-ignored:
     name: Fixture-gated nml-core tests
