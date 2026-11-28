@@ -11,6 +11,11 @@ const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const INCH := 0.0254
 
+## The receive doors main connects in _ready ([signal of the manager, main's handler]) that the O seat rewires.
+const RECEIVE_DOORS := [["remote_activation_updated", "_on_remote_activation_updated"],
+	["turn_state_received", "_on_turn_state_received"], ["command_received", "_on_network_command"],
+	["remote_wounds_updated", "_on_remote_wounds_updated"], ["remote_round_advanced", "_on_remote_round_advanced"]]
+
 ## Every epoch a feature test pinned through `need_epoch` (the shipped-epoch gate reads it).
 static var pins: Array[int] = []
 
@@ -72,9 +77,13 @@ static func boot(suite: Node, seat: String) -> SkirmishTable:
 			t.main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
 			t.main.solo_ai_slots = {}
 			t.net = WireNet.new()
+			t.net.is_host = true   # this table is the host, slot 1: it owns the turn token
 			t.net.army_manager = t.main.opr_army_manager
 			t.main.network_manager = t.net
 			t.main.radial_menu_controller.network_manager = t.net
+			for pair in RECEIVE_DOORS:   # main wired its receive doors to the real manager in _ready: wire the swapped one
+				if t.net.has_signal(pair[0]) and t.main.has_method(pair[1]):
+					t.net.connect(pair[0], Callable(t.main, pair[1]))
 			SoloHarness.controller(t.main)
 			t.main._apply_turn_token(1)
 	SoloHarness.instant(t.main)
