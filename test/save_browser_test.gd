@@ -108,6 +108,12 @@ func test_an_empty_folder_says_so() -> void:
 		if label.is_visible_in_tree():
 			texts.append(label.text)
 	assert_array(texts).contains(["No saved games yet.", "Games you save at the table appear here."])
+	# ...in the middle of the sheet, not in its lower half (gap review 27.11., sheet 09; red before)
+	await get_tree().process_frame
+	var note := browser.get("empty_note") as Control
+	var sheet := browser.find_child("Sheet", true, false) as Control
+	var middle := sheet.get_global_rect().get_center().y
+	assert_float(absf(note.get_global_rect().get_center().y - middle)).is_less(sheet.size.y * 0.15)
 
 
 ## Step 48.4: the row with focus is the selected one - its Load is the gold button, no other is (red before: every
@@ -148,3 +154,14 @@ func test_the_sheet_fits_a_720p_window() -> void:
 		"sheet %s outside %s" % [sheet.get_global_rect(), window]).is_true()
 	var close := browser.find_child("CloseButton", true, false) as Control
 	assert_bool(window.encloses(close.get_global_rect())).is_true()
+
+
+## Sheets 05 and 09: a full menu sheet's close box is 44 px with a drawn thin cross (red before: 26 px with the "×").
+func test_the_sheet_close_box_is_44_px_with_a_drawn_cross() -> void:
+	var browser := await _open(DIR)
+	if browser == null:
+		return
+	var close := browser.find_child("CloseButton", true, false) as Button
+	assert_float(close.custom_minimum_size.x).is_equal(44.0)
+	assert_str(close.text).is_empty()
+	assert_object(close.icon).is_not_null()

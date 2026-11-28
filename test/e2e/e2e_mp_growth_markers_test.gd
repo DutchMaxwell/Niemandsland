@@ -26,7 +26,7 @@ const GROWTH_KEY := "growth_piercing_growth"
 
 ## Stand-in for NetworkManager at main's seam: a live session that records outbound frames.
 ## _do_next_round's MP branch broadcasts the round advance, so the fake must take that call.
-class FakeNet extends Node:
+class FakeNet extends "res://test/support/presence_stub_net.gd":
 	var active: bool = true
 	var sent: Array = []
 	func is_multiplayer_active() -> bool:

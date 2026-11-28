@@ -294,10 +294,12 @@ fn objective_p(
     mine / (mine + theirs)
 }
 
-/// D13: the table the role terms measure on, inches. The state carries no table, so the eval
-/// reads the default 6x4 ft one (the same constants the referee twins take as arguments).
-const ROLE_TABLE_W_IN: f64 = 72.0;
-const ROLE_TABLE_D_IN: f64 = 48.0;
+/// D13 / plan D2-2: the table the role terms measure on, inches. The state carries no table, so the eval reads the
+/// scored side's rules book default board (`Book::default_board_in`: 72 x 48 for gf/aof/aofr, 48 x 48 for gff/aofs).
+fn role_table_in(state: &State, player: i64) -> [f64; 2] {
+    let unit = (0..state.player.len()).find(|&u| state.player[u] == player).unwrap_or(0);
+    state.book(unit).default_board_in
+}
 /// D13: the share of the score the role term carries; the rest is the reserve-aware control mean.
 const ROLE_TERM_WEIGHT: f64 = 0.5;
 
@@ -349,6 +351,7 @@ fn role_term(state: &State, player: i64) -> Option<f64> {
     if (att != 1 && att != 2) || !matches!(&*state.scoring, "escort" | "extract") {
         return None;
     }
+    let [table_w_in, table_d_in] = role_table_in(state, player);
     let live: Vec<([f64; 2], f64, bool)> = (0..state.markers_meta.len())
         .filter_map(|i| {
             let (p, r) = crate::mission::marker_point_in(state, i)?;
@@ -364,13 +367,13 @@ fn role_term(state: &State, player: i64) -> Option<f64> {
         let target = -(edge.signum() as f64);
         let defender_value = live
             .iter()
-            .map(|(p, r, _)| (1.0 - (ROLE_TABLE_D_IN / 2.0 - target * p[1] - r) / ROLE_TABLE_D_IN).clamp(0.0, 1.0))
+            .map(|(p, r, _)| (1.0 - (table_d_in / 2.0 - target * p[1] - r) / table_d_in).clamp(0.0, 1.0))
             .fold(0.0f64, f64::max);
         return Some(if attacker_side { 1.0 - defender_value } else { defender_value });
     }
     let value_at = |p: &[f64; 2], r: f64| {
-        let gap = (ROLE_TABLE_W_IN / 2.0 - p[0].abs()).min(ROLE_TABLE_D_IN / 2.0 - p[1].abs()) - r;
-        (1.0 - gap / (ROLE_TABLE_D_IN / 2.0)).clamp(0.0, 1.0)
+        let gap = (table_w_in / 2.0 - p[0].abs()).min(table_d_in / 2.0 - p[1].abs()) - r;
+        (1.0 - gap / (table_d_in / 2.0)).clamp(0.0, 1.0)
     };
     let any_relic = live.iter().any(|m| m.2);
     // R9a fog: the attacker cannot tell the hidden markers apart, so while no relic is known each is
@@ -1421,5 +1424,42 @@ mod tests {
         assert!(crate::io::plain_of(&st)["markers_meta"][0].get("secret_hidden").is_none());
         st.markers_meta[0].secret_hidden = true;
         assert_eq!(crate::io::plain_of(&st)["markers_meta"][0]["secret_hidden"], serde_json::json!(true));
+    }
+
+    /// Plan D2-2: the role terms measure on the scored side's book board. An extract relic 2 in from the right edge on a
+    /// gff table (48 x 48) is 2 in from its nearest edge, not 14 (the 72 x 48 default); a gf table scores byte-identical.
+    #[test]
+    fn d2_2_the_role_term_reads_the_book_board() {
+        use crate::state::{Marker, Objective, Profiles};
+        use crate::IN2M;
+        use std::rc::Rc;
+        let board = |sys: &str| {
+            let mut st = crate::sim::tests::four_unit_line();
+            st.player = vec![1, 1, 2, 2];
+            st.scoring = Rc::from("extract");
+            st.attacker = 1;
+            st.objectives = vec![Objective { pos: [22.0 * IN2M, 0.0, 0.0], owner: 0 }];
+            st.markers_meta = vec![Marker::default()];
+            let mut p = st.profiles.list[0].clone();
+            p.game_system = sys.into();
+            st.profiles = Rc::new(Profiles { list: vec![p], index: Default::default() });
+            st
+        };
+        let gff = super::role_term(&board("gff"), 1).unwrap();
+        assert!((gff - (1.0 - 2.0 / 24.0)).abs() < 1e-12, "48 x 48: gap 2 in: {gff}");
+        let gf = super::role_term(&board("gf"), 1).unwrap();
+        assert!((gf - (1.0 - 14.0 / 24.0)).abs() < 1e-12, "72 x 48 as before: gap 14 in: {gf}");
+        let def = super::role_term(&board("aofs"), 2).unwrap();
+        assert!((def - 2.0 / 24.0).abs() < 1e-12, "the defender's mirror on aofs 48 x 48: {def}");
+        // A mixed table: side 1 plays gff, side 2 gf - each side measures on its own book's board.
+        let mut mixed = board("gff");
+        let mut gf = mixed.profiles.list[0].clone();
+        gf.game_system = "gf".into();
+        let gff = mixed.profiles.list[0].clone();
+        mixed.profiles = Rc::new(Profiles { list: vec![gff, gf], index: Default::default() });
+        let r = &*mixed.roster;
+        mixed.roster = Rc::new(crate::state::Roster { keys: r.keys.clone(), index: r.index.clone(), profile: vec![0, 0, 1, 1] });
+        assert!((super::role_term(&mixed, 1).unwrap() - (1.0 - 2.0 / 24.0)).abs() < 1e-12, "side 1 on its gff 48 x 48");
+        assert!((super::role_term(&mixed, 2).unwrap() - 14.0 / 24.0).abs() < 1e-12, "side 2 on its gf 72 x 48");
     }
 }

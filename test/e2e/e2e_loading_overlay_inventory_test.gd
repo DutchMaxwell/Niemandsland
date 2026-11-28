@@ -191,7 +191,12 @@ func test_the_named_overlay_shows_one_tip() -> void:
 	for l: Node in card.find_children("*", "Label", true, false):
 		words.append((l as Label).text)
 	assert_bool(words.has("AT THE TABLE")).is_true()
-	assert_bool(words.has(LoadingOverlay.TIPS[0])).is_true()
+	# the "?" stands as a key cap between the tip's two parts; the picture's caption comes with the tip (sheet 06)
+	assert_str(" ? ".join(words.slice(1).filter(func(w: String) -> bool: return w != "?"))).is_equal(LoadingOverlay.TIPS[0])
+	var cap := card.find_children("*", "Label", true, false).filter(func(l: Node) -> bool: return (l as Label).text == "?")
+	assert_bool(not cap.is_empty() and String((cap[0] as Label).theme_type_variation) == String(HouseStyle.KEYCAP)).is_true()
+	var caption := _overlay.find_child("PictureCaption", true, false) as Control
+	assert_bool(caption != null and caption.visible == card.visible).override_failure_message("no picture caption").is_true()
 	assert_bool(LoadingOverlay.tip_fits(1080.0)).is_true()
 	assert_bool(LoadingOverlay.tip_fits(720.0)).is_false()
 	_overlay.free()

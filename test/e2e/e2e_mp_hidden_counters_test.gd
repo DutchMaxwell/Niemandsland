@@ -30,7 +30,7 @@ const INCH := 0.0254
 ## Stands in for NetworkManager at main's seam: a live session that records every outbound hidden
 ## state delta in the order main sent them. `active` mirrors the real is_multiplayer_active() gate,
 ## which is what main tests before it broadcasts at all.
-class FakeNet extends Node:
+class FakeNet extends "res://test/support/presence_stub_net.gd":
 	var active: bool = true
 	var sent: Array = []
 	func is_multiplayer_active() -> bool:

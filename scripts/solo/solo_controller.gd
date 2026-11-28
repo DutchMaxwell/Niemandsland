@@ -18,9 +18,6 @@ const BOUNDS_MARGIN_M := 0.02   # keep models a hair inside the table edge
 ## margin nudge at the very edge is not news.
 const BOARD_CLAMP_NOTE_EPS_M := 0.01
 const INCHES_TO_METERS := 0.0254
-## The planner's own skirmish chain cap, unchanged (6 in) while the table's check reads the book (step 28b). Ticket
-## PLANNER-CHAIN (due 01.12.2026): these sites read the book too, gated by gff AI games before/after.
-const PLANNER_SKIRMISH_CHAIN_IN := 6.0
 const OBJECTIVE_CONTROL_IN := 3.0   # OPR objective seize/hold radius (Solo & Co-Op v3.5.0 p.6)
 
 ## NML-1010 W2 — the live mission-VP ledger (progressive missions). Statics
@@ -3021,8 +3018,7 @@ func _act_regroup(unit: GameUnit, report: Dictionary) -> Dictionary:
 	# G4R3 F-T-REGROUP-LOG (EPOCH_73_V36): the Regroup rule names itself — it used to act silently.
 	if AiActRecorder.rules_epoch >= AiActRecorder.EPOCH_73_V36:
 		_rule_note(report, "Regroup: %s starts its activation out of coherency — it gathers back first" % unit.get_name(), false)
-	var chain_in: float = PLANNER_SKIRMISH_CHAIN_IN \
-		if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
+	var chain_in: float = CoherencyChecker.book_chain_in(unit)
 	record_decision({"kind": "action", "unit": unit.get_name(),
 		"rule": "%s: a unit out of coherency at activation start MUST act to regroup — gather the stragglers before anything else" % OPRApiClient.rules_cite(RulesRegistry.system_of_unit(unit)),
 		"candidates": [], "chosen": "regroup", "why": "torn at activation start (casualties)",
@@ -6200,8 +6196,7 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# instead of freezing in the hold-invariant below. (A regroup-by-goal override was tried and
 	# reverted: the rigid unit delta cannot walk individual stragglers home, it only vetoed the
 	# real move — deploy-side repair keeps units from ever STARTING torn instead.)
-	var chain_in: float = PLANNER_SKIRMISH_CHAIN_IN \
-		if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
+	var chain_in: float = CoherencyChecker.book_chain_in(unit)
 	var start_coherent: bool = allow_contact or models.size() <= 1 \
 		or _config_coherent_world(models, positions, chain_in)
 	# Pass 1: full band, going AROUND difficult terrain — unless the unit ignores it or its destination
@@ -8329,8 +8324,7 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 			# coherency" — live-test audit act37/42): a charge is NOT exempt from the chain. The
 			# straggler pull walks non-contact models back into link range; contact models are the
 			# largest component and stay put, so the reached contact is never undone.
-			var charge_chain: float = PLANNER_SKIRMISH_CHAIN_IN \
-				if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
+			var charge_chain: float = CoherencyChecker.book_chain_in(unit)
 			if not _config_coherent_world(models, cfg, charge_chain):
 				_pull_stragglers_coherent_world(models, cfg, obstacles, charge_chain, [], [], gate_walls)
 		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, gate_traversal, obstacles)   # charge: contact reached; single model: done
@@ -8339,8 +8333,7 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	# legal, so a legal factor always exists (t = 0), and the search takes the largest one (GF/AoF v3.5.1 p.7:
 	# "or as close as possible"). Making the shorten OVERLAP-AWARE stops the coherency pull-back from dragging a
 	# model back INTO a friendly unit near its start (self-play: the residual inter/intra overlap after v1).
-	var max_chain: float = PLANNER_SKIRMISH_CHAIN_IN \
-		if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
+	var max_chain: float = CoherencyChecker.book_chain_in(unit)
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
 			and _config_terrain_clear(models, cfg, gate_walls):
 		return _clamp_gate_walls_keep_coherent(planned_world, cfg, models, gate_flying, gate_traversal, obstacles, start_world, max_chain)
@@ -10543,8 +10536,7 @@ static func chain_casualty_order(unit: GameUnit, max_picks: int = -1) -> Array:
 	var table := CoherencyChecker.LinkTable.new(group, CoherencyChecker.MEASURING_SLACK_INCHES)
 	if not table.valid:
 		return order   # a node is gone (headless / mid-teardown) — nothing to measure
-	var max_chain: float = PLANNER_SKIRMISH_CHAIN_IN \
-		if CoherencyChecker.is_skirmish_system(host) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
+	var max_chain: float = CoherencyChecker.book_chain_in(host)
 	var picks: int = order.size() if max_picks < 0 else mini(max_picks, order.size())
 	var gone := {}
 	var out: Array = []
@@ -11197,8 +11189,7 @@ func unit_coherent_now(unit: GameUnit) -> bool:
 	var ms := _moving_models(unit)
 	if ms.size() <= 1:
 		return true
-	var max_chain: float = PLANNER_SKIRMISH_CHAIN_IN \
-		if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
+	var max_chain: float = CoherencyChecker.book_chain_in(unit)
 	return _config_coherent_world(ms, _positions_of(ms), max_chain)
 
 
@@ -11498,8 +11489,7 @@ func _charge_path_probe_impl(unit: GameUnit, target: GameUnit, band_in: float) -
 		# #183: a charge has no ladder to settle debts — an end the arc cap slid back may overlap another base.
 		var refuse := "overlap" if charge_cut and not _config_overlap_free(models, finalized, _external_obstacle_shapes(unit)) else ""
 		if refuse == "" and CHARGE_CAP_COHERENCY_REFUSES and not _config_coherent_world(models, finalized,
-				PLANNER_SKIRMISH_CHAIN_IN if CoherencyChecker.is_skirmish_system(unit)
-				else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES):
+				CoherencyChecker.book_chain_in(unit)):
 			refuse = "coherency"   # off by default: the execution logs the coherency debt instead
 		if refuse != "":
 			result["reachable"] = false
@@ -11704,8 +11694,7 @@ func pile_in(defender: GameUnit, charger: GameUnit) -> Array:
 	var c_models := _moving_models(charger)
 	if d_models.size() == 0 or c_models.is_empty() or _is_regiment(defender):
 		return []
-	var chain_in: float = PLANNER_SKIRMISH_CHAIN_IN \
-		if CoherencyChecker.is_skirmish_system(defender) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
+	var chain_in: float = CoherencyChecker.book_chain_in(defender)
 	var flying := defender.has_special_rule("Flying")
 	var walls := [] if flying else _rest_walls()
 	var eps_m: float = SeparationChecker.BASE_CONTACT_EPSILON_INCHES * INCHES_TO_METERS
@@ -14118,8 +14107,7 @@ func _deploy_footprint_offsets(unit: GameUnit) -> Array:
 	var spacing: float = maxf(DEPLOY_SPACING_M, 2.0 * base_r + 0.006)
 	var cols: int = mini(n, DEPLOY_COLS) if n <= 2 * DEPLOY_COLS else int(ceil(sqrt(float(n))))
 	var rows: int = int(ceil(float(n) / float(cols)))
-	var chain_cap_in: float = PLANNER_SKIRMISH_CHAIN_IN \
-		if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
+	var chain_cap_in: float = CoherencyChecker.book_chain_in(unit)
 	var span_cap: float = (chain_cap_in - 0.5) * INCHES_TO_METERS
 	var grid_diag: float = sqrt(pow(float(cols - 1), 2.0) + pow(float(rows - 1), 2.0))
 	if grid_diag > 0.001 and grid_diag * spacing + 2.0 * base_r > span_cap:

@@ -26,6 +26,8 @@ var _transitioning := false
 var continue_btn: Button
 var start_battle_btn: Button
 var online_hub_lists := true   # false: the online hub asks the relay only on refresh (tests)
+var setup_lists := true   # false: the setup never asks the CDN for NACHTMAHR's lists (tests)
+var _ai_lists: AiLists
 var load_battle_btn: Button
 var report_problem_btn: Button
 var credits_btn: Button
@@ -65,7 +67,7 @@ func _ready() -> void:
 	var save := SaveManager.latest_save_info()
 	_continue_path = str(save.get("path",""))
 	view.set_save(save)
-	view.version.text = "Fan project for OnePageRules     " + version_string()
+	view.version.text = "Fan project for OnePageRules  ·  " + version_string()
 	continue_btn.pressed.connect(_on_continue_pressed)
 	start_battle_btn.pressed.connect(_on_start_battle_pressed)
 	view.buttons.LearnBtn.pressed.connect(_open_learn_page.bind(false))
@@ -172,14 +174,12 @@ func _on_settings_pressed() -> void:
 		add_child(_settings)
 		_settings.initialize(diorama.get_lighting_controller())
 		_settings.set_modal(true)   # in the menu the sheet is modal with the scrim; at the table it stays see-through
-		var label := Label.new()
-		label.text = "Menu background"
-		_settings._page("Display").add_child(label)
 		var choices := OptionButton.new()
 		for title in ["Urban ruins","Alien jungle","Grassland","Arid desert","Frozen tundra","Volcanic ash"]:
 			choices.add_item(title)
 		choices.select(MenuDiorama.Battlefield.BIOMES.find(diorama.biome))
-		_settings._page("Display").add_child(choices)
+		choices.custom_minimum_size.x = _settings.ROW_FRAME_W
+		_settings._page("Display").add_child(_settings._as_row(choices, "Menu background", _settings.HELP["Menu background"]))
 		choices.item_selected.connect(func(index: int) -> void:
 			diorama.set_biome(MenuDiorama.Battlefield.BIOMES[index])
 			var config := ConfigFile.new()
@@ -228,6 +228,12 @@ func _show_table_setup(host_settings: Dictionary = {}) -> void:
 	_table_setup.selected_system = GameSystem.default_pick()   # the last pick; the dialog applies it in _ready
 	add_child(_table_setup)
 	_table_setup.set_biomes(MenuDiorama.Battlefield.BIOMES,diorama.biome)
+	if not host_settings.is_empty():
+		_table_setup.opponent.choose_who("online")   # from the hub: the online room
+	else:
+		_table_setup.opponent.apply_pick(SetupOpponent.default_pick())   # the last table's opponent
+	if setup_lists:
+		_load_setup_lists(_table_setup.opponent)
 	_table_setup.size_chosen.connect(_on_table_setup_chosen.bind(host_settings))
 	_table_setup.cancelled.connect(_on_table_setup_cancelled)
 	view.hide()
@@ -253,18 +259,33 @@ func _fade_setup(dialog: Window, from: float, to: float, free_after := false) ->
 func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> void:
 	ProjectSettings.set_setting("niemandsland/pending_table_setup",{"size":size_feet,"biome":_table_setup.selected_biome,"rules":_table_setup.selected_rules,"system":_table_setup.selected_system})
 	GameSystem.remember_pick(_table_setup.selected_system)
-	if RulesAutomation.ui_enabled() and not _table_setup.online:
+	if RulesAutomation.ui_enabled() and not _table_setup.online:   # the card, not the opener
 		RulesAutomation.remember_pick(_table_setup.selected_rules)
-	for key in host_settings:
-		ProjectSettings.set_setting(key,host_settings[key])
+	if _table_setup.opponent.who == "online":   # the hub's settings, or a private room under the saved name
+		if host_settings.is_empty():
+			host_settings = OnlineHub.host_settings(PlayerIdentity.load_saved_name(), InternetLobby.DEFAULT_RELAY_URL, false)
+		for key in host_settings:
+			ProjectSettings.set_setting(key,host_settings[key])
 	_table_setup.layout.commit()   # the chosen layout travels to the table (PendingLayout)
+	_table_setup.opponent.commit()   # and who is at the table (PendingOpponent)
+	SetupOpponent.remember_pick(_table_setup.opponent.pick())
 	var setup := _table_setup
 	_table_setup = null
 	await _commit_beat(setup._create)
+	_transition_to_game()   # the loading picture first, opaque at once (it also hides the menu) ...
 	if UiMotion.reduced():
 		setup.hide()
-	_fade_setup(setup, 1.0, 0.0, true)   # fades out under the loading picture's fade-in
-	_transition_to_game()
+	setup.transparent_bg = true   # the fading page shows the loading picture beneath, not its window's clear colour
+	_fade_setup(setup, 1.0, 0.0, true)   # ... then the setup fades out over it
+
+
+## NACHTMAHR's list index for step 04 of the setup (bundle, CDN, cache); the Solo card waits for it.
+func _load_setup_lists(opponent: SetupOpponent) -> void:
+	if _ai_lists == null:
+		_ai_lists = AiLists.new()
+		add_child(_ai_lists)
+	opponent.loading = true
+	opponent.set_manifest(await _ai_lists.manifest())
 
 
 func _on_table_setup_cancelled() -> void:
@@ -493,7 +514,9 @@ func _maybe_warn_core_missing() -> void:
 func _show_core_missing_dialog() -> PromptCard:
 	# The closing instruction stands in its own paragraph (the same words).
 	var text := CoreLoadNotice.TEXT.replace(" Download the full game", "\n\nDownload the full game")
-	return _show_notice(CoreLoadNotice.TITLE, text)
+	var card := _show_notice(CoreLoadNotice.TITLE, text)
+	card.set_title_tone(HouseStyle.GOLD)   # a warning (sheet 08): the title in gold, not the accent
+	return card
 
 
 ## A plain notice: one house card with an OK (Enter or Esc closes it); it wraps at the card's own width and
@@ -632,11 +655,7 @@ func _transition_to_game() -> void:
 	# (no grey flash). The game scene takes a few seconds to load; show the bar against
 	# the threaded load's real progress, then hand over to the loaded scene. main.gd
 	# dismisses the overlay once its own backdrop is up.
-	var overlay := LoadingOverlay.new()
-	overlay.add_to_group("transition_overlay")
-	get_tree().root.add_child(overlay)
-	overlay.set_label("LOADING")
-	_name_the_table(overlay)
+	var overlay := _add_loading_overlay()
 
 	if ResourceLoader.load_threaded_request(GAME_SCENE) != OK:
 		get_tree().change_scene_to_file(GAME_SCENE)  # fallback: no progress, but works
@@ -653,6 +672,18 @@ func _transition_to_game() -> void:
 			return
 		overlay.set_progress(progress[0] if progress.size() > 0 else 0.0)
 		await get_tree().process_frame
+
+
+## The hand-over's loading picture, opaque from its first frame: the menu is hidden in the same frame and the setup
+## fades out over it, so no frame shows the bare clear colour between them.
+func _add_loading_overlay() -> LoadingOverlay:
+	var overlay := LoadingOverlay.new()
+	overlay.fade_in = false
+	overlay.add_to_group("transition_overlay")
+	get_tree().root.add_child(overlay)
+	overlay.set_label("LOADING")
+	_name_the_table(overlay)
+	return overlay
 
 
 func _on_load_file_selected(path: String) -> void:

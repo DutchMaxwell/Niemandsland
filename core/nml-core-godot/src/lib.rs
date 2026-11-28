@@ -980,6 +980,19 @@ impl NmlCore {
         self.dropped.iter().map(GString::from).collect()
     }
 
+    /// #3862: `rules::command_limit` over a list - `units` = one `[name, PackedStringArray labels]` per unit, in list order.
+    /// "" when `system`'s book accepts the list's command upgrades, else the sentence naming the second unit and the upgrade.
+    /// The rule itself is the core's; this only converts.
+    #[func]
+    fn command_limit(&self, system: GString, units: VarArray) -> GString {
+        let units: Vec<(String, Vec<String>)> = units.iter_shared().filter_map(|v| {
+            let u = v.try_to::<VarArray>().ok()?;
+            let labels = u.get(1)?.try_to::<PackedStringArray>().ok()?;
+            Some((u.get(0)?.to_string(), labels.as_slice().iter().map(|l| l.to_string()).collect()))
+        }).collect();
+        nml_core::rules::command_limit(&system.to_string(), &units).err().map(|e| GString::from(e.as_str())).unwrap_or_default()
+    }
+
     /// Ruling D16 (CMD-ROUNDTRIP CR3): the default command-group picks the table writes into a unit at game start - empty
     /// unless a unit of `system` with `rules` carries a command group; else the two nearest living friendly units of
     /// `others` (each `[key, player, alive, Vector2 centre]`, world XZ metres), ties by key. `at` = the unit's model centre.
@@ -1023,7 +1036,8 @@ impl NmlCore {
 
     /// Plan step 27-pre P1: the ledges the core plays on for the board of `seed` / `theme` (as
     /// [`boardgen_layout_themed`] names it): `{"tiers": {nx, nz, cell_in, level_in, ladders, stairs}, "solid_cells": [..]}`,
-    /// `boardgen::plain::to_plain`'s, for the table's terrain line. Pure data.
+    /// `boardgen::plain::to_plain`'s, for the table's terrain line; GEN-2: also `cells` (cover classes), `version`, `digest`
+    /// (16 hex) and `problems` (empty = accepted). Pure data.
     #[func]
     fn boardgen_tiers(&self, seed: i64, theme: GString) -> VarDictionary {
         plain::variant_of(&boardcall::tiers_value_themed(seed, &theme.to_string())).try_to::<VarDictionary>().unwrap_or_default()

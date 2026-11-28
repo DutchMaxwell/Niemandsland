@@ -62,11 +62,15 @@ class StageMark:
 # === Private variables ===
 
 var _tip_card: Control = null   # full mode: one tip under the bar, only on the named overlay
+var _where: Label = null   # full mode: "BIOME REFERENCE · EXAMPLE ARRANGEMENT" bottom right, with the tip (sheet 06)
 var _stage_names := PackedStringArray()
 var _stage_marks: Array[StageMark] = []
 var _stage_labels: Array[Label] = []
 
 var _content: Control = null
+## False: the cover stands at once (the menu -> table hand-over hides the menu in the same frame, so a fade-in would
+## show the bare clear colour for its length - the grey wash of gap review 28.11.).
+var fade_in := true
 var _label: Label = null
 var _fill: Control = null   # a ColorRect in compact mode, a gradient in full mode
 var _target := 0.0
@@ -158,7 +162,7 @@ func _ready() -> void:
 	_percent = _text(line, "0 %", HouseStyle.GOLD, HouseStyle.FONT_EYEBROW_LARGE)
 	for mono: Label in [_stage, _percent]:
 		mono.add_theme_font_override("font", HouseStyle.mono())
-	if not UiMotion.reduced():
+	if fade_in and not UiMotion.reduced():
 		_content.modulate.a = 0.0
 		_fade_in = create_tween()
 		_fade_in.tween_property(_content, "modulate:a", 1.0, HouseStyle.DUR_SCREEN_IN)
@@ -190,6 +194,18 @@ func _place_full(box: VBoxContainer) -> void:
 	_content.add_child(_legal_line())
 	_tip_card = _tip()
 	_content.add_child(_tip_card)
+	_where = _legal_line()
+	_where.name = "PictureCaption"
+	_where.text = "Biome reference · example arrangement"
+	_where.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_where.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_where.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_where.offset_right = -64
+	_where.offset_left = -64
+	_where.offset_bottom = -40   # sheet 06 .where: 64 px from the right, 40 px from the bottom
+	_where.offset_top = -40
+	_where.visible = false
+	_content.add_child(_where)
 
 
 ## The bar's fill: the accent in the compact panel; in full mode a gradient from the accent to the gold.
@@ -220,7 +236,7 @@ static func tip_fits(window_height: float) -> bool:
 func _tip() -> Control:
 	var card := PanelContainer.new()
 	card.name = "TipCard"
-	card.theme = HouseStyle.theme()
+	card.theme = HouseStyle.menu_theme()   # the tip at the menu's type scale (sheet 06: 18 px)
 	card.theme_type_variation = HouseStyle.PANEL_VARIANT
 	card.custom_minimum_size.x = TIP_W
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -242,7 +258,14 @@ func _tip() -> Control:
 	var words := VBoxContainer.new()
 	words.add_theme_constant_override("separation", 2)
 	words.add_child(HouseStyle.label("AT THE TABLE", HouseStyle.EYEBROW))
-	words.add_child(HouseStyle.label(TIPS[randi() % TIPS.size()], HouseStyle.BODY))
+	var line := HBoxContainer.new()   # a "?" in the tip stands as a key cap (sheet 06)
+	line.add_theme_constant_override("separation", 6)
+	var tip := TIPS[randi() % TIPS.size()]
+	for i in tip.split(" ? ").size():
+		if i > 0:
+			line.add_child(HouseStyle.key_cap("?"))
+		line.add_child(HouseStyle.label(tip.split(" ? ")[i], HouseStyle.BODY))
+	words.add_child(line)
 	row.add_child(words)
 	card.add_child(row)
 	return card
@@ -253,7 +276,7 @@ func _legal_line() -> Label:
 	var menu := load("res://scripts/startup_menu.gd") as GDScript
 	var line := Label.new()
 	line.name = "LegalLine"
-	line.text = "Fan project for OnePageRules     " + str(menu.call("version_string"))
+	line.text = "Fan project for OnePageRules  ·  " + str(menu.call("version_string"))
 	line.uppercase = true
 	line.add_theme_font_override("font", HouseStyle.mono())
 	line.add_theme_font_size_override("font_size", HouseStyle.FONT_EYEBROW_LARGE)
@@ -302,6 +325,7 @@ func set_title(text: String) -> void:
 		_title.visible = not text.is_empty()
 	if _tip_card != null:
 		_tip_card.visible = not text.is_empty() and tip_fits(get_viewport().get_visible_rect().size.y)
+		_where.visible = _tip_card.visible
 
 
 ## Full mode: the line under the title (the game system and the table size); an empty text hides it.

@@ -15,6 +15,8 @@ const ROW_H := 78
 const ROW_CONTROL_W := 470
 const ROW_NAME_PX := 19
 const ROW_FRAME_W := 300   # the table frame's dropdown
+const ROW_DROPDOWN_H := 44   # a dropdown in a row (sheet 05 .dd)
+const ROW_SEGMENT_H := 40    # the Quality segments, one joined group (sheet 05 .seg)
 ## The rail's page icons: own drawings in the menu rows' style (24 x 24 view box, white strokes, tinted by the button).
 const PAGE_ICON_SVG := "<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='#fff' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'>%s</svg>"
 const PAGE_ICONS := {
@@ -59,6 +61,7 @@ var _header: HBoxContainer
 var _columns: HBoxContainer
 var _rail: VBoxContainer
 var _rail_head: VBoxContainer
+var _rail_column: PanelContainer   # the rail's column: in the menu a darker well with a hairline at its right (sheet 05)
 var _lab_sep: VBoxContainer
 var _footer: HBoxContainer
 var _graphics_rows := false
@@ -214,7 +217,10 @@ func _build_ui() -> void:
 	rail.add_theme_constant_override(&"separation", HouseStyle.GAP_CONTROL)
 	var left := VBoxContainer.new()   # the rail, headed in the menu by the eyebrow and the title
 	left.add_theme_constant_override(&"separation", 0)
-	columns.add_child(left)
+	_rail_column = PanelContainer.new()
+	_rail_column.name = "RailColumn"
+	_rail_column.add_child(left)
+	columns.add_child(_rail_column)
 	_rail = rail
 	_rail_head = _build_rail_head()
 	left.add_child(_rail_head)
@@ -662,6 +668,12 @@ func _apply_menu_layout() -> void:
 	_scroll.custom_minimum_size.y = 0.0 if on else float(SCROLL_H)
 	_rail.custom_minimum_size.x = PAGE_RAIL_MENU_W if on else PAGE_RAIL_W
 	_rail_head.visible = on
+	var well := StyleBoxFlat.new()   # the menu sets the rail off: a darker column, a 1 px rule at its right
+	well.bg_color = HouseStyle.WELL if on else Color(0, 0, 0, 0)
+	well.border_color = HouseStyle.LINE
+	well.border_width_right = HouseStyle.BORDER if on else 0
+	well.content_margin_right = HouseStyle.GAP_SECTION if on else 0.0
+	_rail_column.add_theme_stylebox_override(&"panel", well)
 	(_header.get_child(0) as Control).visible = not on
 	var close := _header.get_node("CloseButton") as Control
 	close.size_flags_horizontal = (Control.SIZE_SHRINK_END | Control.SIZE_EXPAND) if on else Control.SIZE_SHRINK_END
@@ -669,9 +681,12 @@ func _apply_menu_layout() -> void:
 	_footer_note.visible = on
 	_footer_close.visible = on
 	if on and not _graphics_rows:
+		HouseStyle.sheet_close_box(close as Button)
 		_build_graphics_rows()
 		_build_switch_rows("Accessibility", ["Calm Mode", "Reduce Motion"])
 		_build_audio_rows()
+		_build_mixed_rows("Display")
+		_build_mixed_rows("Gameplay")
 	for page_name: String in PAGES:
 		_style_page_button(_page_buttons[page_name] as Button, page_name)
 	_sync_page_ticks()
@@ -691,6 +706,10 @@ func _build_graphics_rows() -> void:
 	for i in frame.item_count:
 		frame.set_item_text(i, items[i])
 	frame.custom_minimum_size.x = ROW_FRAME_W
+	_quality_row.add_theme_constant_override(&"separation", 0)   # one joined group of five
+	_quality_row.size_flags_horizontal = Control.SIZE_SHRINK_END
+	for segment: Node in _quality_row.get_children():
+		(segment as Control).custom_minimum_size.y = ROW_SEGMENT_H
 	var first := page.get_child(0)
 	if first is Label and (first as Label).text == "Quality":   # the row names it now
 		_drop_help_line(first)
@@ -699,6 +718,12 @@ func _build_graphics_rows() -> void:
 	var eyebrow := HouseStyle.label("GRAPHICS", HouseStyle.EYEBROW)
 	page.add_child(eyebrow)
 	page.move_child(eyebrow, 0)
+	var heading := HouseStyle.label("How the table looks", HouseStyle.BODY)   # sheet 05's page heading
+	heading.name = "PageHeading"
+	heading.add_theme_font_override(&"font", HouseStyle.font(500))
+	heading.add_theme_font_size_override(&"font_size", HouseStyle.FONT_VALUE)
+	page.add_child(heading)
+	page.move_child(heading, 1)
 	for row_name: String in ["Quality", "Tilt-Shift (Depth of Field)", "Board Mist and Steam", "Combat Effects",
 			"Miniature Idle Motion", "Table frame"]:
 		var control: Control = _quality_row if row_name == "Quality" else frame if row_name == "Table frame" \
@@ -756,6 +781,62 @@ func _build_switch_rows(page_name: String, names: Array) -> void:
 			page.add_child(_as_row(by_name[row_name], row_name, str(HELP.get(row_name, ""))))
 
 
+## Display and Gameplay as rows, in the page's order under its name as an eyebrow: a switch is its own row; a "Name
+## [dropdown]" line (Monitor, Gore) and a slider block (UI Scale, Stage beat) give their control to a row named after their
+## label - a slider with its value (mono, gold) beside it. The old "DISPLAY:" heading goes.
+func _build_mixed_rows(page_name: String) -> void:
+	var page := _page(page_name)
+	var rows: Array = []
+	for n: Node in page.get_children():
+		var control: Control = n as Control
+		var row_name := ""
+		if n is CheckButton:
+			row_name = (n as Button).text
+		elif n is BoxContainer:
+			var labels: Array = n.find_children("*", "Label", true, false)
+			var picks: Array = n.find_children("*", "OptionButton", true, false) + n.find_children("*", "HSlider", true, false)
+			if labels.is_empty() or picks.is_empty():
+				continue
+			control = picks[0]
+			row_name = (labels[0] as Label).text.get_slice(":", 0)   # "Stage beat: 2.0s" names its row "Stage beat"
+			_drop_help_line(labels[0])
+			if control is HSlider:
+				control = _slider_with_value(control as HSlider, labels[-1] as Label)
+			else:
+				control.get_parent().remove_child(control)
+				control.custom_minimum_size.x = ROW_FRAME_W
+		else:
+			continue   # the "DISPLAY:" heading and the old help lines go with the page's leftovers
+		rows.append(_as_row(control, row_name, str(HELP.get(row_name, ""))))
+	for n: Node in page.get_children():
+		page.remove_child(n)
+		n.queue_free()
+	page.add_child(HouseStyle.label(page_name.to_upper(), HouseStyle.EYEBROW))
+	for row: Control in rows:
+		page.add_child(row)
+
+
+## A slider and its value label side by side for a row's right column; the value in mono gold, without the name.
+func _slider_with_value(slider: HSlider, value_label: Label) -> HBoxContainer:
+	slider.get_parent().remove_child(slider)
+	value_label.get_parent().remove_child(value_label)
+	slider.custom_minimum_size.x = 300.0
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	value_label.custom_minimum_size.x = 62.0
+	value_label.add_theme_font_override(&"font", HouseStyle.mono())
+	value_label.add_theme_color_override(&"font_color", HouseStyle.GOLD)
+	var strip := func(_v: float = 0.0) -> void: value_label.text = value_label.text.get_slice(": ", 1) \
+			if value_label.text.contains(": ") else value_label.text
+	strip.call()
+	slider.value_changed.connect(strip)   # after the slider's own handler, which writes "Stage beat: 2.0s"
+	var control := HBoxContainer.new()
+	control.add_theme_constant_override(&"separation", HouseStyle.GAP_SECTION)
+	control.add_child(slider)
+	control.add_child(value_label)
+	return control
+
+
 ## Takes away the help line that was hung under `control` (the row carries its own).
 func _drop_help_line(control: Node) -> void:
 	var old: Variant = control.get_meta("help_line", null)
@@ -799,6 +880,8 @@ func _as_row(control: Control, row_name: String, help: String) -> Control:
 		(control as Button).text = ""
 	_drop_help_line(control)
 	control.set_meta("help_line", true)
+	if control is OptionButton:
+		control.custom_minimum_size.y = ROW_DROPDOWN_H
 	control.size_flags_horizontal = Control.SIZE_FILL if control is HBoxContainer else Control.SIZE_SHRINK_END
 	control.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	holder.add_child(control)

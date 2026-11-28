@@ -2086,7 +2086,7 @@ static func _living_centre(u: GameUnit) -> Variant:
 	return sum / n if n > 0 else null
 
 
-## The core's `PENDING_EPOCH_TWO_BEARERS` (acts.rs): from it the capture names the models that carry the Banner and the
+## The core's `EPOCH_104_TWO_BEARERS` (acts.rs): from it the capture names the models that carry the Banner and the
 ## Musician; below it both ride the last model, as every record before it.
 const TWO_BEARERS_EPOCH := 104
 
@@ -2209,7 +2209,7 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 		# ring); a list that names none falls back to the LAST model. No key for every other unit or one off the table.
 		# Lead ruling 26.11.: the Musician on another model than the Banner's dies with its own model - `cmd_musician`,
 		# written only then (absent = it rides with `cmd_bearer`).
-		# The named models ride the core's PENDING_EPOCH_TWO_BEARERS (lead 26.11.): below it the last model, as recorded.
+		# The named models ride the core's EPOCH_104_TWO_BEARERS (lead 26.11.): below it the last model, as recorded.
 		if not dormant and _carries_command(u):
 			var kit: Array = u.get_special_rules()
 			var named := AiActRecorder.rules_epoch >= TWO_BEARERS_EPOCH

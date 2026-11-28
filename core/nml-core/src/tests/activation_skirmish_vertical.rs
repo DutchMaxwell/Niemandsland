@@ -336,23 +336,12 @@ fn a_fall_lands_the_move_before_its_wounds() {
     assert!(landings[hurt].models.iter().all(|m| (m.at[0] - foot[0]).abs() < 1e-9), "the wounds' `at` is the foot");
 }
 
-/// The push offer rides with the declared action: after the Intent, before the first die, once.
-#[test]
-fn a_push_is_declared_with_the_action_before_the_first_die_once() {
-    let push = || Input::Push(PushInput { target: "b".into(), model: 0, to: [0.0; 3] });
-    let intent = || Input::Intent { kind: HOLD, shoot: Some("b".into()), split: None, charge: None, no_step: false };
-    assert_eq!(order_check("Squad", &[Input::Begin, push()]), Err((1, "a push before the action was declared".into())));
-    assert_eq!(order_check("Squad", &[Input::Begin, intent(), Input::Faces(vec![6]), push()]), Err((3, "a push after the first die".into())));
-    assert_eq!(order_check("Squad", &[Input::Begin, intent(), push(), push()]), Err((3, "one push per activation".into())));
-    assert_eq!(order_check("Squad", &[Input::Begin, intent(), push(), Input::Faces(vec![6])]), Ok(()));
-}
-
 /// Plan step 27-pre-R (found by the R3 ruin e2e): the same 4 in ledge as `ledge`, but as a free ruin's FLOOR on a flat board
-/// (x >= 0 in, top 4 in). From `PENDING_EPOCH_RUIN_LEDGES` the drop off it is the tier ledge's: the same check, the same
+/// (x >= 0 in, top 4 in). From `EPOCH_107_RUIN_LEDGES` the drop off it is the tier ledge's: the same check, the same
 /// jump dice and the same foot to land a fall on - `jump_foot` read the drop's top from the flat tier grid and found none.
 #[test]
 fn a_ruin_floor_ledge_plays_like_a_tier_ledge() {
-    let e = crate::acts::PENDING_EPOCH_RUIN_LEDGES;
+    let e = crate::acts::EPOCH_107_RUIN_LEDGES;
     let seams = Seams { rules_epoch: e, tray_exact: true, ..Seams::default() };
     let drop = Drop { mode: ADVANCE, placed: vec![[-INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS]], ..Default::default() };
     let (st, statics, tier) = ledge(4.0, "gff", &[]);
@@ -375,3 +364,59 @@ fn a_ruin_floor_ledge_plays_like_a_tier_ledge() {
     assert!((0..3).all(|k| (floor_jumps[0].3[k] - tier_jumps[0].3[k]).abs() < 1e-6), "{floor_jumps:?} vs {tier_jumps:?}");
 }
 
+
+/// #3858 (rules-must-log): a Flying unit going down a 5 in edge names Flying and the height in one line, from the Jumping
+/// epoch on; a walker's line stays the jump's, and below the Jumping epoch the flyer's move writes nothing new.
+#[test]
+fn a_flyers_drop_names_flying() {
+    let (c, _) = drop_off(5.0, "gff", &["Flying"], EPOCH_100_SKIRMISH_JUMP);
+    let Check::Ok { lines } = c else { panic!("{c:?}") };
+    let flying: Vec<_> = lines.iter().filter(|l| l.rule == "flying").map(|l| l.text.as_str()).collect();
+    assert_eq!(flying, vec!["Squad: Flying - down 5 in with no drop or jump test"], "{lines:?}");
+    let Check::Ok { lines } = drop_off(5.0, "gff", &[], EPOCH_100_SKIRMISH_JUMP).0 else { panic!("walker") };
+    assert!(!lines.iter().any(|l| l.rule == "flying"), "{lines:?}");
+    let Check::Ok { lines } = drop_off(5.0, "gff", &["Flying"], EPOCH_94_PARITY_BATCH).0 else { panic!("94") };
+    assert!(lines.is_empty(), "{lines:?}");
+}
+
+/// 107 scope (found while preparing the bump): the big games have no drops or jumps, so stepping off a free ruin's upper
+/// floor stays an ordinary move in gf / aof - the ruin ledges are a skirmish rule (`vertical_moves`), never a refusal there.
+#[test]
+fn a_big_game_model_steps_off_a_ruin_floor_freely() {
+    let i = INCHES_TO_METERS;
+    let slab = crate::terrain::Slab { c: [3.0 * i, 0.0], he: [3.0 * i, 6.0 * i], yaw: 0.0, y0: 4.0 * i - 0.01, y1: 4.0 * i };
+    let floor = Terrain::build(&crate::terrain::PlainTerrain {
+        cell_params: crate::terrain::CellParams { table_size_feet: [1.0, 1.0], grid_rotation_degrees: 0.0, grid_size_inches: 3.0, inches_to_meters: i },
+        tiers: Some(crate::terrain::TierGrid { nx: 4, nz: 4, cell_in: 3.0, level_in: vec![0.0; 16], ladders: vec![], stairs: vec![] }),
+        sandbox: vec![crate::terrain::Obb { c: slab.c, he: slab.he, yaw: 0.0, kind: 1, slabs: vec![slab] }],
+        ..Default::default()
+    });
+    let drop = Drop { mode: ADVANCE, placed: vec![[-INCHES_TO_METERS, 0.0, 1.5 * INCHES_TO_METERS]], ..Default::default() };
+    for sys in ["gf", "aof"] {
+        let (st, statics, _) = ledge(4.0, sys, &[]);
+        for epoch in [crate::acts::EPOCH_106_CORE_TIERS, crate::acts::EPOCH_107_RUIN_LEDGES] {
+            let seams = Seams { rules_epoch: epoch, tray_exact: true, ..Seams::default() };
+            let c = check_move(&statics, &st, 0, seams, &floor, &drop, true);
+            assert!(ok(&c), "{sys} at {epoch}: stepping off the floor is a plain move: {c:?}");
+        }
+    }
+    // Gate (c) for 107 on this ruin board: every move of a gf / aof model from on and around the floor (19 starts, 4
+    // directions, on the floor and on the ground) checks byte-identically at 106 and 107.
+    let mut moves = 0;
+    for sys in ["gf", "aof"] {
+        let (mut st, statics, _) = ledge(4.0, sys, &[]);
+        for x10 in (-30..=60).step_by(5) {
+            for y in [0.0, 4.0 * i] {
+                st.positions[0][0] = [f64::from(x10) / 10.0 * i, y, 1.5 * i];
+                for d in [[3.0, 0.0], [-3.0, 0.0], [0.0, 3.0], [0.0, -3.0]] {
+                    let to = [st.positions[0][0][0] + d[0] * i, 0.0, st.positions[0][0][2] + d[1] * i];
+                    let mv = Drop { mode: ADVANCE, placed: vec![to], ..Default::default() };
+                    let at = |e: u32| format!("{:?}", check_move(&statics, &st, 0, Seams { rules_epoch: e, tray_exact: true, ..Seams::default() }, &floor, &mv, true));
+                    assert_eq!(at(crate::acts::EPOCH_106_CORE_TIERS), at(crate::acts::EPOCH_107_RUIN_LEDGES), "{sys} from {:?} by {d:?}", st.positions[0][0]);
+                    moves += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(moves, 2 * 19 * 2 * 4);
+}

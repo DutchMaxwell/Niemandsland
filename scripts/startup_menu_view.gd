@@ -299,8 +299,10 @@ func _build_news_card() -> void:
 	var line := HBoxContainer.new()
 	line.add_theme_constant_override("separation",4)
 	_news_count = _label("",15,HouseStyle.MUTED)
-	_news_count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	line.add_child(_news_count)
+	var gap := Control.new()   # "5 highlights  Read ›" side by side (sheet 01)
+	gap.custom_minimum_size.x = 10
+	line.add_child(gap)
 	line.add_child(_label("Read",15,HouseStyle.GOLD))
 	var chevron := TextureRect.new()
 	chevron.texture = _icon(&"go")
@@ -324,7 +326,8 @@ func set_news(cards: Array) -> void:
 		var locale := TranslationServer.get_locale()
 		var first: Dictionary = cards[0]
 		var texts: Dictionary = first.get(WhatsNewContent.language(locale),{})
-		_news_eyebrow.text = (WhatsNewContent.new().text_for(locale,"title") % WhatsNewContent.version()).to_upper()
+		var release := ".".join(WhatsNewContent.version().get_slice("-",0).split(".").slice(0,3))   # "0.3.15" (sheet 01)
+		_news_eyebrow.text = (WhatsNewContent.new().text_for(locale,"title") % release).to_upper()
 		_news_title.text = str(texts.get("title",""))
 		_news_count.text = "%d highlights" % cards.size()
 		var picture := str(first.get("image",""))

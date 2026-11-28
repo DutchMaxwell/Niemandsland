@@ -7,7 +7,7 @@ extends GdUnitTestSuite
 
 
 ## A NetworkManager stand-in that only records the marker broadcasts.
-class FakeNet extends Node:
+class FakeNet extends "res://test/support/presence_stub_net.gd":
 	var markers: Array = []
 
 	func broadcast_unit_marker(game_unit: GameUnit, marker_name: String, add: bool, _color: Color = Color.WHITE, _value: int = -1) -> void:

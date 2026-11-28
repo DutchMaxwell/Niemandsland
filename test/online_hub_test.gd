@@ -191,3 +191,50 @@ func test_tab_walks_the_hub_in_reading_order() -> void:
 		if at == null:
 			break
 	assert_array(order).is_equal(expected + [hub.get("back")])
+
+
+## Gap review 27.11. (sheet 02): the first room is the chosen one - filled, its Join gold -, the refresh button is 44 px
+## and an info line stands under the list (red before: bare rows, a 32 px icon, no line).
+func test_the_chosen_room_is_filled_and_refresh_is_44_px() -> void:
+	var hub := await _hub()
+	if hub == null:
+		return
+	hub.call("_on_rooms", [{"code": "ABC123", "players": 1}, {"code": "KLM456", "players": 2}], hub.get("_gen"))
+	var rows := _rows(hub)
+	assert_bool(rows[0] is PanelContainer).override_failure_message("a room row has no box").is_true()
+	if not rows[0] is PanelContainer:
+		return
+	var box := (rows[0] as PanelContainer).get_theme_stylebox(&"panel") as StyleBoxFlat
+	assert_bool(box != null and box.bg_color == HouseStyle.ROW_HOVER).is_true()
+	assert_str(String(((rows[0] as Node).find_child("Join", true, false) as Button).theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	assert_str(String(((rows[1] as Node).find_child("Join", true, false) as Button).theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	assert_float((hub.find_child("Refresh", true, false) as Control).custom_minimum_size.x).is_equal(44.0)
+	assert_array(_texts_of(hub)).contains(["The list shows what the relay reports today: a code and its player count."])
+
+
+## Sheet 02: the name field is 46 px high as the mockups' field (red before: 38 px).
+func test_the_name_field_is_46_px() -> void:
+	var hub := await _hub()
+	if hub == null:
+		return
+	await get_tree().process_frame
+	assert_float((hub.get("name_field") as Control).size.y).is_greater_equal(46.0)
+
+
+## The Join button's Enter cap never covers its word (seen on the 28.11. capture after the menu buttons took the
+## mockups' 18 px padding and 17 px text: "Join" ran under the cap; red before).
+func test_join_keeps_its_word_clear_of_the_enter_cap() -> void:
+	var hub := await _hub()
+	if hub == null:
+		return
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var join := hub.find_child("JoinWithCode", true, false) as Button
+	var cap := join.get_child(0) as Control
+	var font := join.get_theme_font(&"font")
+	var text_end := join.get_theme_stylebox(&"normal").content_margin_left \
+		+ font.get_string_size(join.text, HORIZONTAL_ALIGNMENT_LEFT, -1, join.get_theme_font_size(&"font_size")).x
+	assert_float(cap.position.x).override_failure_message("cap at %d, word ends at %d" % [int(cap.position.x), int(text_end)]) \
+		.is_greater_equal(text_end + 4.0)
+	var block := join.get_parent().get_parent() as Control
+	assert_float(join.get_global_rect().end.x).is_less_equal(block.get_global_rect().end.x + 1.0)

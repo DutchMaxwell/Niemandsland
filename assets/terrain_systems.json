@@ -54,6 +54,6 @@
   },
   "generated_board": {
     "tiefwerk": {"settings": ["grimdark"], "scales": ["skirmish"]},
-    "ruined_town": {"settings": ["fantasy"], "scales": ["skirmish"], "available": false}
+    "ruined_town": {"settings": ["fantasy"], "scales": ["skirmish"]}
   }
 }

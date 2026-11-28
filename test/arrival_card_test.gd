@@ -58,3 +58,17 @@ func test_the_close_box_dismisses_the_card() -> void:
 	card.connect("dismissed", func() -> void: gone.append(true))
 	close.pressed.emit()
 	assert_array(gone).is_equal([true])
+
+
+## Spec 97 (step 97.13): lines are done by their own flag - NACHTMAHR's army may stand before the player's
+## (red before: no set_flags).
+func test_a_later_line_can_be_done_first() -> void:
+	var card := await _card()
+	if card == null:
+		return
+	assert_bool(card.has_method("set_flags")).override_failure_message("no set_flags").is_true()
+	if not card.has_method("set_flags"):
+		return
+	card.call("set_flags", [false, true])
+	assert_array([card.call("state", 0), card.call("state", 1), card.call("state", 2)]).is_equal(
+		[&"now", &"done", &"next"])

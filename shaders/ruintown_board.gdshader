@@ -7,6 +7,8 @@ shader_type spatial;
 #include "res://shaders/tiefwerk_noise.gdshaderinc"
 #include "res://shaders/ruintown_green.gdshaderinc"
 #include "res://shaders/ruintown_soil.gdshaderinc"   // (LOOK5 S1) the ground as a material - inert until S4 calls soil_blend
+uniform sampler2D green_map : filter_linear, repeat_disable;   // (LOOK5 S6) BoardgenTownGreen.map: R cover, G wear, B verge
+uniform float soil_debug = 0.0;   // (LOOK5 S6) the grit debug exit for the soil: 1 the heaviest layer's class colour, 2 the blend-band share (grey)
 
 uniform vec4 palette[19];   // display colours by kind index (BoardgenTheme.TOWN_KINDS)
 uniform vec3 board_origin;   // world position of the board centre
@@ -438,44 +440,73 @@ void fragment() {
 			emis += grit_fill(alb);
 		} else if (k == 0) {   // earth: packed, with pebbles, weeds and broken stones
 			alb = tint * GROUND_EARTH * mix(0.78, 1.15, fbm(xz * 1.6 + seed));   // 0.32 (was 1.0): the packed earth of the deployment bands sits below the models too (readability gate)
-			vec2 cp = xz * 3.0;   // 0.33 in cells, a pebble or a weed tuft in some of them: sparse, small, dark and irregular (rotated, stretched, off the cell centre)
-			vec2 ci = floor(cp);
-			float sp = h21(ci + seed);
-			float ang = h21(ci + 3.0) * 6.2832;
-			vec2 lf = (fract(cp) - 0.5 - (vec2(h21(ci + 7.0), h21(ci + 13.0)) - 0.5) * 0.4);
-			lf = vec2(cos(ang) * lf.x - sin(ang) * lf.y, sin(ang) * lf.x + cos(ang) * lf.y) * vec2(1.0, 1.0 + 1.4 * h21(ci + 5.0));
-			float pebble = step(0.955, sp) * smoothstep(0.2, 0.1, length(lf));
-			float path = smoothstep(0.03, 0.0, abs(vnoise(xz * 0.21 + seed) - 0.5)) * step(0.5, vnoise(xz * 0.07 + 5.0)) * (1.0 - grit_on);   // (gone with the grit map: it led nowhere)   // a worn path: pale, meandering (a noise stand-in until the doors of R12c exist)
-			// ground cover (plan TARGET C, E2): painted only, 0 in high - patches of rank growth, thicker within 1 in of a raised lot or a plot, thinner on the worn paths
-			float near = 0.0;
-			for (int d = 0; d < 4; d++) {
-				vec2 o = vec2(d < 2 ? (d == 0 ? 1.0 : -1.0) : 0.0, d >= 2 ? (d == 2 ? 1.0 : -1.0) : 0.0);
-				near = max(near, float(int(ground_at(gw + o).r * 255.0 + 0.5) >= 2));
+			vec3 soil_s = vec3(0.0);   // (LOOK5 S6) the soil colour (linear) and the base tone it is pinned to
+			vec3 soil_base = vec3(1.0);
+			vec3 soil_dbg = vec3(-1.0);
+			if (soil_on < 0.5) {
+				vec2 cp = xz * 3.0;   // 0.33 in cells, a pebble or a weed tuft in some of them: sparse, small, dark and irregular (rotated, stretched, off the cell centre)
+				vec2 ci = floor(cp);
+				float sp = h21(ci + seed);
+				float ang = h21(ci + 3.0) * 6.2832;
+				vec2 lf = (fract(cp) - 0.5 - (vec2(h21(ci + 7.0), h21(ci + 13.0)) - 0.5) * 0.4);
+				lf = vec2(cos(ang) * lf.x - sin(ang) * lf.y, sin(ang) * lf.x + cos(ang) * lf.y) * vec2(1.0, 1.0 + 1.4 * h21(ci + 5.0));
+				float pebble = step(0.955, sp) * smoothstep(0.2, 0.1, length(lf));
+				float path = smoothstep(0.03, 0.0, abs(vnoise(xz * 0.21 + seed) - 0.5)) * step(0.5, vnoise(xz * 0.07 + 5.0)) * (1.0 - grit_on);   // (gone with the grit map: it led nowhere)   // a worn path: pale, meandering (a noise stand-in until the doors of R12c exist)
+				// ground cover (plan TARGET C, E2): painted only, 0 in high - patches of rank growth, thicker within 1 in of a raised lot or a plot, thinner on the worn paths
+				float near = 0.0;
+				for (int d = 0; d < 4; d++) {
+					vec2 o = vec2(d < 2 ? (d == 0 ? 1.0 : -1.0) : 0.0, d >= 2 ? (d == 2 ? 1.0 : -1.0) : 0.0);
+					near = max(near, float(int(ground_at(gw + o).r * 255.0 + 0.5) >= 2));
+				}
+				float band = smoothstep(9.0, 13.0, abs(xz.y));   // (townC4, lead 22.11.: the green lives on the earth - the deployment strips overgrow most, like C's)
+				float cover = smoothstep(COVER_CUT - 0.04, COVER_CUT + 0.04, fbm(xz * 0.35 + seed * 0.37) + 0.35 * near - 0.4 * path + BAND_COVER * band)
+					* smoothstep(0.28, 0.48, vnoise(xz * 1.3 + seed * 1.7) + 0.3 * near + 0.25 * band);   // rough, not turf: bare earth between the clumps in the open
+				float tuft = max(step(0.915, sp) * step(sp, 0.955), cover * step(sp, 0.6)) * smoothstep(0.26, 0.12, length(lf));   // in the cover 60 % of the 0.33 in cells carry a tuft (4 % outside)
+				vec3 soil = alb;
+				alb = mix(alb, GREEN_COVER * mix(0.55, 1.25, fbm(xz * 3.1 + seed)), cover);   // a dull dark yellow-grey green between the tufts, mottled
+				alb = mix(alb, vec3(0.13, 0.14, 0.08) * mix(0.7, 1.2, h21(ci + 9.0)) * (1.0 + 0.9 * cover), 0.75 * tuft);   // a dull green-brown tuft, never a yellow coin
+				alb *= mix(vec3(1.0), green_drift(xz, 0.0), cover);   // (look review R11) dry straw patches and greener ones over 3-8 in (ruintown_green: the one green, folded)
+				float clump = green_break(xz, 0.0);   // the cover is clumped, not a carpet: dark hollows between the clumps
+				alb *= 1.0 - 0.22 * cover * (1.0 - tuft) * smoothstep(0.55, 0.3, clump) * keep(xz.x, 0.18);
+				alb *= min(1.0, (dot(soil, LUMA) + 0.03 * tuft) / max(dot(alb, LUMA), 0.001));   // the cover is never brighter than the soil, a tuft at most 0.03 (the ground stays under the models)
+				alb = mix(alb, vec3(0.13, 0.12, 0.11) * mix(0.6, 1.3, h21(ci + 4.0)), pebble);   // a dark stone
+				alb = mix(alb, tint * vec3(1.3, 1.3, 1.28), 0.75 * path);   // (was 1.4 1.34 1.2: an orange path; plan TARGET C, E1)
+				if (t_on.w > 0.5) {
+					vec3 r = ratio_of(t_earth, xz / t_tile.w, MEAN_EARTH);   // real rock and soil under the pebbles, the tufts and the paths
+					tex_ratio = mix(vec3(dot(r, vec3(0.333))), r, 0.5);   // halfway to its own grey: the soil keeps its detail and loses its orange (plan TARGET C, E1)
+				}
+				rel = clamp(0.2 + 0.6 * fbm(xz * 3.0 + seed) - 0.15 * path + 0.35 * pebble + cover * (0.45 * clump - 0.15) + 0.3 * tuft, 0.0, 1.0);   // packed earth: lumps, the worn paths lower; (R11) the cover stands in clumps, a tuft on top
+				depth_in = mix(0.05, 0.08, cover);
+				ao = mix(1.0, mix(0.7, 1.0, smoothstep(0.2, 0.6, rel)), cover);
+				rough = 0.95;
+			} else {   // (LOOK5 S6) THE YARD IS A MATERIAL: the four photo soils at their own colour, exposure-pinned to this earth's tone (the readability budget)
+				vec3 gm = texture(green_map, xz / (board_cells * cell_in) + 0.5).rgb;   // R cover = grass, G wear = mud, B verge = wet soil at the street's edge
+				vec4 w = vec4(max(1.0 - gm.r - gm.g, 0.0) * (1.0 - gm.b), gm.g * (1.0 - gm.b), gm.r * (1.0 - gm.b), gm.b);
+				SoilSample sm = soil_blend(w, xz);
+				float macro = mix(0.88, 1.12, vnoise(green_fold(xz) * 0.4 + seed));   // lumpy ground over 2.5 in, folded (fairness), and it hides the tile
+				soil_base = pow(alb, vec3(2.2));
+				soil_s = sm.c * dot(soil_base, LUMA) * macro;
+				tex_ratio = soil_s / max(soil_base, vec3(0.0001));
+				tex_n = sm.n;
+				tex_on = 1.0;
+				rel = sm.h;
+				ao = sm.ao;
+				rough = sm.rough;
+				depth_in = 0.06;
+				if (soil_debug > 1.5) {   // how much of the pixel sits in the blend band (0 = one layer, 1 = an even mix)
+					soil_dbg = vec3(4.0 * sm.k.x * sm.k.y);
+				} else if (soil_debug > 0.5) {   // the HEAVIEST weight only, one pure colour per class (a summed colour let a bare + grass mix read as verge)
+					soil_dbg = w.x >= max(max(w.y, w.z), w.w) ? vec3(1.0, 0.0, 0.0) : (w.y >= max(w.z, w.w) ? vec3(0.0, 0.0, 1.0) : (w.z >= w.w ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 1.0, 0.0)));   // bare red, mud blue, grass green, verge yellow
+				}
 			}
-			float band = smoothstep(9.0, 13.0, abs(xz.y));   // (townC4, lead 22.11.: the green lives on the earth - the deployment strips overgrow most, like C's)
-			float cover = smoothstep(COVER_CUT - 0.04, COVER_CUT + 0.04, fbm(xz * 0.35 + seed * 0.37) + 0.35 * near - 0.4 * path + BAND_COVER * band)
-				* smoothstep(0.28, 0.48, vnoise(xz * 1.3 + seed * 1.7) + 0.3 * near + 0.25 * band);   // rough, not turf: bare earth between the clumps in the open
-			float tuft = max(step(0.915, sp) * step(sp, 0.955), cover * step(sp, 0.6)) * smoothstep(0.26, 0.12, length(lf));   // in the cover 60 % of the 0.33 in cells carry a tuft (4 % outside)
-			vec3 soil = alb;
-			alb = mix(alb, GREEN_COVER * mix(0.55, 1.25, fbm(xz * 3.1 + seed)), cover);   // a dull dark yellow-grey green between the tufts, mottled
-			alb = mix(alb, vec3(0.13, 0.14, 0.08) * mix(0.7, 1.2, h21(ci + 9.0)) * (1.0 + 0.9 * cover), 0.75 * tuft);   // a dull green-brown tuft, never a yellow coin
-			alb *= mix(vec3(1.0), green_drift(xz, 0.0), cover);   // (look review R11) dry straw patches and greener ones over 3-8 in (ruintown_green: the one green, folded)
-			float clump = green_break(xz, 0.0);   // the cover is clumped, not a carpet: dark hollows between the clumps
-			alb *= 1.0 - 0.22 * cover * (1.0 - tuft) * smoothstep(0.55, 0.3, clump) * keep(xz.x, 0.18);
-			alb *= min(1.0, (dot(soil, LUMA) + 0.03 * tuft) / max(dot(alb, LUMA), 0.001));   // the cover is never brighter than the soil, a tuft at most 0.03 (the ground stays under the models)
-			alb = mix(alb, vec3(0.13, 0.12, 0.11) * mix(0.6, 1.3, h21(ci + 4.0)), pebble);   // a dark stone
-			alb = mix(alb, tint * vec3(1.3, 1.3, 1.28), 0.75 * path);   // (was 1.4 1.34 1.2: an orange path; plan TARGET C, E1)
-			if (t_on.w > 0.5) {
-				vec3 r = ratio_of(t_earth, xz / t_tile.w, MEAN_EARTH);   // real rock and soil under the pebbles, the tufts and the paths
-				tex_ratio = mix(vec3(dot(r, vec3(0.333))), r, 0.5);   // halfway to its own grey: the soil keeps its detail and loses its orange (plan TARGET C, E1)
-			}
-			rel = clamp(0.2 + 0.6 * fbm(xz * 3.0 + seed) - 0.15 * path + 0.35 * pebble + cover * (0.45 * clump - 0.15) + 0.3 * tuft, 0.0, 1.0);   // packed earth: lumps, the worn paths lower; (R11) the cover stands in clumps, a tuft on top
-			depth_in = mix(0.05, 0.08, cover);
-			ao = mix(1.0, mix(0.7, 1.0, smoothstep(0.2, 0.6, rel)), cover);
-			rough = 0.95;
 			grit_earth(gw, alb, rough);
-			emis += grit_fill(alb);
-			dbg = grit_debug == 2 ? grit_map_colour(gw) : vec3(0.0);
+			if (soil_on < 0.5) {
+				emis += grit_fill(alb);
+			} else {   // (S6) the Night fill carries the soil: mostly value and grain, a little cool-shifted colour (soil_fill_sat); the lit term keeps the full albedo
+				vec3 f = mix(vec3(dot(soil_s, LUMA)) * vec3(0.92, 1.0, 1.10), soil_s, soil_fill_sat);
+				emis += f * (dot(grit_fill(alb), LUMA) / max(dot(soil_base, LUMA), 0.0001)) * ao;
+			}
+			dbg = soil_dbg.x >= 0.0 ? soil_dbg : (grit_debug == 2 ? grit_map_colour(gw) : vec3(0.0));
 		} else if (k == 3 || k == 4 || k == 8) {   // floor boards of a ruined house or yard, scorched in patches
 			if (k != 8) {
 				tint *= mix(0.9, 1.1, ground_at(xz).g);   // each part of a ruined row has its own tone

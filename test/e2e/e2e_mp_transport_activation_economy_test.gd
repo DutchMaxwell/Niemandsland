@@ -14,7 +14,7 @@ const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 
 
 ## Stands in for NetworkManager at the radial controller's seam and records every outbound frame.
-class FakeNet extends Node:
+class FakeNet extends "res://test/support/presence_stub_net.gd":
 	var active: bool = true
 	var sent: Array = []
 	var peer_to_slot: Dictionary = {}

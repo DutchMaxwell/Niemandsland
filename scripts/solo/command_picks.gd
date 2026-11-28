@@ -111,3 +111,26 @@ static func _draw(main) -> void:
 		if n > 0:
 			_rings.append(main._solo_spawn_picked_ring(at / n) if picks.has(gu.unit_id)
 				else main._solo_spawn_pulse_ring(at / n, Color(1.0, 0.75, 0.2, 0.8)))
+
+
+## #3862 (O-FT-1): the core's `rules::command_limit` over an imported list (`NmlCore.command_limit`): "" when the list's
+## book accepts its command upgrades, else one warning line naming the second unit and its upgrade (AoF: Skirmish p.13: one
+## model per army with each command upgrade). A warning, never a refusal: the book calls force organisation optional. A
+## unit's labels are its rules and upgrades, each once. Without the extension nothing is checked (the core is optional).
+static func limit_warning(army: OPRApiClient.OPRArmy, core: Object = null) -> String:
+	var units: Array = []
+	for u in army.units:
+		var labels := PackedStringArray()
+		for l in Array(u.special_rules) + Array(u.upgrades):
+			if not labels.has(str(l).strip_edges()):
+				labels.append(str(l).strip_edges())
+		units.append([u.custom_name if not u.custom_name.is_empty() else u.name, labels])
+	if core == null and ClassDB.class_exists("NmlCore"):
+		core = ClassDB.instantiate("NmlCore")
+	if core == null:
+		return ""
+	var reason := str(core.command_limit(str(army.game_system_abbrev), units))
+	if reason.is_empty():
+		return ""
+	# Only the AoF: Skirmish book has the limit (`Book::one_command_upgrade_each`), so the line cites that book.
+	return "Warning: %s (AoF: Skirmish p.13: one model per army with each command upgrade) - the list plays on" % reason

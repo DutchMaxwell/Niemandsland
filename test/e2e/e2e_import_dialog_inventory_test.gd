@@ -127,14 +127,14 @@ func test_preview_shows_the_army_name_and_totals() -> void:
 	army.points = 1000
 	_dlg._show_loaded()
 	_dlg._update_preview()
-	assert_str(_dlg.army_preview.text).contains("Test Army")
-	assert_str(_dlg.army_preview.text).contains("[b]Points:[/b] 1000")
+	var texts: Array = _dlg.army_preview.find_children("*", "Label", true, false).map(func(l: Node) -> String: return (l as Label).text)
+	assert_array(texts).contains(["Test Army", "Grimdark Future", "1000 PTS · 0 UNITS"])
 
 
 func test_the_x_cancels_and_the_sheet_is_house_style_and_owns_its_clicks() -> void:
 	var root := _dlg.get_child(0) as Control
 	assert_int(root.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
-	assert_object(root.theme).is_same(HouseStyle.theme())
+	assert_object(root.theme).is_same(HouseStyle.menu_theme())   # sheet 04's scale (step 85)
 	assert_str(String(_button("Import army").theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
 	assert_str(String(_button("Load army").theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
 	assert_str(String(_button("Cancel").theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
@@ -194,3 +194,93 @@ func test_a_third_seat_keeps_its_own_segment() -> void:
 	_load_fake_army()
 	_dlg.import_btn.pressed.emit()
 	assert_int(int(_imported[0][1])).is_equal(3)
+
+
+## Step 50 (sheet 04): the preview is a header and one row per unit - the name with quality, defense and weapons under
+## it, the model count and the points in mono gold (red before: one rich-text block of bullet lines).
+func test_the_preview_is_one_row_per_unit() -> void:
+	var army := _load_fake_army()
+	army.game_system = "gf"
+	army.points = 590
+	for spec: Array in [["Command Squad", 5, 310, 4, 4], ["Line Infantry", 10, 280, 5, 5]]:
+		var unit := OPRApiClient.OPRUnit.new()
+		unit.name = spec[0]
+		unit.size = spec[1]
+		unit.cost = spec[2]
+		unit.quality = spec[3]
+		unit.defense = spec[4]
+		army.units.append(unit)
+	_dlg._show_loaded()
+	_dlg._update_preview()
+	var texts: Array = _dlg.army_preview.find_children("*", "Label", true, false).map(func(l: Node) -> String: return (l as Label).text)
+	assert_array(texts).contains(["Command Squad", "× 5", "310", "Line Infantry", "× 10", "280", "590 PTS · 2 UNITS"])
+	var cost: Label = _dlg.army_preview.find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).text == "310")[0]
+	assert_object(cost.get_theme_font("font")).is_same(HouseStyle.mono())
+
+
+## Step 85 (sheet 04): in a wide window the import is one 1320 px sheet titled "Bring your army." with the inputs left
+## and the preview right, Cancel and Import army under the preview; a narrow window stacks them as before (red before:
+## one 620 px column).
+func test_a_wide_window_shows_two_columns() -> void:
+	_dlg._fit_to(Vector2(1920, 1080))
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_object(_label("Bring your army.")).override_failure_message("no title").is_not_null()
+	var sheet := _dlg.find_child("Sheet", true, false) as Control
+	assert_float(sheet.size.x).is_greater_equal(1300.0)
+	var link := _dlg.share_link_input.get_global_rect()
+	var preview: Rect2 = (_dlg.army_preview.get_parent() as Control).get_global_rect()
+	assert_float(preview.position.x).override_failure_message("the preview is not right of the link").is_greater(link.end.x)
+	assert_float(_button("Import army").get_global_rect().position.x).is_greater(link.end.x)
+	_dlg._fit_to(Vector2(1024, 768))
+	for _i in 2:
+		await get_tree().process_frame
+	assert_float(_dlg.army_preview.get_parent().get_global_rect().position.y).is_greater(_dlg.share_link_input.get_global_rect().end.y)
+
+
+## Sheet 04's finish: the field names are muted eyebrows in capitals, "Import army" carries its Enter cap and stands 44 px
+## high (red before: sentence-case captions, no cap, 40 px).
+func test_the_import_reads_as_sheet_04() -> void:
+	var caption := _label("Army Forge share link or list ID")
+	assert_bool(caption != null and caption.uppercase).override_failure_message("not an eyebrow").is_true()
+	var import := _button("Import army")
+	var caps := import.find_children("*", "Label", false, false).filter(func(l: Node) -> bool: return (l as Label).text == "Enter")
+	assert_int(caps.size()).is_equal(1)
+	assert_float(import.custom_minimum_size.y).is_equal(float(HouseStyle.MENU_H_ACTION))
+
+
+## Gap review 28.11. (sheet 04 finish): on open the link field takes the focus, not "Open Army Forge" in a white box; the
+## field is 46 px with the example under it; one line per unit (the profile is the row's tooltip); system and rules as
+## bordered chips; the 44 px close box (red before: focus on the link, Q4+ D4+ lines, plain gold system text, 28 px box).
+func test_the_import_finish_matches_sheet_04() -> void:
+	_dlg.visible = false
+	_dlg.visible = true
+	for _i in 3:
+		await get_tree().process_frame
+	assert_object(_dlg.get_viewport().gui_get_focus_owner()).override_failure_message("the field does not take the focus").is_same(_dlg.share_link_input)
+	assert_float(_dlg.share_link_input.custom_minimum_size.y).is_equal(float(HouseStyle.MENU_H_FIELD))
+	var example := _label("e.g. https://army-forge.onepagerules.com/share?id=XXX")
+	assert_float(example.get_global_rect().position.y).override_failure_message("the example is above the field").is_greater(
+		_dlg.share_link_input.get_global_rect().position.y)
+	var close := _dlg.find_child("CloseButton", true, false) as Button
+	assert_float(close.custom_minimum_size.x).is_equal(float(HouseStyle.MENU_SHEET_CLOSE))
+	var army := _load_fake_army()
+	army.game_system = "gf"
+	army.book_version = "3.6.0"
+	var unit := OPRApiClient.OPRUnit.new()
+	unit.name = "Command Squad"
+	unit.quality = 4
+	unit.defense = 4
+	army.units.append(unit)
+	_dlg._show_loaded()
+	_dlg._update_preview()
+	var labels: Array = _dlg.army_preview.find_children("*", "Label", true, false)
+	var texts: Array = labels.map(func(l: Node) -> String: return (l as Label).text)
+	assert_array(texts).override_failure_message("a second line per unit: %s" % [texts]).not_contains(["Q4+ D4+"])
+	assert_array(texts).contains(["Rules 3.6"])
+	var name_row := (labels.filter(func(l: Node) -> bool: return (l as Label).text == "Command Squad")[0] as Node).get_parent() as Control
+	assert_str(name_row.tooltip_text).contains("Q4+ D4+")
+	var chips: Array = labels.filter(func(l: Node) -> bool: return (l as Label).text == "Rules 3.6")
+	assert_bool(not chips.is_empty() and (chips[0] as Label).has_theme_stylebox_override("normal")).override_failure_message(
+		"no rimmed rules chip").is_true()

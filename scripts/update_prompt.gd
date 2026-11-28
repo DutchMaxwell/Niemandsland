@@ -53,7 +53,7 @@ func setup(current_version: String, offered_version: String, url: String, notes:
 	# One mono line in a card: INSTALLED a  →  LATEST b, the offered version in gold.
 	var versions := HBoxContainer.new()
 	versions.add_theme_constant_override("separation", 0)
-	for part: Array in [["INSTALLED %s  →  LATEST " % current_version, HouseStyle.INK],
+	for part: Array in [["INSTALLED %s  →  LATEST " % current_version.to_upper(), HouseStyle.INK],
 			[offered_version.to_upper(), HouseStyle.GOLD]]:
 		var piece := HouseStyle.label(part[0], HouseStyle.BODY)
 		piece.add_theme_font_override("font", HouseStyle.mono())

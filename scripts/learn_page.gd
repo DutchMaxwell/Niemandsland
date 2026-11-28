@@ -224,15 +224,26 @@ func _fill_grid(key: String) -> void:
 			fill.mouse_filter = MOUSE_FILTER_IGNORE
 			card.add_child(fill)
 			card.move_child(fill, 0)
-			var tag := _text("Finale", 13, HouseStyle.mono())
+			var tag := _text("FINALE", 13, HouseStyle.mono())   # a bordered gold chip (sheet 07)
 			tag.add_theme_color_override(&"font_color", HouseStyle.GOLD)
-			tag.size_flags_horizontal = SIZE_SHRINK_BEGIN
-			words.add_child(tag)
+			var chip := PanelContainer.new()
+			var rim := StyleBoxFlat.new()
+			rim.bg_color = Color(HouseStyle.GOLD, 0.08)
+			rim.border_color = Color(HouseStyle.GOLD, 0.6)
+			rim.set_border_width_all(1)
+			rim.set_corner_radius_all(3)
+			rim.content_margin_left = 8
+			rim.content_margin_right = 8
+			chip.add_theme_stylebox_override(&"panel", rim)
+			chip.size_flags_horizontal = SIZE_SHRINK_BEGIN
+			chip.add_child(tag)
+			words.add_child(chip)
 		for label: Label in words.find_children("*", "Label", true, false):
 			label.mouse_filter = MOUSE_FILTER_IGNORE
-		if i == data[3]:   # the next lesson: the gold rim and the lighter fill
+		if i == data[3]:   # the next lesson: the gold rim and the lighter fill (sheet 07 .ch.next)
 			var rim := HouseStyle.menu_theme().get_stylebox(&"normal", &"Button").duplicate() as StyleBoxFlat
-			rim.bg_color = HouseStyle.ROW_HOVER
+			rim.bg_color = HouseStyle.CARD_CHOSEN
+			rim.draw_center = true   # the theme's button box may draw its rim only (as #3838)
 			rim.border_color = HouseStyle.GOLD
 			card.add_theme_stylebox_override(&"normal", rim)
 		row.add_child(card)

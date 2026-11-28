@@ -4,11 +4,20 @@ extends GdUnitTestSuite
 var _runner: GdUnitSceneRunner
 var _menu: Control
 
+var _menu_cfg: Variant = null   # the profile's menu config: a Create table remembers the opponent there
+
+
 func before_test() -> void:
+	_menu_cfg = FileAccess.get_file_as_string(SetupOpponent.MENU_CFG) if FileAccess.file_exists(SetupOpponent.MENU_CFG) else null
 	_runner = scene_runner("res://scenes/startup_menu.tscn")
 	_menu = _runner.scene()
+	_menu.setup_lists = false   # the setup never asks the CDN for NACHTMAHR's lists here
 
 func after_test() -> void:
+	if _menu_cfg == null:
+		DirAccess.remove_absolute(SetupOpponent.MENU_CFG)
+	else:
+		FileAccess.open(SetupOpponent.MENU_CFG, FileAccess.WRITE).store_string(_menu_cfg)
 	_menu = null
 	_runner = null
 
@@ -174,6 +183,7 @@ func test_host_creation_commits_selected_table_and_network_settings_together() -
 	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
 	probe.set_script(MenuTransitionProbe)
 	add_child(probe)
+	probe.setup_lists = false
 	probe.online_hub_lists = false
 	probe._open_online_hub()
 	var hub: OnlineHub = probe.view.page_open
@@ -203,6 +213,7 @@ func test_grassland_card_hands_main_a_table_biome_id() -> void:
 	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
 	probe.set_script(MenuTransitionProbe)
 	add_child(probe)
+	probe.setup_lists = false
 	probe._on_start_battle_pressed()
 	var card: Button = null
 	for key in probe._table_setup._biome_buttons:
@@ -314,6 +325,7 @@ func test_the_table_setup_fades_in_and_out() -> void:
 	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
 	probe.set_script(MenuTransitionProbe)
 	add_child(probe)
+	probe.setup_lists = false
 	probe._on_start_battle_pressed()
 	var dialog: Window = probe._table_setup
 	var content := dialog.get_child(0) as Control
@@ -408,6 +420,7 @@ func test_create_table_commits_with_a_sweep_before_the_screen_changes() -> void:
 	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
 	probe.set_script(MenuTransitionProbe)
 	add_child(probe)
+	probe.setup_lists = false
 	probe._on_start_battle_pressed()
 	var create: Button = probe._table_setup._create
 	probe._table_setup._confirm()
@@ -416,3 +429,143 @@ func test_create_table_commits_with_a_sweep_before_the_screen_changes() -> void:
 	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.1).timeout
 	assert_bool(probe.entered_game).is_true()
 	assert_bool(UiFeedback.has_method("play_commit")).override_failure_message("no commit tone").is_true()
+
+
+## Spec 97 (step 97.11): Create table carries who is at the table. Solo stores NACHTMAHR's list and no online key;
+## the online room from "Start battle" is a private room under the saved name; a hub start switched to Solo is no
+## room; the online card locks the Automatic rules pick (red before: no opponent in the setup's hand-over).
+const OPP_KEY := "niemandsland/pending_table_opponent"
+const HOST_KEYS := ["niemandsland/pending_internet_lobby", "niemandsland/internet_is_host",
+	"niemandsland/internet_relay_url", "niemandsland/player_name", "niemandsland/internet_public"]
+const MANIFEST := {"alien_hives": {"name": "Alien Hives", "lists": [{"points": 3000, "file": "alien_hives_3000.json"}]}}
+
+
+func _create_with(who: String, host_settings: Dictionary = {}) -> Dictionary:
+	var keys: Array = HOST_KEYS + [OPP_KEY, "niemandsland/pending_table_setup", "niemandsland/pending_table_layout"]
+	var previous := {}
+	for key: String in keys:
+		previous[key] = ProjectSettings.get_setting(key, null)
+		ProjectSettings.set_setting(key, null)
+	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	probe.set_script(MenuTransitionProbe)
+	add_child(probe)
+	probe.setup_lists = false
+	probe._show_table_setup(host_settings)
+	var opponent: SetupOpponent = probe._table_setup.get("opponent")
+	if opponent == null:
+		for key: String in keys:
+			ProjectSettings.set_setting(key, previous[key])
+		return {}
+	opponent.set_manifest(MANIFEST)
+	opponent.choose_who(who)
+	probe._table_setup._confirm()
+	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.1).timeout
+	var result := {}
+	for key: String in keys:
+		result[key] = ProjectSettings.get_setting(key, null)
+		ProjectSettings.set_setting(key, previous[key])
+	return result
+
+
+func test_solo_hands_nachtmahrs_list_over_and_no_room() -> void:
+	var result := await _create_with("solo")
+	assert_dict(result).override_failure_message("no opponent in the setup").is_not_empty()
+	if result.is_empty():
+		return
+	assert_dict(result[OPP_KEY]).is_equal({"who": "solo", "file": "alien_hives_3000.json", "slot": 2,
+		"label": "NACHTMAHR · Alien Hives · 3000"})
+	assert_object(result["niemandsland/pending_internet_lobby"]).is_null()
+
+
+func test_an_online_room_from_start_battle_is_private_under_the_saved_name() -> void:
+	var result := await _create_with("online")
+	if result.is_empty():
+		fail("no opponent in the setup")
+		return
+	assert_bool(result["niemandsland/pending_internet_lobby"]).is_true()
+	assert_bool(result["niemandsland/internet_is_host"]).is_true()
+	assert_bool(result["niemandsland/internet_public"]).is_false()
+	assert_str(str(result["niemandsland/internet_relay_url"])).is_equal(InternetLobby.DEFAULT_RELAY_URL)
+	assert_str(str(result["niemandsland/player_name"])).is_equal(PlayerIdentity.load_saved_name())
+	assert_str(str(result[OPP_KEY].who)).is_equal("online")
+
+
+func test_a_hub_start_switched_to_solo_opens_no_room() -> void:
+	var hub := OnlineHub.host_settings("Ashfall", InternetLobby.DEFAULT_RELAY_URL, true)
+	var result := await _create_with("solo", hub)
+	if result.is_empty():
+		fail("no opponent in the setup")
+		return
+	for key: String in HOST_KEYS:
+		assert_object(result[key]).override_failure_message(key).is_null()
+
+
+func test_the_online_card_locks_automatic_rules() -> void:
+	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	probe.set_script(MenuTransitionProbe)
+	add_child(probe)
+	probe.setup_lists = false
+	probe._show_table_setup()
+	var dialog: TableSizeDialog = probe._table_setup
+	dialog.selected_rules = RulesAutomation.Level.AUTOMATIC
+	var opponent: SetupOpponent = dialog.get("opponent")
+	if opponent == null:
+		fail("no opponent in the setup")
+		return
+	opponent.choose_who("online")
+	assert_int(dialog.selected_rules).is_equal(RulesAutomation.Level.MANUAL)
+	assert_bool(dialog.online).is_true()
+	dialog._on_close()
+
+
+## Spec 97 (step 97.12): Create table remembers the opponent; the next setup opens on it (a hub start does not).
+func test_the_next_setup_opens_on_the_remembered_opponent() -> void:
+	await _create_with("local")
+	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	probe.set_script(MenuTransitionProbe)
+	add_child(probe)
+	probe.setup_lists = false
+	probe._show_table_setup()
+	assert_str(probe._table_setup.opponent.who).is_equal("local")
+	probe._table_setup._on_close()
+
+
+## Sheet 08 / 01: the core notice is a warning, its title gold; the version line has its dot (red before: accent title,
+## no dot).
+func test_the_core_notice_title_is_gold_and_the_version_line_has_its_dot() -> void:
+	var card: PromptCard = _menu._show_core_missing_dialog()
+	var title := card.get("_title_label") as Label
+	assert_str(title.get_theme_color("font_color").to_html(false)).is_equal(HouseStyle.GOLD.to_html(false))
+	card.ok_button.pressed.emit()
+	assert_str(_menu.view.version.text).contains("OnePageRules  ·  ")
+
+
+## Gap review 28.11. (sheet 06b): after "Create table" the setup faded out onto the engine's grey (76, 76, 76) for about
+## 0.3 s - the menu hidden, the loading picture still fading in from 0. Now the clear colour is the sheet colour and the
+## loading picture stands opaque from its first frame (red before: clear colour (0.3, 0.3, 0.3), no such helper).
+func test_the_hand_over_never_shows_the_engine_grey() -> void:
+	var clear: Color = ProjectSettings.get_setting("rendering/environment/defaults/default_clear_color", Color(0.3, 0.3, 0.3))
+	assert_bool(clear.is_equal_approx(HouseStyle.SHEET_FILL)).override_failure_message("clear colour %s" % clear).is_true()
+	assert_bool(_menu.has_method("_add_loading_overlay")).override_failure_message("no opaque hand-over overlay").is_true()
+	if not _menu.has_method("_add_loading_overlay"):
+		return
+	var overlay: LoadingOverlay = _menu.call("_add_loading_overlay")
+	await get_tree().process_frame
+	assert_float(overlay._content.modulate.a).override_failure_message("the loading picture fades in over bare grey").is_equal(1.0)
+	overlay.queue_free()
+
+
+## Gap review 28.11. (06b), second half: the setup fades out onto the loading picture, not onto its own window's clear
+## colour - the window drops its background for the fade (red before: one flat frame of (14, 22, 28) between them).
+func test_the_setup_fades_out_onto_the_loading_picture() -> void:
+	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	probe.set_script(MenuTransitionProbe)
+	add_child(probe)
+	probe.setup_lists = false
+	probe._show_table_setup()
+	var setup: Window = probe._table_setup
+	setup._confirm()
+	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.05).timeout   # the commit beat, then the fade starts
+	assert_bool(probe.entered_game).is_true()
+	assert_bool(is_instance_valid(setup) and setup.transparent_bg).override_failure_message(
+		"the fading setup draws its own background").is_true()

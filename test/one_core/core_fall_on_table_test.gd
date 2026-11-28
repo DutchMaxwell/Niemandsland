@@ -61,7 +61,7 @@ func _ledge(layout: Dictionary) -> Array:
 @warning_ignore('unused_parameter')
 func test_a_core_fall_lands_at_the_foot_with_its_wounds(do_skip := not ClassDB.class_exists("NmlCore"),
 		skip_reason := "NmlCore extension not loaded") -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_CORE_TIERS
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_106_CORE_TIERS
 	var core: Object = ClassDB.instantiate("NmlCore")
 	var layout: Dictionary = core.boardgen_layout_themed(7, "")
 	SoloHarness.generated_board(_main, 7, "")
