@@ -120,6 +120,7 @@ const MENU_FONT_SEGMENT := 16    # one of a segmented group (.seg span)
 const MENU_PAD_BUTTON_X := 18    # a button's side padding (.btn)
 const MENU_PAD_SEGMENT_X := 16
 const MENU_H_ACTION := 44
+const MENU_H_FIELD := 46         # a text field at the menu's scale (house.css .field)
 const MENU_PAD_PANEL := 22
 const MENU_ICON_BUTTON := 32     # the close box of a menu window
 const MENU_SHEET_CLOSE := 44     # the close box of a full menu sheet (settings, saves): sheets 05 and 09

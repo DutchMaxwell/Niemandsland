@@ -75,7 +75,7 @@ func _setup_ui() -> void:
 	var link_section := VBoxContainer.new()
 	link_section.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 	vbox.add_child(link_section)
-	link_section.add_child(HouseStyle.label("Army Forge share link or list ID", HouseStyle.CAPTION))
+	link_section.add_child(_eyebrow("Army Forge share link or list ID"))
 	var example := HBoxContainer.new()
 	example.add_child(HouseStyle.label("e.g. https://army-forge.onepagerules.com/share?id=XXX", HouseStyle.CAPTION))
 	example.get_child(0).size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -104,7 +104,7 @@ func _setup_ui() -> void:
 	var player_row := HBoxContainer.new()
 	player_row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 	vbox.add_child(player_row)
-	player_row.add_child(HouseStyle.label("Assign player", HouseStyle.CAPTION))
+	player_row.add_child(_eyebrow("Assign player"))
 	player_option = OptionButton.new()
 	player_option.theme_type_variation = HouseStyle.BUTTON
 	player_option.add_item("Player 1 (Blue)", 1)
@@ -138,7 +138,7 @@ func _setup_ui() -> void:
 	_recent.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 	vbox.add_child(_recent)
 
-	right.add_child(HouseStyle.label("Preview", HouseStyle.CAPTION))
+	right.add_child(_eyebrow("Preview"))
 	army_preview = ScrollContainer.new()
 	army_preview.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	# Small minimum so a long army list never pushes the buttons off: the rows fill the well and scroll.
@@ -168,8 +168,17 @@ func _setup_ui() -> void:
 	cancel_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
 	cancel_btn.pressed.connect(_on_cancel)
 	btn_row.add_child(cancel_btn)
-	import_btn = HouseStyle.button("Import army", HouseStyle.PRIMARY)
+	import_btn = HouseStyle.button("Import army", HouseStyle.PRIMARY, HouseStyle.MENU_H_ACTION)
 	import_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
+	import_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	import_btn.custom_minimum_size.x = 210   # room for its Enter cap at the right (sheet 04)
+	var cap := HouseStyle.key_cap_on_gold("Enter")
+	cap.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	cap.offset_left = -14
+	cap.offset_right = -14
+	import_btn.add_child(cap)
+	cancel_btn.custom_minimum_size.y = HouseStyle.MENU_H_ACTION
 	import_btn.disabled = true
 	import_btn.pressed.connect(_on_import)
 	btn_row.add_child(import_btn)
@@ -194,6 +203,14 @@ func _setup_ui() -> void:
 func _table() -> Node:
 	var scene := get_tree().current_scene if is_inside_tree() else null
 	return scene if scene != null and scene.has_method("_table_system") and scene.get("network_manager") != null else null
+
+
+## A field's name as sheet 04 draws it: a muted eyebrow in capitals (the text keeps its case for the code).
+func _eyebrow(text: String) -> Label:
+	var l := HouseStyle.label(text, HouseStyle.EYEBROW)
+	l.uppercase = true
+	l.add_theme_color_override("font_color", HouseStyle.MUTED)
+	return l
 
 
 func _link_button(text: String, colour: Color) -> Button:
@@ -231,11 +248,23 @@ func _fill_recent() -> void:
 		row.add_child(_mono("%d PTS" % int(entry.points), HouseStyle.MUTED))
 		var load_button := HouseStyle.button("Load", HouseStyle.BUTTON, 36)
 		load_button.size_flags_horizontal = Control.SIZE_SHRINK_END
+		load_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		load_button.pressed.connect(func() -> void:
 			share_link_input.text = str(entry.link)
 			_on_fetch_from_link())
 		row.add_child(load_button)
-		_recent.add_child(row)
+		var framed := PanelContainer.new()   # a framed row (sheet 04 .r)
+		var box := StyleBoxFlat.new()
+		box.bg_color = HouseStyle.FILL
+		box.border_color = HouseStyle.LINE
+		box.set_border_width_all(1)
+		box.set_corner_radius_all(HouseStyle.RADIUS_CARD)
+		box.content_margin_left = 14
+		box.content_margin_right = 8
+		framed.add_theme_stylebox_override("panel", box)
+		row.custom_minimum_size.y = 52
+		framed.add_child(row)
+		_recent.add_child(framed)
 
 
 ## Sheet 04's measures: up to 1320 px wide with the two columns side by side and a tall preview; below 1100 px of window

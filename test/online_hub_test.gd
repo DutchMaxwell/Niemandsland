@@ -210,3 +210,12 @@ func test_the_chosen_room_is_filled_and_refresh_is_44_px() -> void:
 	assert_str(String(((rows[1] as Node).find_child("Join", true, false) as Button).theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
 	assert_float((hub.find_child("Refresh", true, false) as Control).custom_minimum_size.x).is_equal(44.0)
 	assert_array(_texts_of(hub)).contains(["The list shows what the relay reports today: a code and its player count."])
+
+
+## Sheet 02: the name field is 46 px high as the mockups' field (red before: 38 px).
+func test_the_name_field_is_46_px() -> void:
+	var hub := await _hub()
+	if hub == null:
+		return
+	await get_tree().process_frame
+	assert_float((hub.get("name_field") as Control).size.y).is_greater_equal(46.0)
