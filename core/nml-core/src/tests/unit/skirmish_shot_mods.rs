@@ -1,9 +1,9 @@
-//! `PENDING_EPOCH_SKIRMISH_SHOT_MODS` (plan SKIRMISH-CATALOGUE): Precision Charge and the unit-borne Imprecise read through the
+//! `EPOCH_109_SKIRMISH_SHOT_MODS` (plan SKIRMISH-CATALOGUE): Precision Charge and the unit-borne Imprecise read through the
 //! REAL catalogues (`ctx_for` / `UnitStatic::build_for` on assets/solo) in the skirmish books as in their mass-battle
 //! siblings from 109, and not below it. RED: the rows removed from the skirmish maps -> the 109 leg reads false / 0; the
 //! `since_epoch` gate removed from `RulesMap::lookup` -> the 108 leg reads true / -1.
 use super::*;
-use crate::acts::{EPOCH_108_BLAST_EVEN, PENDING_EPOCH_SKIRMISH_SHOT_MODS};
+use crate::acts::{EPOCH_108_BLAST_EVEN, EPOCH_109_SKIRMISH_SHOT_MODS};
 
 fn prof(system: &str, faction: &str, rules: &[&str], weapons: &str) -> Profile {
     let mut p: Profile = serde_json::from_str(&format!(r#"{{"unit_id":"u","name":"U","weapons":{weapons}}}"#)).unwrap();
@@ -31,7 +31,7 @@ const CARRIERS: [(&str, &str, &str); 4] =
 #[test]
 fn from_109_the_skirmish_books_read_precision_charge_and_imprecise_as_their_siblings() {
     for (sys, charger, imprecise) in CARRIERS {
-        assert_eq!(reads(sys, charger, imprecise, PENDING_EPOCH_SKIRMISH_SHOT_MODS), (true, -1), "{sys} at 109");
+        assert_eq!(reads(sys, charger, imprecise, EPOCH_109_SKIRMISH_SHOT_MODS), (true, -1), "{sys} at 109");
     }
 }
 
@@ -47,7 +47,7 @@ fn below_109_the_skirmish_books_stay_as_recorded() {
 #[test]
 fn every_skirmish_imprecise_faction_reads_its_minus_one() {
     for f in ["alien_hives", "eternal_dynasty", "goblin_reclaimers", "robot_legions"] {
-        assert_eq!(reads("gff", "orc_marauders", f, PENDING_EPOCH_SKIRMISH_SHOT_MODS).1, -1, "gff {f}");
+        assert_eq!(reads("gff", "orc_marauders", f, EPOCH_109_SKIRMISH_SHOT_MODS).1, -1, "gff {f}");
     }
 }
 
@@ -60,7 +60,7 @@ fn every_since_epoch_in_the_catalogues_is_a_named_gate() {
         for (i, _) in text.match_indices("\"since_epoch\"") {
             let tail = &text[i + 14..];
             let n: u32 = tail.trim_start_matches([':', ' ']).split(|c: char| !c.is_ascii_digit()).next().unwrap().parse().unwrap();
-            assert_eq!(n, PENDING_EPOCH_SKIRMISH_SHOT_MODS, "{s}: since_epoch {n} is no named gate");
+            assert_eq!(n, EPOCH_109_SKIRMISH_SHOT_MODS, "{s}: since_epoch {n} is no named gate");
         }
     }
 }

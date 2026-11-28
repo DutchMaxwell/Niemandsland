@@ -900,7 +900,7 @@ func test_the_lagging_books_encode_the_same_mechanics_as_their_current_siblings(
 	RulesRegistry.reset_cache()
 
 
-## PENDING_EPOCH_SKIRMISH_SHOT_MODS: a catalogue row with `since_epoch` answers only from that recorder epoch on (the core's
+## EPOCH_109_SKIRMISH_SHOT_MODS: a catalogue row with `since_epoch` answers only from that recorder epoch on (the core's
 ## `Entry::since_epoch`). RED: `_live` returning true -> the 108 leg finds the row.
 func test_a_since_epoch_row_answers_only_from_its_epoch() -> void:
 	var was := AiActRecorder.rules_epoch

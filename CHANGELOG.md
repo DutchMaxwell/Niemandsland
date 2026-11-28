@@ -7,6 +7,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Changed — rules corrections
+- **Rules epoch 109 is live: Precision Charge and Imprecise work in the two skirmish games.** In Grimdark Future:
+  Firefight and AoF: Skirmish, a model with Precision Charge now gets +1 to hit when it charges, and a unit that carries
+  Imprecise itself now gets -1 to hit, as in their army books. Both rules were silently skipped there before. Games
+  recorded before epoch 109 replay unchanged.
 - **Rules epoch 108 is live: a Blast splits the whole attack evenly in the two skirmish games.** The hits of one Blast
   attack are shared evenly between the target and the units within reach (up to each unit's room), and the defender
   picks where the remainder goes. A single hit, or a target alone, lands as before. Games recorded before epoch 108 replay
