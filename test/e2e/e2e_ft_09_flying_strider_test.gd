@@ -3,7 +3,7 @@ extends GdUnitTestSuite
 ## FF36 p.14 l.1218-1220 (Flying ignores terrain and jumps), p.15 l.1311-1312 (Strider halves the jump dice, rounding up).
 ## Scene: the drawn generated board 7, its 6 in ledge (no ladder); a 1-model Tough(3) unit with Flying, a twin with
 ## Strider, each dropping to the foot. Tray seed 6: Strider's three dice 5 3 3 (all 2+).
-## The flyer's drop writes no line at all (the rule is applied silently): kept as a skipped case under #3858.
+## #3858 (fixed): the flyer's drop names Flying in the log.
 ## Real: the main scene, the drawn board, the card's Activate / End, the table's drop check (the core's move check) and
 ## the drop door.
 
@@ -49,9 +49,8 @@ func test_flying_passes_a_6_in_drop_without_dice(timeout := 120000) -> void:
 	assert_int((u.models[0] as ModelInstance).wounds_current).is_equal(3)
 
 
-@warning_ignore("unused_parameter")
-func test_a_line_names_flying_at_the_drop(timeout := 120000, do_skip := true,
-		skip_reason := "FINDING #3858 (comment): a rule applied on a player's move writes no line - Flying at a jump") -> void:
+## #3858: the flyer's drop names Flying (the core's move check writes it).
+func test_a_line_names_flying_at_the_drop(timeout := 120000) -> void:
 	await _jump(7, 6.0, 6, ["Flying"])
 	assert_bool(_t.lines.any(func(l: String) -> bool: return l.find("Flying") != -1)).override_failure_message("%s" % [_t.lines]).is_true()
 

@@ -4,7 +4,7 @@ extends GdUnitTestSuite
 ## l.1094-1096 (a move in or through Difficult terrain is capped at 6 in).
 ## Scene: a single Tough(3) model; one overlay cell painted Dangerous on its path; a row of Forest (Difficult) cells on
 ## another unit's path.
-## FINDING #3858: the player's log shows the Dangerous dice line but no line naming the rule (case kept, skipped).
+## #3858 (fixed): the player's log names the Dangerous test before its dice line.
 ## Real: the main scene, the terrain overlay, the card's Activate / End, the real drag and the core's move check.
 
 const INCH := 0.0254
@@ -50,9 +50,8 @@ func test_a_move_through_dangerous_terrain_rolls_one_die_per_wound_left(timeout 
 	assert_int(m.wounds_max - m.wounds_current).override_failure_message("each 1 a wound: %s" % [_t.lines]).is_equal(ones)
 
 
-@warning_ignore("unused_parameter")
-func test_the_dangerous_test_is_named_in_the_log(timeout := 120000, do_skip := true,
-		skip_reason := "FINDING #3858: no log line names the Dangerous terrain test on a player's move") -> void:
+## #3858: the player's move names its Dangerous test (the table writes the line the core does not).
+func test_the_dangerous_test_is_named_in_the_log(timeout := 120000) -> void:
 	await _through_dangerous()
 	assert_bool(_t.lines.any(func(l: String) -> bool: return l.find("Dangerous terrain") != -1)) \
 		.override_failure_message("a line names the test: %s" % [_t.lines]).is_true()
