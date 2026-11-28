@@ -210,3 +210,22 @@ func test_the_chosen_room_is_filled_and_refresh_is_44_px() -> void:
 	assert_str(String(((rows[1] as Node).find_child("Join", true, false) as Button).theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
 	assert_float((hub.find_child("Refresh", true, false) as Control).custom_minimum_size.x).is_equal(44.0)
 	assert_array(_texts_of(hub)).contains(["The list shows what the relay reports today: a code and its player count."])
+
+
+## The Join button's Enter cap never covers its word (seen on the 28.11. capture after the menu buttons took the
+## mockups' 18 px padding and 17 px text: "Join" ran under the cap; red before).
+func test_join_keeps_its_word_clear_of_the_enter_cap() -> void:
+	var hub := await _hub()
+	if hub == null:
+		return
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var join := hub.find_child("JoinWithCode", true, false) as Button
+	var cap := join.get_child(0) as Control
+	var font := join.get_theme_font(&"font")
+	var text_end := join.get_theme_stylebox(&"normal").content_margin_left \
+		+ font.get_string_size(join.text, HORIZONTAL_ALIGNMENT_LEFT, -1, join.get_theme_font_size(&"font_size")).x
+	assert_float(cap.position.x).override_failure_message("cap at %d, word ends at %d" % [int(cap.position.x), int(text_end)]) \
+		.is_greater_equal(text_end + 4.0)
+	var block := join.get_parent().get_parent() as Control
+	assert_float(join.get_global_rect().end.x).is_less_equal(block.get_global_rect().end.x + 1.0)

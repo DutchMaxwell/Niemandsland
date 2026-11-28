@@ -7,6 +7,7 @@ extends MenuPage
 signal host_requested(settings: Dictionary)
 signal join_requested(code: String, url: String, player_name: String, button: Button)
 
+const JOIN_W := 124   # the Join-with-a-code button: its word, then its Enter cap (sheet 02)
 const LOCK := "<rect x='5' y='11' width='14' height='9' rx='1.5'/><path d='M8 11V8a4 4 0 0 1 8 0v3'/>"
 const JOIN_CODE_LEN := 6
 const TIMEOUT_S := 8.0
@@ -290,6 +291,7 @@ func _build_join() -> void:
 	join_button.focus_mode = FOCUS_ALL
 	join_button.disabled = true
 	join_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	join_button.custom_minimum_size.x = JOIN_W   # "Join" and its Enter cap side by side at the menu's button scale
 	join_button.pressed.connect(_on_join)
 	var cap := HouseStyle.key_cap("Enter")
 	cap.mouse_filter = MOUSE_FILTER_IGNORE
