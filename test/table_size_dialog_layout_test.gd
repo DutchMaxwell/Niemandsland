@@ -35,7 +35,8 @@ func _assert_layout(window: Vector2i) -> float:
 		assert_float(dialog._cards[0].size.y).override_failure_message("%s: picture %d px" % [window, int(dialog._cards[0].size.y)]).is_greater_equal(150.0)
 	else:
 		assert_float(card_aspect).override_failure_message("%s: biome card %.2f:1" % [window, card_aspect]).is_between(2.0, 2.8)
-	assert_float(hero_aspect).override_failure_message("%s: preview %.2f:1" % [window, hero_aspect]).is_between(2.2, 2.9)
+	var hero_min: float = TableSizeDialog.RAIL_HERO_ASPECT if dialog._rail_body.visible else 2.2   # the rail card: sheet 03's 1.6
+	assert_float(hero_aspect).override_failure_message("%s: preview %.2f:1" % [window, hero_aspect]).is_between(hero_min - 0.01, 2.9)
 	assert_float(dialog._page.get_combined_minimum_size().y) \
 		.override_failure_message("%s: the page needs scrolling" % window).is_less_equal(dialog._scroll.size.y)
 	assert_bool(Rect2(Vector2.ZERO, area).encloses(dialog._create.get_global_rect())) \
@@ -251,3 +252,15 @@ func test_from_900_px_the_system_cards_are_the_sheets() -> void:
 	var small_texts: Array = (small._system_buttons["gf"] as Node).find_children("*", "Label", true, false).filter(
 		func(l: Node) -> bool: return (l as Label).is_visible_in_tree()).map(func(l: Node) -> String: return (l as Label).text)
 	assert_array(small_texts).not_contains(["GRIMDARK"])
+
+
+## Sheets 03/03b: in the rail card "Create table" is 18 px semibold at the left with its Enter cap (red before: 14 px
+## regular, centred, an arrow glyph).
+func test_the_rail_cards_create_table_reads_as_drawn() -> void:
+	var dialog := await _open(Vector2i(1920, 1080))
+	assert_str(dialog._create.text).is_equal("Create table")
+	assert_int(dialog._create.get_theme_font_size("font_size")).is_equal(18)
+	var cap := dialog._create.get_node_or_null("EnterCap") as Control
+	assert_bool(cap != null and cap.visible).override_failure_message("no Enter cap").is_true()
+	var small := await _open(Vector2i(1280, 720))
+	assert_bool((small._create.get_node("EnterCap") as Control).visible).is_false()
