@@ -22703,15 +22703,6 @@ func restore_generated_board(record: Dictionary) -> void:
 	_lay_generated_board(record)
 
 
-## Plan step 27-pre P3, TEST-ONLY door (lead 26.11.; retires in GEN-7 when the e2e uses the player path): a rules e2e
-## puts a drawn generated board of `seed_value` / `theme` on the table through the release door's laying (without its
-## table-size and models checks: those rules tests place their models first). Debug builds only.
-func _attach_generated_board_for_test(seed_value: int, theme: String) -> void:
-	if not OS.is_debug_build() or not ClassDB.class_exists("NmlCore"):
-		return
-	_lay_generated_board({"seed": seed_value, "theme": theme})
-
-
 ## Check coherency for all currently selected units
 func _check_coherency_for_selected_units() -> void:
 	if not coherency_visualizer or not object_manager:
