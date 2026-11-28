@@ -144,6 +144,9 @@ func _place() -> void:
 	fit_rail_lines(_rail, compact)
 	left.add_theme_constant_override(&"separation", 8 if compact else 14)
 	for card in _tool_cards:   # 20 px inside the cards from 800 px, as drawn; the 720 page keeps the tight cards
+		# ... and below 800 px the cards' buttons at the table's scale, so Generate again, the mirror and the editor
+		# fit beside the rail in one row (gap review 28.11.: 750 px of row in a 650 px column)
+		card.theme = HouseStyle.theme() if compact else null
 		card.remove_theme_stylebox_override(&"panel")
 		if not compact:
 			var roomy := card.get_theme_stylebox(&"panel").duplicate() as StyleBox
