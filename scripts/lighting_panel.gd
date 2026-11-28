@@ -61,6 +61,7 @@ var _header: HBoxContainer
 var _columns: HBoxContainer
 var _rail: VBoxContainer
 var _rail_head: VBoxContainer
+var _rail_column: PanelContainer   # the rail's column: in the menu a darker well with a hairline at its right (sheet 05)
 var _lab_sep: VBoxContainer
 var _footer: HBoxContainer
 var _graphics_rows := false
@@ -216,7 +217,10 @@ func _build_ui() -> void:
 	rail.add_theme_constant_override(&"separation", HouseStyle.GAP_CONTROL)
 	var left := VBoxContainer.new()   # the rail, headed in the menu by the eyebrow and the title
 	left.add_theme_constant_override(&"separation", 0)
-	columns.add_child(left)
+	_rail_column = PanelContainer.new()
+	_rail_column.name = "RailColumn"
+	_rail_column.add_child(left)
+	columns.add_child(_rail_column)
 	_rail = rail
 	_rail_head = _build_rail_head()
 	left.add_child(_rail_head)
@@ -664,6 +668,12 @@ func _apply_menu_layout() -> void:
 	_scroll.custom_minimum_size.y = 0.0 if on else float(SCROLL_H)
 	_rail.custom_minimum_size.x = PAGE_RAIL_MENU_W if on else PAGE_RAIL_W
 	_rail_head.visible = on
+	var well := StyleBoxFlat.new()   # the menu sets the rail off: a darker column, a 1 px rule at its right
+	well.bg_color = HouseStyle.WELL if on else Color(0, 0, 0, 0)
+	well.border_color = HouseStyle.LINE
+	well.border_width_right = HouseStyle.BORDER if on else 0
+	well.content_margin_right = HouseStyle.GAP_SECTION if on else 0.0
+	_rail_column.add_theme_stylebox_override(&"panel", well)
 	(_header.get_child(0) as Control).visible = not on
 	var close := _header.get_node("CloseButton") as Control
 	close.size_flags_horizontal = (Control.SIZE_SHRINK_END | Control.SIZE_EXPAND) if on else Control.SIZE_SHRINK_END
@@ -708,6 +718,12 @@ func _build_graphics_rows() -> void:
 	var eyebrow := HouseStyle.label("GRAPHICS", HouseStyle.EYEBROW)
 	page.add_child(eyebrow)
 	page.move_child(eyebrow, 0)
+	var heading := HouseStyle.label("How the table looks", HouseStyle.BODY)   # sheet 05's page heading
+	heading.name = "PageHeading"
+	heading.add_theme_font_override(&"font", HouseStyle.font(500))
+	heading.add_theme_font_size_override(&"font_size", HouseStyle.FONT_VALUE)
+	page.add_child(heading)
+	page.move_child(heading, 1)
 	for row_name: String in ["Quality", "Tilt-Shift (Depth of Field)", "Board Mist and Steam", "Combat Effects",
 			"Miniature Idle Motion", "Table frame"]:
 		var control: Control = _quality_row if row_name == "Quality" else frame if row_name == "Table frame" \

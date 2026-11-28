@@ -658,3 +658,17 @@ func test_the_menus_quality_is_one_group_and_dropdowns_are_44_px() -> void:
 	assert_float((row.get_child(0) as Control).custom_minimum_size.y).is_equal(40.0)
 	var frame := _panel.find_child("TableFrameOption", true, false) as Control
 	assert_float(frame.custom_minimum_size.y).is_equal(44.0)
+
+
+## Gap review 28.11. (sheet 05): in the menu the rail is set off - a darker column with a hairline at its right - and the
+## Graphics page carries its heading "How the table looks" under the eyebrow (red before: neither).
+func test_the_menus_rail_is_set_off_and_graphics_has_its_heading() -> void:
+	_panel.set_modal(true)
+	await get_tree().process_frame
+	var column := _panel.find_child("RailColumn", true, false) as PanelContainer
+	var box := column.get_theme_stylebox(&"panel") as StyleBoxFlat if column != null else null
+	assert_bool(box != null and box.border_width_right >= 1 and box.bg_color.a > 0.0).override_failure_message(
+		"the rail is not set off").is_true()
+	var heading := _panel.find_child("PageHeading", true, false) as Label
+	assert_str(heading.text if heading != null else "").is_equal("How the table looks")
+	_panel.set_modal(false)
