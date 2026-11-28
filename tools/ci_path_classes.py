@@ -33,9 +33,9 @@ CLASSES = {
     },
 }
 # The LOOK short run also boots the real game once: a class file that does not compile or does not load breaks
-# scripts/main.gd through its one door, and only a boot of scenes/main.tscn sees that. Any suite that boots it will
-# do; tools/ci_look_lane_test.py keeps this one such a suite.
-CANARY = "test/e2e/e2e_local_table_no_implicit_ai_test.gd"
+# scripts/main.gd through its one door, and only a boot of scenes/main.tscn sees that; the canary also asserts that no
+# board-look code is on the table of a plain game. tools/ci_look_lane_test.py keeps it so.
+CANARY = "test/e2e/e2e_look_canary_test.gd"
 # A suite that names a whole source root (res://scripts, res://scenes, ...) walks every file in it, so a class file can
 # trip it without naming any class symbol: it runs in the short run too.
 WALKS_A_ROOT = re.compile(r"[\"']res://(?:scripts|scenes|shaders|assets|materials)/?[\"']")

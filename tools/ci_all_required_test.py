@@ -37,6 +37,7 @@ def test_skip_without_a_path_reason_is_red():
 def test_failure_or_cancel_is_red():
     assert verdict(_env(test="failure")) == 1
     assert verdict(_env(core_linux="cancelled")) == 1
+    assert verdict(_env(test="cancelled")) == 1  # the one gdUnit job of a LOOK-only PR (ncore=true, test not skipped)
 
 
 def test_failed_changes_cannot_pass_through_empty_outputs():

@@ -54,7 +54,9 @@ jobs:
       shard_count: ${{ steps.shards.outputs.shard_count }}
       shards: ${{ steps.shards.outputs.shards }}
       procs: ${{ steps.shards.outputs.procs }}
-      jobs: ${{ steps.shards.outputs.jobs }}
+      look_only: ${{ steps.look.outputs.look_only }}
+      # A LOOK-only PR gets ONE gdUnit job (the short run below) instead of the 4 groups.
+      jobs: ${{ steps.look.outputs.look_only == 'true' && '[0]' || steps.shards.outputs.jobs }}
     steps:
       # THE one place that decides how many gdUnit4 shards exist. The test matrix, the
       # shard assignment (tools/shard_assign.py) in the test job and in the shards-coverage guard
@@ -70,7 +72,29 @@ jobs:
           echo "procs=$PROCS" >> "$GITHUB_OUTPUT"
           echo "jobs=$(python3 -c "import json,sys; print(json.dumps(list(range(int(sys.argv[1])))))" "$((COUNT / PROCS))")" >> "$GITHUB_OUTPUT"
           echo "shards=$(python3 -c "import json,sys; print(json.dumps(list(range(int(sys.argv[1])))))" "$COUNT")" >> "$GITHUB_OUTPUT"
+      # fetch-depth 2: the pull-request merge commit and both parents, for `git diff HEAD^1 HEAD` (the PR's own files).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      # LOOK short run (PLAN_CI_THROUGHPUT step 7): a PR whose every changed file is in the LOOK class
+      # (tools/ci_look_paths.txt) or under docs/ runs one gdUnit job over `ci_path_classes.py --lane look` instead of the
+      # 4 groups. Why that is safe: ci_path_classes.py --check (shards-coverage, every PR) proves no file outside the class
+      # reaches it except main.gd's one door; the lane = the class suites + the whole-root walkers + a boot of main.tscn.
+      # Any git problem or an empty diff = not LOOK-only = the full run. The `test` job below still RUNS: no new skip.
+      # Only for a PR whose base IS main. A stacked child's diff is taken against its PARENT branch: a LOOK-only child of a
+      # parent that changes core/ would get the short run, stay green after the retarget to main (`edited` is no trigger
+      # type) and land the parent's code without the gdUnit groups. Any other base = the full run.
+      - name: LOOK-only PR?
+        id: look
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT" = "pull_request" ] && [ "$BASE_REF" = "main" ] && python3 tools/ci_path_classes.py --pr-is-only look; then
+            echo "look_only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "look_only=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -329,8 +353,14 @@ jobs:
       # blocks — spreads the slow test/e2e suites evenly across the runners.
       - name: Run gdUnit4 tests
         run: |
-          bash tools/ci/run_shard_group.sh --shards ${{ needs.changes.outputs.shard_count }} \
-            --first $(( ${{ matrix.group }} * ${{ needs.changes.outputs.procs }} )) --procs ${{ needs.changes.outputs.procs }}
+          if [ "${{ needs.changes.outputs.look_only }}" = "true" ]; then
+            python3 tools/ci_path_classes.py --lane look > look_suites.txt
+            echo "LOOK-only PR: short run over $(wc -l < look_suites.txt) suites"
+            bash tools/ci/run_shard_group.sh --suite-file look_suites.txt
+          else
+            bash tools/ci/run_shard_group.sh --shards ${{ needs.changes.outputs.shard_count }} \
+              --first $(( ${{ matrix.group }} * ${{ needs.changes.outputs.procs }} )) --procs ${{ needs.changes.outputs.procs }}
+          fi
 
       # gdUnit prints "No test cases found, abort test run!" and exits 0 when a test file
       # fails to PARSE (syntax error) instead of failing to assert — a broken suite would
@@ -343,6 +373,7 @@ jobs:
       - name: Verify gdUnit executed the full suite
         run: |
           P=${{ needs.changes.outputs.procs }}; FIRST=$(( ${{ matrix.group }} * P ))
+          LOOK=${{ needs.changes.outputs.look_only }}; [ "$LOOK" = "true" ] && { P=1; FIRST=0; }
           for ((i = FIRST; i < FIRST + P; i++)); do
             CLEAN=$(sed -r 's/\x1b\[[0-9;]*m//g' "gdunit_output_$i.log")
             if grep -q "No test cases found" <<< "$CLEAN"; then
@@ -352,7 +383,8 @@ jobs:
               echo "::error::slice $i: gdUnit never printed its 'Overall Summary' line — run did not complete normally"; exit 1
             fi
             EXECUTED=$(grep -oP 'Executed test suites: \(\K[0-9]+' <<< "$CLEAN" | head -1)
-            FILE_COUNT=$(python3 tools/shard_assign.py --shards ${{ needs.changes.outputs.shard_count }} --index "$i" | wc -l)
+            if [ "$LOOK" = "true" ]; then FILE_COUNT=$(wc -l < look_suites.txt)
+            else FILE_COUNT=$(python3 tools/shard_assign.py --shards ${{ needs.changes.outputs.shard_count }} --index "$i" | wc -l); fi
             echo "slice $i: gdUnit executed suites: ${EXECUTED:-<none>} | its *_test.gd files: $FILE_COUNT"
             echo "slice $i: report dir $(ls -d reports/slice$i/report_* 2>/dev/null | head -1)"
             if [ -z "$EXECUTED" ] || [ "$EXECUTED" -lt "$FILE_COUNT" ]; then
@@ -426,7 +458,7 @@ jobs:
           python3 -m pip install --quiet pytest
           python3 -m pytest tools/ci_triggers_test.py tools/ci_dev_view_gate_test.py -q
           python3 -m pytest tools/shard_assign_test.py tools/ci_rust_paths_test.py tools/table_census_test.py tools/ci_all_required_test.py tools/ci_run_shard_group_test.py -q
-          python3 -m pytest tools/ci_path_classes_test.py -q
+          python3 -m pytest tools/ci_path_classes_test.py tools/ci_look_lane_test.py -q
 
   relay-tests:
     name: Relay tests
