@@ -51,6 +51,7 @@ func _ready() -> void:
 func _setup_ui() -> void:
 	var parts := HouseStyle.overlay_sheet("Army import", SHEET_W)
 	(parts["close"] as Button).pressed.connect(_on_cancel)
+	HouseStyle.sheet_close_box(parts["close"] as Button)   # the 44 px close box of a menu sheet (as 05, 09)
 	add_child(parts["root"] as Control)
 	(parts["root"] as Control).theme = HouseStyle.menu_theme()   # sheet 04 stands at the menu's scale, as the arrival card
 	_sheet = parts["sheet"]
@@ -76,6 +77,11 @@ func _setup_ui() -> void:
 	link_section.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 	vbox.add_child(link_section)
 	link_section.add_child(_eyebrow("Army Forge share link or list ID"))
+	share_link_input = LineEdit.new()
+	share_link_input.placeholder_text = "Paste a share link or list ID here..."
+	share_link_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	share_link_input.custom_minimum_size.y = HouseStyle.MENU_H_FIELD
+	link_section.add_child(share_link_input)   # first, so it takes the first focus (sheet 04: no ring on the link)
 	var example := HBoxContainer.new()
 	example.add_child(HouseStyle.label("e.g. https://army-forge.onepagerules.com/share?id=XXX", HouseStyle.CAPTION))
 	example.get_child(0).size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -83,10 +89,6 @@ func _setup_ui() -> void:
 	forge.pressed.connect(func() -> void: OS.shell_open(ARMY_FORGE_URL))
 	example.add_child(forge)
 	link_section.add_child(example)
-	share_link_input = LineEdit.new()
-	share_link_input.placeholder_text = "Paste a share link or list ID here..."
-	share_link_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	link_section.add_child(share_link_input)
 
 	var link_btn_row := HBoxContainer.new()
 	link_btn_row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
@@ -138,7 +140,24 @@ func _setup_ui() -> void:
 	_recent.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 	vbox.add_child(_recent)
 
-	right.add_child(_eyebrow("Preview"))
+	# Sheet 04's preview card: its eyebrow, the list and Cancel / Import army inside, 22 px from the rim.
+	var preview_panel := HouseStyle.card()
+	preview_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_preview_panel = preview_panel
+	right.add_child(preview_panel)
+	var inner := MarginContainer.new()
+	for side: String in ["left", "right"]:
+		inner.add_theme_constant_override("margin_" + side, HouseStyle.MENU_PAD_PANEL - HouseStyle.PAD_CARD_X)
+	for side: String in ["top", "bottom"]:
+		inner.add_theme_constant_override("margin_" + side, HouseStyle.MENU_PAD_PANEL - HouseStyle.PAD_CARD_Y)
+	preview_panel.add_child(inner)
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
+	inner.add_child(stack)
+	stack.add_child(_eyebrow("Preview"))
+	var well := MarginContainer.new()   # the list and its empty / loading / error state share one place
+	well.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stack.add_child(well)
 	army_preview = ScrollContainer.new()
 	army_preview.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	# Small minimum so a long army list never pushes the buttons off: the rows fill the well and scroll.
@@ -148,22 +167,19 @@ func _setup_ui() -> void:
 	_preview_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_preview_rows.add_theme_constant_override("separation", 0)
 	army_preview.add_child(_preview_rows)
-	var preview_panel := HouseStyle.card(army_preview)
-	preview_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_preview_panel = preview_panel
-	right.add_child(preview_panel)
+	well.add_child(army_preview)
 	# Empty / loading / error state over the same well, so a wait never reads as blank.
 	state_panel = StatePanel.new()
 	state_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	state_panel.action_pressed.connect(_on_fetch_from_link)
 	state_panel.use_house_style()
-	preview_panel.add_child(state_panel)
+	well.add_child(state_panel)
 	_show_empty_state()
 
 	var btn_row := HBoxContainer.new()
 	btn_row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 	btn_row.alignment = BoxContainer.ALIGNMENT_END
-	right.add_child(btn_row)
+	stack.add_child(btn_row)
 	cancel_btn = HouseStyle.button("Cancel", HouseStyle.BUTTON, HouseStyle.H_ACTION)
 	cancel_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
 	cancel_btn.pressed.connect(_on_cancel)
@@ -219,6 +235,7 @@ func _link_button(text: String, colour: Color) -> Button:
 	b.flat = true
 	b.add_theme_color_override("font_color", colour)
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.focus_mode = Control.FOCUS_NONE   # a quiet link, as the house buttons: no white focus box on open
 	return b
 
 
@@ -242,7 +259,7 @@ func _fill_recent() -> void:
 		list_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(list_name)
 		var system := str(entry.system)
-		var tag := _mono(GameSystem.short(system).to_upper() if GameSystem.is_known(system) else system.to_upper(),
+		var tag := _tag(GameSystem.short(system) if GameSystem.is_known(system) else system,
 			HouseStyle.GOLD if system == table_system else HouseStyle.MUTED)
 		row.add_child(tag)
 		row.add_child(_mono("%d PTS" % int(entry.points), HouseStyle.MUTED))
@@ -355,7 +372,9 @@ func _update_preview() -> void:
 	army_name.add_theme_font_size_override("font_size", HouseStyle.FONT_VALUE)
 	head.add_child(army_name)
 	var system := _preview_army.game_system
-	head.add_child(HouseStyle.label(GameSystem.label(system) if GameSystem.is_known(system) else system, HouseStyle.NOTE))
+	head.add_child(_tag(GameSystem.label(system) if GameSystem.is_known(system) else system, HouseStyle.GOLD))
+	if not _preview_army.book_version.is_empty():
+		head.add_child(_tag("Rules " + ".".join(_preview_army.book_version.split(".").slice(0, 2)), HouseStyle.MUTED))
 	_preview_rows.add_child(head)
 	var facts := "%d PTS · %d UNITS" % [_preview_army.points, _preview_army.units.size()]
 	if _preview_army.model_count > 0:
@@ -365,12 +384,11 @@ func _update_preview() -> void:
 		var weapon_strs: Array[String] = []
 		for w in unit.weapons:
 			weapon_strs.append("%dx %s" % [w.count, w.name] if w.count > 1 else w.name)
-		var words := VBoxContainer.new()
+		var words := HouseStyle.label(unit.custom_name if not unit.custom_name.is_empty() else unit.name, HouseStyle.BODY)
 		words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		words.add_theme_constant_override("separation", 0)
-		words.add_child(HouseStyle.label(unit.custom_name if not unit.custom_name.is_empty() else unit.name, HouseStyle.BODY))
-		words.add_child(HouseStyle.label("  ".join(["Q%d+ D%d+" % [unit.quality, unit.defense]] + ([", ".join(weapon_strs)] if not weapon_strs.is_empty() else [])), HouseStyle.CAPTION))
-		var row := HBoxContainer.new()
+		var row := HBoxContainer.new()   # one line per unit (sheet 04); the profile is the row's tooltip
+		row.tooltip_text = "  ".join(["Q%d+ D%d+" % [unit.quality, unit.defense]] + ([", ".join(weapon_strs)] if not weapon_strs.is_empty() else []))
+		row.mouse_filter = Control.MOUSE_FILTER_PASS
 		row.custom_minimum_size.y = 42
 		row.add_child(words)
 		var count := HouseStyle.label("× %d" % unit.size, HouseStyle.CAPTION)
@@ -386,6 +404,23 @@ func _update_preview() -> void:
 		rule.color = Color(HouseStyle.LINE, 0.6)
 		rule.custom_minimum_size.y = 1
 		_preview_rows.add_child(rule)
+
+
+## A bordered mono chip (sheet 04 .tag): capitals in the colour, a rim of it, a key cap's radius.
+func _tag(text: String, colour: Color) -> Label:
+	var l := _mono(text, colour)
+	l.uppercase = true   # drawn in capitals; the text keeps its case
+	l.add_theme_font_size_override("font_size", HouseStyle.FONT_SMALL)
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color(0, 0, 0, 0)
+	box.border_color = Color(colour, HouseStyle.TAG_RIM_ALPHA)
+	box.set_border_width_all(HouseStyle.BORDER)
+	box.set_corner_radius_all(HouseStyle.RADIUS_KEYCAP)
+	box.content_margin_left = HouseStyle.PAD_PILL_X
+	box.content_margin_right = HouseStyle.PAD_PILL_X
+	l.add_theme_stylebox_override("normal", box)
+	return l
 
 
 func _mono(text: String, colour: Color) -> Label:

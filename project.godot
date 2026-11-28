@@ -121,6 +121,7 @@ lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
 lights_and_shadows/positional_shadow/soft_shadow_filter_quality=3
 textures/default_filters/anisotropic_filtering_level=4
 anti_aliasing/quality/msaa_3d=2
+environment/defaults/default_clear_color=Color(0.054902, 0.086275, 0.109804, 1)
 environment/ssao/enabled=true
 environment/ssao/radius=1.0
 environment/ssao/intensity=1.0

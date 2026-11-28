@@ -7908,7 +7908,10 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
     let mut lender = morale_hero(statics, state, root, seams);
     if let Some((h, quality)) = hero_aura_quality(statics, state, i, ctx.quality, seams) {
         ctx.quality = quality;
-        let line = format!("{} (Tough 9+) lends its Quality to {shown}'s morale test (Q{}+)", statics[state.roster.profile[h]].name, quality);
+        // HERO-AURA-LINE: the line names the book's own floor - the big games' "(Tough 9+)", none in the skirmish books.
+        let floor = state.book(i).hero_aura_at(seams.rules_epoch).min_tough;
+        let label = if floor > 0 { format!(" (Tough {floor}+)") } else { String::new() };
+        let line = format!("{}{label} lends its Quality to {shown}'s morale test (Q{}+)", statics[state.roster.profile[h]].name, quality);
         shot.log.push(line.clone());
         say_rule(tray, "morale", state.player[i], || line);
         lender = None;

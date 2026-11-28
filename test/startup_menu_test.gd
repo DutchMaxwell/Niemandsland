@@ -538,3 +538,18 @@ func test_the_core_notice_title_is_gold_and_the_version_line_has_its_dot() -> vo
 	assert_str(title.get_theme_color("font_color").to_html(false)).is_equal(HouseStyle.GOLD.to_html(false))
 	card.ok_button.pressed.emit()
 	assert_str(_menu.view.version.text).contains("OnePageRules  ·  ")
+
+
+## Gap review 28.11. (sheet 06b): after "Create table" the setup faded out onto the engine's grey (76, 76, 76) for about
+## 0.3 s - the menu hidden, the loading picture still fading in from 0. Now the clear colour is the sheet colour and the
+## loading picture stands opaque from its first frame (red before: clear colour (0.3, 0.3, 0.3), no such helper).
+func test_the_hand_over_never_shows_the_engine_grey() -> void:
+	var clear: Color = ProjectSettings.get_setting("rendering/environment/defaults/default_clear_color", Color(0.3, 0.3, 0.3))
+	assert_bool(clear.is_equal_approx(HouseStyle.SHEET_FILL)).override_failure_message("clear colour %s" % clear).is_true()
+	assert_bool(_menu.has_method("_add_loading_overlay")).override_failure_message("no opaque hand-over overlay").is_true()
+	if not _menu.has_method("_add_loading_overlay"):
+		return
+	var overlay: LoadingOverlay = _menu.call("_add_loading_overlay")
+	await get_tree().process_frame
+	assert_float(overlay._content.modulate.a).override_failure_message("the loading picture fades in over bare grey").is_equal(1.0)
+	overlay.queue_free()

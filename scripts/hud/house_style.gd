@@ -48,6 +48,7 @@ const SELECTED_ALPHA := 0.20
 const GOLD_HOVER_LIGHTEN := 0.08
 const GOLD_PRESS_DARKEN := 0.12
 const DISABLED_ALPHA := 0.40
+const TAG_RIM_ALPHA := 0.55     # the rim of a mono chip (sheet 04 .tag: system, rules, a recent list's system)
 const DANGER_INK_LIFT := 0.15   # danger text lifted to ~5:1 on a panel (DANGER itself reads ~4.1:1 at 14 px)
 
 # ===== Geometry (px at the 1920x1080 base; the canvas_items stretch scales the rest) =====
