@@ -1,7 +1,7 @@
 //! Step 29b (ruling D-29-R1, "defender picks how"): the even Blast split's remainder is the defender's choice
 //! `blast_split:<shooter>:<target>` on the step API; without an answer the core's own (target first) stands.
 use super::*;
-use crate::acts::PENDING_EPOCH_BLAST_EVEN;
+use crate::acts::EPOCH_108_BLAST_EVEN;
 use crate::sim::tests::volley_landings::volley_line;
 use crate::IN2M;
 use crate::unit::ShootProfile;
@@ -50,7 +50,7 @@ fn play(epoch: u32, choice: Option<&str>) -> (ActStep, Vec<i64>) {
 
 #[test]
 fn the_defender_is_asked_who_takes_the_remainder() {
-    match play(PENDING_EPOCH_BLAST_EVEN, Some("")).0 {
+    match play(EPOCH_108_BLAST_EVEN, Some("")).0 {
         ActStep::NeedChoice { id, options, owner, .. } => {
             assert_eq!((id.as_str(), owner.as_str()), (ID, "b"));
             assert_eq!(options, vec!["b".to_string(), "bh".to_string()]);
@@ -61,13 +61,13 @@ fn the_defender_is_asked_who_takes_the_remainder() {
 
 #[test]
 fn the_answer_moves_the_remainder_and_no_answer_keeps_the_target_first() {
-    let (done, saves) = play(PENDING_EPOCH_BLAST_EVEN, None);
+    let (done, saves) = play(EPOCH_108_BLAST_EVEN, None);
     assert!(matches!(done, ActStep::Done { .. }), "{done:?}");
     assert_eq!(saves.first(), Some(&2), "the core's own: the target takes the remainder: {saves:?}");
-    let (done, saves) = play(PENDING_EPOCH_BLAST_EVEN, Some("bh"));
+    let (done, saves) = play(EPOCH_108_BLAST_EVEN, Some("bh"));
     assert!(matches!(done, ActStep::Done { .. }), "{done:?}");
     assert_eq!(saves.first(), Some(&1), "the defender put it on bh: {saves:?}");
-    match play(PENDING_EPOCH_BLAST_EVEN, Some("ah")).0 {
+    match play(EPOCH_108_BLAST_EVEN, Some("ah")).0 {
         ActStep::Refused { reason, .. } => assert_eq!(reason, "ah is not an option of blast_split:a:b (options: b | bh)"),
         other => panic!("expected Refused, got {other:?}"),
     }
@@ -75,7 +75,7 @@ fn the_answer_moves_the_remainder_and_no_answer_keeps_the_target_first() {
 
 #[test]
 fn below_the_epoch_nothing_is_asked() {
-    let (done, saves) = play(PENDING_EPOCH_BLAST_EVEN - 1, Some(""));
+    let (done, saves) = play(crate::acts::EPOCH_107_RUIN_LEDGES, Some(""));
     assert!(matches!(done, ActStep::Done { .. }), "below the epoch the split is the old one, no choice: {done:?}");
     assert_eq!(saves.first(), Some(&2));
 }

@@ -1,7 +1,7 @@
 {
  "cases": [
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -141,7 +141,7 @@
    "seed": 0
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -279,7 +279,7 @@
    "seed": 17
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -417,7 +417,7 @@
    "seed": 49
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -555,7 +555,7 @@
    "seed": 225
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -695,7 +695,7 @@
    "seed": 3
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -835,7 +835,7 @@
    "seed": 7
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -973,7 +973,7 @@
    "seed": 512
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -1113,7 +1113,7 @@
    "seed": 999
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "3",
     "prompt_opened": "1"
@@ -1255,7 +1255,7 @@
    "seed": 0
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "2",
     "prompt_opened": "1"
@@ -1394,7 +1394,7 @@
    "seed": 17
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "3",
     "prompt_opened": "1"
@@ -1534,7 +1534,7 @@
    "seed": 49
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "2",
     "prompt_opened": "1"
@@ -1673,7 +1673,7 @@
    "seed": 225
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "3",
     "prompt_opened": "1"
@@ -1815,7 +1815,7 @@
    "seed": 3
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "3",
     "prompt_opened": "1"
@@ -1957,7 +1957,7 @@
    "seed": 7
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "3",
     "prompt_opened": "1"
@@ -2097,7 +2097,7 @@
    "seed": 512
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "3",
     "prompt_opened": "1"
@@ -2239,7 +2239,7 @@
    "seed": 999
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -2377,7 +2377,7 @@
    "seed": 0
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -2514,7 +2514,7 @@
    "seed": 17
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -2652,7 +2652,7 @@
    "seed": 49
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -2789,7 +2789,7 @@
    "seed": 225
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -2927,7 +2927,7 @@
    "seed": 3
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -3065,7 +3065,7 @@
    "seed": 7
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -3203,7 +3203,7 @@
    "seed": 512
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "1",
     "prompt_opened": "1"
@@ -3341,7 +3341,7 @@
    "seed": 999
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "3",
     "prompt_opened": "1"
@@ -3479,7 +3479,7 @@
    "seed": 0
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "2",
     "prompt_opened": "1"
@@ -3616,7 +3616,7 @@
    "seed": 17
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "3",
     "prompt_opened": "1"
@@ -3753,7 +3753,7 @@
    "seed": 49
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "2",
     "prompt_opened": "1"
@@ -3890,7 +3890,7 @@
    "seed": 225
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "3",
     "prompt_opened": "1"
@@ -4028,7 +4028,7 @@
    "seed": 3
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "3",
     "prompt_opened": "1"
@@ -4166,7 +4166,7 @@
    "seed": 7
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "3",
     "prompt_opened": "1"
@@ -4303,7 +4303,7 @@
    "seed": 512
   },
   {
-   "epoch": 107,
+   "epoch": 108,
    "extra": {
     "picks_fed": "3",
     "prompt_opened": "1"
@@ -4443,7 +4443,7 @@
  ],
  "family": "mixed_kit",
  "provenance": {
-  "epoch": 107,
+  "epoch": 108,
   "git_sha": "04e6eee1b885eabe6513c907f9ac80240041d3db",
   "registry_sha256": "425decb0652c95d5718359a87107f2f3738e3287e9d67a13369b0a00a3f0df0e",
   "registry_system": "gf"

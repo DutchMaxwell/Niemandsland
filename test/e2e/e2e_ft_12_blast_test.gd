@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## Feature test FT-12: the even Blast split and the defender's choice, Firefight (gff) and Skirmish (aofs), hot-seat table,
-## PINNED to the pending epoch 108 (PENDING_EPOCH_BLAST_EVEN; the table ships 103 - R-FT1). FF36 p.13 l.1156-1161 and its
+## PINNED to the pending epoch 108 (EPOCH_108_BLAST_EVEN; the table ships 103 - R-FT1). FF36 p.13 l.1156-1161 and its
 ## example (AS36 the same): each hit is multiplied by X and split evenly between the target and every enemy unit within
 ## 3 in of it, the DEFENDER picks how, each unit takes at most as many hits as it has models.
 ## Case 1 (the book's example): P1's Blast(6) 1 hit at Squad (2 models) with three 1-model P2 units within 3 in and one
