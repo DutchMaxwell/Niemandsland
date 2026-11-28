@@ -56,10 +56,22 @@ func open(unseen_only: bool = false, in_game: bool = false) -> bool:
 	_in_game = in_game
 	_refresh()
 	popup_centered()
+	_fit_to_cards()
 	_close_button.grab_focus()
 	if WhatsNewContent.mark_seen(state_path) != OK:
 		push_warning("WhatsNewDialog: could not save the last-seen version")
 	return true
+
+## The sheet takes the height its cards need, up to DIALOG_SIZE: text-only cards no longer
+## leave the lower half of a tall sheet empty (gap review 28.11., sheet 08). Measured one
+## frame on, once the cards are wrapped at their width.
+func _fit_to_cards() -> void:
+	await get_tree().process_frame
+	var spare := (_cards.get_parent() as Control).size.y - _cards.size.y
+	if visible and spare > 1.0:
+		size.y = int(size.y - spare)
+		move_to_center()
+
 
 func _input(event: InputEvent) -> void:
 	if visible and event.is_action_pressed("ui_cancel"):
