@@ -35,7 +35,7 @@ for ((i = FIRST; i < FIRST + PROCS; i++)); do
   done
   ARGS=()
   while IFS= read -r suite; do ARGS+=(-a "res://${suite}"); done < "slice_$i.txt"
-  XDG_DATA_HOME="$TMPROOT/ud$i" godot --headless --path . \
+  NML_LANDING_INVARIANT=1 XDG_DATA_HOME="$TMPROOT/ud$i" godot --headless --path . \
     -s -d res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
     --ignoreHeadlessMode -c -rd "reports/slice$i" "${ARGS[@]}" > "gdunit_output_$i.log" 2>&1 &
   PIDS+=("$!"); IDX+=("$i")
@@ -46,6 +46,9 @@ for k in "${!PIDS[@]}"; do
   wait "${PIDS[$k]}"; st=$?
   echo "::group::slice $i (exit $st)"; cat "gdunit_output_$i.log"; echo "::endgroup::"
   if [ "$st" -ne 0 ]; then echo "::error::slice $i exited $st"; RC=1; fi
+  # LANDING-INVARIANT: the core says "LANDING-GAP" when a step's landings do not explain its end state (the table would keep
+  # a model the core removed); any such line fails the group.
+  if grep -q "LANDING-GAP" "gdunit_output_$i.log"; then grep "LANDING-GAP" "gdunit_output_$i.log" | sed 's/^/::error::/'; RC=1; fi
   UD="$TMPROOT/ud$i/godot/app_userdata/Niemandsland"
   for d in "$UD"/*_cache; do
     [ -d "$d" ] && cp -rn "$d" "$SEED/"

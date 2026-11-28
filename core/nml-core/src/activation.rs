@@ -1005,7 +1005,20 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             ActStep::NeedRoll { index, faces, kind, count, target, owner, owner_key, lines: [moved, lines].concat(), landings }
         }
         Step::Refused { reason, .. } => ActStep::Refused { index: t.len(), reason },
-        Step::Done(Ok((state, shot)), lines, landings) => ActStep::Done { state, lines: [moved, lines].concat(), landings, unported: shot.unported },
+        Step::Done(Ok((end, shot)), lines, landings) => {
+            // LANDING-INVARIANT (off by default; CI turns it on): every wound the core landed must reach the table as a landing -
+            // the table lands wounds and losses ONLY from them. `strict` panics (the core test step), any other value says
+            // "LANDING-GAP" on stderr (the gdUnit shards fail on that word). The self-play cast sub-phase (`seams.cast`) is
+            // left out: the table never runs it (it hands its casts in, `cast: false`), so its landings reach no table.
+            if let (Some(mode), false) = (std::env::var_os("NML_LANDING_INVARIANT"), seams.cast) {
+                let gaps = crate::landing::landing_gaps(state, &end, &landings);
+                assert!(mode != "strict" || gaps.is_empty(), "LANDING-GAP {unit}: {gaps:?}");
+                for gap in gaps {
+                    eprintln!("LANDING-GAP {unit}: {gap}");
+                }
+            }
+            ActStep::Done { state: end, lines: [moved, lines].concat(), landings, unported: shot.unported }
+        }
         Step::Done(Err(u), ..) => ActStep::Refused { index: t.len(), reason: format!("{u:?}") },
     }
 }
