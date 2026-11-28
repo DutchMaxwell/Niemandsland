@@ -171,7 +171,9 @@ func card_shows(gu: GameUnit, needle: String) -> bool:
 
 ## Import the card-list JSON at `path` for `player` through the table's real import door (system check included).
 func import_list(path: String, player: int) -> OPRApiClient.OPRArmy:
-	var army := OPRApiClient.new().build_army_offline(JSON.parse_string(FileAccess.get_file_as_string(path)))
+	var client := OPRApiClient.new()   # a Node: freed here, or the suite reports it as an orphan (CI exit 101)
+	var army := client.build_army_offline(JSON.parse_string(FileAccess.get_file_as_string(path)))
+	client.free()
 	await main._on_opr_army_imported(army, player, false)
 	await E2EBoot.settle(_tree)
 	return army
