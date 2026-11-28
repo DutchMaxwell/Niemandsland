@@ -68,6 +68,9 @@ var _stage_marks: Array[StageMark] = []
 var _stage_labels: Array[Label] = []
 
 var _content: Control = null
+## False: the cover stands at once (the menu -> table hand-over hides the menu in the same frame, so a fade-in would
+## show the bare clear colour for its length - the grey wash of gap review 28.11.).
+var fade_in := true
 var _label: Label = null
 var _fill: Control = null   # a ColorRect in compact mode, a gradient in full mode
 var _target := 0.0
@@ -159,7 +162,7 @@ func _ready() -> void:
 	_percent = _text(line, "0 %", HouseStyle.GOLD, HouseStyle.FONT_EYEBROW_LARGE)
 	for mono: Label in [_stage, _percent]:
 		mono.add_theme_font_override("font", HouseStyle.mono())
-	if not UiMotion.reduced():
+	if fade_in and not UiMotion.reduced():
 		_content.modulate.a = 0.0
 		_fade_in = create_tween()
 		_fade_in.tween_property(_content, "modulate:a", 1.0, HouseStyle.DUR_SCREEN_IN)

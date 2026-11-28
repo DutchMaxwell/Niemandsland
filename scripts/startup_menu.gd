@@ -272,10 +272,10 @@ func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> vo
 	var setup := _table_setup
 	_table_setup = null
 	await _commit_beat(setup._create)
+	_transition_to_game()   # the loading picture first, opaque at once (it also hides the menu) ...
 	if UiMotion.reduced():
 		setup.hide()
-	_fade_setup(setup, 1.0, 0.0, true)   # fades out under the loading picture's fade-in
-	_transition_to_game()
+	_fade_setup(setup, 1.0, 0.0, true)   # ... then the setup fades out over it
 
 
 ## NACHTMAHR's list index for step 04 of the setup (bundle, CDN, cache); the Solo card waits for it.
@@ -654,11 +654,7 @@ func _transition_to_game() -> void:
 	# (no grey flash). The game scene takes a few seconds to load; show the bar against
 	# the threaded load's real progress, then hand over to the loaded scene. main.gd
 	# dismisses the overlay once its own backdrop is up.
-	var overlay := LoadingOverlay.new()
-	overlay.add_to_group("transition_overlay")
-	get_tree().root.add_child(overlay)
-	overlay.set_label("LOADING")
-	_name_the_table(overlay)
+	var overlay := _add_loading_overlay()
 
 	if ResourceLoader.load_threaded_request(GAME_SCENE) != OK:
 		get_tree().change_scene_to_file(GAME_SCENE)  # fallback: no progress, but works
@@ -675,6 +671,18 @@ func _transition_to_game() -> void:
 			return
 		overlay.set_progress(progress[0] if progress.size() > 0 else 0.0)
 		await get_tree().process_frame
+
+
+## The hand-over's loading picture, opaque from its first frame: the menu is hidden in the same frame and the setup
+## fades out over it, so no frame shows the bare clear colour between them.
+func _add_loading_overlay() -> LoadingOverlay:
+	var overlay := LoadingOverlay.new()
+	overlay.fade_in = false
+	overlay.add_to_group("transition_overlay")
+	get_tree().root.add_child(overlay)
+	overlay.set_label("LOADING")
+	_name_the_table(overlay)
+	return overlay
 
 
 func _on_load_file_selected(path: String) -> void:
