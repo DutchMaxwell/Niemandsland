@@ -445,7 +445,7 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     // The climbs the AI's move pays (GF p.11), in the trail's world frame: none for Flying or below epoch 74.
     let flying = state.profile(si).special_rules.iter().any(|r| r == "Flying");
     let ledges = crate::mv::step::world_ledges_of(terrain, flying, seams.rules_epoch);
-    let (mut x, mut dropped) = (0.0f64, 0.0f64);
+    let (mut x, mut dropped, mut flown) = (0.0f64, 0.0f64, 0.0f64);
     let mut jump_lines: Vec<LogLine> = Vec::new();
     // Teleport / Ethereal (army book): once per activation, before attacking, the unit is PLACED within the rule's reach of
     // where it stands - a placement, not a walk. The table pays it before the core call (`teleport_used`), so a trail ends
@@ -491,6 +491,12 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
             None => 0.0,
         };
         dropped = dropped.max(drop_in);
+        // #3858 (rules-must-log): Flying passes the drop and jump rules (3.6 skirmish p.14); the height it flew down names
+        // itself below. Read as the tier levels under the start and the end, only where the book has drops and jumps.
+        if flying && rule_on(seams.rules_epoch, EPOCH_94_PARITY_BATCH) && jumps_on(state, si, seams) {
+            let level = |p: [f64; 2]| terrain.tier_in_at(p[0] / terrain.in2m(), p[1] / terrain.in2m());
+            flown = flown.max(level(a) - level(b));
+        }
         x = x.max(drop_in + if path.is_empty() { inch(a, b) } else { crate::mv::step::trail_walk_in(&path, &ledges).0 });
         paths.push(path);
     }
@@ -502,8 +508,11 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
     // Rules-must-log: the drop names itself once (the biggest of the unit's models).
     let drop_line = (dropped > 0.0).then(|| LogLine { rule: "drop", category: Category::Movement, side: state.player[si],
         text: format!("{}: Drop {dropped:.0} in - a drop is regular movement and counts its height", statics[state.roster.profile[si]].name), detail: None });
+    let flying_line = (flown > 0.01).then(|| LogLine { rule: "flying", category: Category::Movement, side: state.player[si],
+        text: format!("{}: Flying - down {flown:.0} in with no drop or jump test", statics[state.roster.profile[si]].name), detail: None });
+    let drop_line = drop_line.into_iter().chain(flying_line);
     if x <= y + 0.01 {
-        return Check::Ok { lines: drop_line.into_iter().chain(jump_lines).collect() };
+        return Check::Ok { lines: drop_line.chain(jump_lines).collect() };
     }
     // The Difficult cap names itself: "the Rush allowance is 6.0"" alone read as a wrong Rush band to the player.
     let why = if capped { " in Difficult terrain" } else { "" };
@@ -512,7 +521,7 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
         return Check::Refused { reason: text };
     }
     let detail = if capped { Some("Difficult terrain".to_string()) } else { (!a.widened_by.is_empty()).then(|| a.widened_by.join(", ")) };
-    Check::Ok { lines: drop_line.into_iter().chain(jump_lines).chain([LogLine { rule: "move_overrun", category: Category::Movement, side: state.player[si], text, detail }]).collect() }
+    Check::Ok { lines: drop_line.chain(jump_lines).chain([LogLine { rule: "move_overrun", category: Category::Movement, side: state.player[si], text, detail }]).collect() }
 }
 
 /// P4.0-5: the one choice the step API offers so far — the Takedown model pick (`sim::takedown_pick`'s

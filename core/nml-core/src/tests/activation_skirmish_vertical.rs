@@ -364,3 +364,17 @@ fn a_ruin_floor_ledge_plays_like_a_tier_ledge() {
     assert!((0..3).all(|k| (floor_jumps[0].3[k] - tier_jumps[0].3[k]).abs() < 1e-6), "{floor_jumps:?} vs {tier_jumps:?}");
 }
 
+
+/// #3858 (rules-must-log): a Flying unit going down a 5 in edge names Flying and the height in one line, from the Jumping
+/// epoch on; a walker's line stays the jump's, and below the Jumping epoch the flyer's move writes nothing new.
+#[test]
+fn a_flyers_drop_names_flying() {
+    let (c, _) = drop_off(5.0, "gff", &["Flying"], EPOCH_100_SKIRMISH_JUMP);
+    let Check::Ok { lines } = c else { panic!("{c:?}") };
+    let flying: Vec<_> = lines.iter().filter(|l| l.rule == "flying").map(|l| l.text.as_str()).collect();
+    assert_eq!(flying, vec!["Squad: Flying - down 5 in with no drop or jump test"], "{lines:?}");
+    let Check::Ok { lines } = drop_off(5.0, "gff", &[], EPOCH_100_SKIRMISH_JUMP).0 else { panic!("walker") };
+    assert!(!lines.iter().any(|l| l.rule == "flying"), "{lines:?}");
+    let Check::Ok { lines } = drop_off(5.0, "gff", &["Flying"], EPOCH_94_PARITY_BATCH).0 else { panic!("94") };
+    assert!(lines.is_empty(), "{lines:?}");
+}

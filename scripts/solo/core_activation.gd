@@ -650,6 +650,10 @@ static func drive(main, h: int, unit: GameUnit, transcript: Array, ai: bool,
 		if str(r["kind"]) == "defense" and roller != unit and not main._solo_is_ai_unit(roller) \
 				and main._solo_i_own_unit(roller):   # step 42 (O21): a local defender sees its saves coming, as on the table
 			await main._solo_ask_saves(unit, roller, _shot_weapon(unit, lines), int(r["faces"]), int(r["target"]), 0)
+		if kind == "dangerous" and not ai:
+			# #3858: the core rolls a player's Dangerous test with no sentence (P4.D-19); the table names the test the core
+			# asked for, with its dice count, before the dice line (`run_ai`'s beat writes the same line for the AI).
+			main._solo_log_dangerous_test(unit, int(r["faces"]))
 		var leg_before: String = main._solo_leg
 		if not mapped.is_empty():
 			main._solo_leg = str(mapped[1])   # AI-G4 H1a: dice.jsonl's `leg` of the roll

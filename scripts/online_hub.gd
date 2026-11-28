@@ -39,6 +39,7 @@ func _init() -> void:
 	left.add_child(caption)
 	name_field = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Player name")
 	name_field.max_length = PlayerIdentity.MAX_NAME_LEN
+	name_field.custom_minimum_size.y = HouseStyle.MENU_H_FIELD   # sheet 02 .field
 	name_field.text_submitted.connect(func(_typed: String) -> void: _on_prepare())
 	left.add_child(name_field)
 	var create := _block(MenuView._icon(&"table"), "Create a room", "Prepare a table for your group")
