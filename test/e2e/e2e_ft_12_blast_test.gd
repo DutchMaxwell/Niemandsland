@@ -63,12 +63,26 @@ func _gunner(sys: String, blast: int) -> GameUnit:
 	return a
 
 
+## The table side of the spread (LANDING-INVARIANT find): every neighbour keeps on the table exactly the models the core left it -
+## its start models less the unsaved hits its "Blast: <unit> takes ... - N unsaved" line names (Tough 1 models).
+func _neighbours_match_the_core(units: Array, sys: String) -> void:
+	for u in units:
+		var gu := u as GameUnit
+		var line: Array = _t.lines.filter(func(l: String) -> bool: return l.begins_with("Blast: %s takes " % gu.get_name()))
+		var unsaved := int(str(line[0]).get_slice(" - ", 1).get_slice(" ", 0)) if not line.is_empty() else 0
+		assert_int(gu.get_alive_count()).override_failure_message("%s: %s on the table after %d unsaved: %s" % [sys, gu.get_name(), unsaved, _t.lines]) \
+			.is_equal(maxi(0, gu.models.size() - unsaved))
+
+
 func _even_split_of_the_books_example(sys: String) -> void:
 	var a := _gunner(sys, 6)
 	var squad := _t.unit(sys, 2, "Squad", 2, 1, 0.0, 0.0)
 	_place(squad, 12.0, 0.0)
+	var near: Array = []
 	for spec in [["Near A", 12.0, -3.5], ["Near B", 15.5, 0.0], ["Near C", 12.0, 5.0], ["Far", 17.5, 1.5]]:
-		_place(_t.unit(sys, 2, spec[0], 1, 1, 0.0, 0.0), spec[1], spec[2])
+		var n := _t.unit(sys, 2, spec[0], 1, 1, 0.0, 0.0)
+		_place(n, spec[1], spec[2])
+		near.append(n)
 	var asked := await _shoot(a, squad, "")
 	assert_bool(asked).override_failure_message("%s: no real choice, no prompt" % sys).is_false()
 	assert_int(_t.count("Blast(6): 1 hit -> 2 on Squad, 3 on units within reach, 1 lost")) \
@@ -76,6 +90,7 @@ func _even_split_of_the_books_example(sys: String) -> void:
 	for n in ["Near A", "Near B", "Near C"]:
 		assert_int(_t.count("Gunner fires Mortar at %s — 1 hit" % n)).override_failure_message("%s: %s takes 1: %s" % [sys, n, _t.lines]).is_equal(1)
 	assert_bool(_t.lines.any(func(l: String) -> bool: return l.find("at Far") != -1)).override_failure_message("%s: Far takes none" % sys).is_false()
+	_neighbours_match_the_core(near, sys)
 
 
 func _the_defender_picks(sys: String) -> void:
@@ -88,6 +103,7 @@ func _the_defender_picks(sys: String) -> void:
 	assert_bool(asked).override_failure_message("%s: P2 is asked: %s" % [sys, _t.lines]).is_true()
 	assert_int(_t.count("Blast(3): 1 hit -> 1 on Squad, 2 on units within reach, 0 lost")) \
 		.override_failure_message("%s: the extra hit on Mates: %s" % [sys, _t.lines]).is_equal(1)
+	_neighbours_match_the_core([mates], sys)
 
 
 func test_gff_the_books_blast_6_example(timeout := 120000) -> void:

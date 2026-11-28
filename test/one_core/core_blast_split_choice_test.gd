@@ -81,6 +81,11 @@ func _volley(pick: String) -> String:
 
 		await get_tree().process_frame
 	assert_bool(asked).override_failure_message("the owner was asked: %s" % [_lines]).is_true()
+	# The table side of the spread (LANDING-INVARIANT find): Mates keeps on the table exactly the models the core left it.
+	var spill: Array = _lines.filter(func(l: String) -> bool: return l.begins_with("Blast: Mates takes "))
+	var unsaved := int(str(spill[0]).get_slice(" - ", 1).get_slice(" ", 0)) if not spill.is_empty() else 0
+	assert_int(mates.get_alive_count()).override_failure_message("Mates on the table after %d unsaved: %s" % [unsaved, _lines]) \
+		.is_equal(maxi(0, 2 - unsaved))
 	var blast: Array = _lines.filter(func(l: String) -> bool: return l.begins_with("Blast(3):"))
 	return str(blast[0]) if not blast.is_empty() else "no Blast line: %s" % [_lines]
 
