@@ -845,7 +845,7 @@ func _layout(refill := true) -> void:
 	_columns.custom_minimum_size.y = 0
 	for air in _left_air:
 		air.visible = false
-	if not narrow:
+	if not narrow and _columns.visible:   # an inner page (who, layout) lays itself out: the title block stays on top
 		_fill_height(area.y-2*(20 if compact else 36),8 if compact else 24)
 	# Wrapped labels measure their height at their CURRENT width, which the containers set only after this
 	# pass (a 1 px wide label reports ~1500 px): fill once more on the next frame, with every width final.
@@ -913,7 +913,7 @@ func _set_rail(on: bool) -> void:
 		var home: Node = _left if on and _columns.visible else _page   # the inner pages keep the title over them
 		if pair[0].get_parent() != home:
 			pair[0].reparent(home,false)
-		home.move_child(pair[0],pair[1] if on else pair[1]+1)
+		home.move_child(pair[0],pair[1] if home == _left else pair[1]+1)   # in the page: after the header
 	var slot := _rail_body.get_node("CreateSlot") as Control
 	for pair: Array in [[_summary_column,_rail_body if on else _footer],[_create,slot if on else _footer]]:
 		if pair[0].get_parent() != pair[1]:
