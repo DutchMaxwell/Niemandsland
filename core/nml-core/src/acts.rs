@@ -1123,12 +1123,15 @@ pub const EPOCH_106_CORE_TIERS: u32 = 106;
 ///   decide (a plain drop up to `LEDGE_CLIMB_MAX_IN`, a jump by `mv::jump::drop_kind`, else refused). Sight is unchanged.
 ///   Read only by `activation::cliff_drop_in`'s two callers (`check_move`, `jump_dice_of`).
 pub const EPOCH_107_RUIN_LEDGES: u32 = 107;
-pub const CURRENT_RULES_EPOCH: u32 = 107;
-/// Plan step 29a (ruling D-29-R1): the skirmish Blast spread splits the WHOLE attack's hits evenly over the target and its
-/// units within reach (`dice::blast_split_at`), not each original hit on its own with the remainder always on the target:
-/// 2 hits of Blast(3) over two units with room are 3 + 3, not 4 + 2. A single hit, or no neighbour, lands as before. A
-/// placeholder one past `CURRENT_RULES_EPOCH`; records stamped 107 or below replay byte-exact.
-pub const PENDING_EPOCH_BLAST_EVEN: u32 = 108;
+/// The EPOCH 108 BATCH (plan O-FT-5): the change that sat behind the `EPOCH_108_BLAST_EVEN` (108) placeholder is now one
+/// frozen constant, and `CURRENT_RULES_EPOCH` is bumped to 108 in the same change. Records stamped 107 or below replay
+/// byte-exact. The recorder mirror (`act_recorder.gd`) stamps 108 in the same change.
+/// - BLAST_EVEN (plan step 29a, ruling D-29-R1): the skirmish Blast spread splits the WHOLE attack's hits evenly over the
+///   target and its units within reach (`dice::blast_split_at`), not each original hit on its own with the remainder always
+///   on the target: 2 hits of Blast(3) over two units with room are 3 + 3, not 4 + 2; the remainder goes where the target's
+///   owner picks (29b). A single hit, or no neighbour, lands as before. Only where a book spreads Blast (the skirmish books).
+pub const EPOCH_108_BLAST_EVEN: u32 = 108;
+pub const CURRENT_RULES_EPOCH: u32 = 108;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
 /// hit_penalty 1, terrain_within_in 1` — aofs hidden_syndicates, gf/gff
@@ -2582,7 +2585,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 107, "the live epoch is EPOCH_107_RUIN_LEDGES");
+        assert_eq!(CURRENT_RULES_EPOCH, 108, "the live epoch is EPOCH_108_BLAST_EVEN");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2592,11 +2595,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":107}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":108}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 107"
+            "a fresh play_game() now stamps the bumped epoch, 108"
         );
     }
 
