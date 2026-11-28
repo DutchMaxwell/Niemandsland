@@ -528,3 +528,13 @@ func test_the_next_setup_opens_on_the_remembered_opponent() -> void:
 	probe._show_table_setup()
 	assert_str(probe._table_setup.opponent.who).is_equal("local")
 	probe._table_setup._on_close()
+
+
+## Sheet 08 / 01: the core notice is a warning, its title gold; the version line has its dot (red before: accent title,
+## no dot).
+func test_the_core_notice_title_is_gold_and_the_version_line_has_its_dot() -> void:
+	var card: PromptCard = _menu._show_core_missing_dialog()
+	var title := card.get("_title_label") as Label
+	assert_str(title.get_theme_color("font_color").to_html(false)).is_equal(HouseStyle.GOLD.to_html(false))
+	card.ok_button.pressed.emit()
+	assert_str(_menu.view.version.text).contains("OnePageRules  ·  ")

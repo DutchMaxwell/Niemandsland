@@ -11,6 +11,7 @@ const CM_TO_FEET := 1.0/30.48
 const PAGE_ASPECT := 1768.0/1080.0
 ## Spare window height grows the preview and the biome cards only down to these proportions.
 const HERO_MIN_ASPECT := 2.2
+const RAIL_HERO_ASPECT := 1.6   # the rail card's picture may grow to sheet 03's 594 x 372
 const RAIL_MIN_H := 900.0
 const SIX_MIN_W := 1000.0   # a left column this wide shows the six biomes in one row (step 83, sheet 03)
 const SIX_PHOTO_H := 150.0
@@ -467,6 +468,14 @@ func _build_ui() -> void:
 		keys.add_child(HouseStyle.label(pair[0],HouseStyle.KEYCAP))
 		keys.add_child(_label(pair[1]+"   ",12,HouseStyle.MUTED))
 	_create = _button("Create table     →")
+	var cap := HouseStyle.key_cap_on_gold("Enter")   # shown in the rail card only
+	cap.name = "EnterCap"
+	cap.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	cap.offset_left = -16
+	cap.offset_right = -16
+	cap.visible = false
+	_create.add_child(cap)
 	_create.custom_minimum_size = Vector2(230,50)
 	_create.pressed.connect(_confirm)
 	_footer.add_child(_create)
@@ -930,6 +939,16 @@ func _set_rail(on: bool) -> void:
 		value.size_flags_horizontal = Control.SIZE_EXPAND_FILL if on else Control.SIZE_FILL
 		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if on else HORIZONTAL_ALIGNMENT_LEFT
 	_create.custom_minimum_size = Vector2(0,56) if on else Vector2(230,50)
+	# In the card the gold action reads as on sheets 03/03b: "Create table" at 18 px semibold, left, its Enter cap right.
+	_create.text = "Create table" if on else "Create table     →"
+	_create.alignment = HORIZONTAL_ALIGNMENT_LEFT if on else HORIZONTAL_ALIGNMENT_CENTER
+	_create.add_theme_font_size_override("font_size",18 if on else 14)
+	_create.add_theme_font_override("font",HouseStyle.font(600) if on else FONT)
+	_create.get_node("EnterCap").visible = on
+	for state in ["normal","hover","pressed","focus"]:
+		var box := _create.get_theme_stylebox(state) as StyleBoxFlat
+		if box != null:
+			box.content_margin_left = 22 if on else 10
 
 
 ## The page fills the window height at every aspect: spare height grows the biome cards and the preview
@@ -946,7 +965,7 @@ func _fill_height(usable: float, separation: int) -> void:
 		_grid.columns = 6
 		for button in buttons:
 			button.custom_minimum_size.y = SIX_PHOTO_H+SIX_BAND_H
-		_grow([_hero],_hero.size.x/HERO_MIN_ASPECT,usable)   # the card's picture first, then the row takes the rest
+		_grow([_hero],_hero.size.x/RAIL_HERO_ASPECT,usable)   # the card's picture first, then the row takes the rest
 		_grow(buttons,(_grid.size.x-50)/6/SIX_MIN_ASPECT,usable)
 	for columns: int in ([] if _six_biomes() else [2,3]):
 		_grid.columns = columns

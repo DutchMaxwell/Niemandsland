@@ -23,8 +23,8 @@ CLASSES = {
                   if g.strip() and not g.startswith("#")],
         "list": "tools/ci_look_paths.txt",
         "doors": [("scripts/main.gd", "BoardgenGreybox.attach_from_env("),
-                  # test-only (plan step 27-pre P3, lead 26.11.): a rules e2e on a drawn board. Remove when the
-                  # player-facing generate path (D-GEN) exists; the e2e then uses that path.
+                  # the release door (GEN-4: main.apply_generated_board / restore_generated_board lay a generated
+                  # board); the rules e2e use it too (GEN-7, the test-only door is gone).
                   ("scripts/main.gd", "_board_look = BoardgenGreybox.attach(table, "),
                   # GEN-13 (lead 28.11.): the setup's board card asks whether the kit is cached through ONE main.gd static;
                   # no setup or menu file names the class.

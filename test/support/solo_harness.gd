@@ -98,10 +98,12 @@ static func drop(main: Node, moves: Array) -> void:
 	await main._on_units_dropped(moves)
 
 
-## Plan step 27-pre P3: a drawn generated board of `seed_value` / `theme` on the table,
-## through main's test-only door.
+## Plan step 27-pre P3 / GEN-7: a drawn generated board of `seed_value` / `theme` on a 4 x 4 ft
+## table, through the player's door (main.apply_generated_board): lay it before any model.
 static func generated_board(main: Node, seed_value: int, theme: String) -> void:
-	main._attach_generated_board_for_test(seed_value, theme)
+	main.table.setup_table(Vector2(4, 4))
+	var id := "ruined_town" if theme.to_lower() == "ruintown" else "tiefwerk"
+	main.apply_generated_board(GeneratedBoard.resolve(id, seed_value))
 
 
 ## GEN-9: NACHTMAHR's guided deployment as main runs it - main's blocked tests from the
