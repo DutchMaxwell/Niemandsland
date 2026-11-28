@@ -237,3 +237,14 @@ func test_a_wide_window_shows_two_columns() -> void:
 	for _i in 2:
 		await get_tree().process_frame
 	assert_float(_dlg.army_preview.get_parent().get_global_rect().position.y).is_greater(_dlg.share_link_input.get_global_rect().end.y)
+
+
+## Sheet 04's finish: the field names are muted eyebrows in capitals, "Import army" carries its Enter cap and stands 44 px
+## high (red before: sentence-case captions, no cap, 40 px).
+func test_the_import_reads_as_sheet_04() -> void:
+	var caption := _label("Army Forge share link or list ID")
+	assert_bool(caption != null and caption.uppercase).override_failure_message("not an eyebrow").is_true()
+	var import := _button("Import army")
+	var caps := import.find_children("*", "Label", false, false).filter(func(l: Node) -> bool: return (l as Label).text == "Enter")
+	assert_int(caps.size()).is_equal(1)
+	assert_float(import.custom_minimum_size.y).is_equal(float(HouseStyle.MENU_H_ACTION))
