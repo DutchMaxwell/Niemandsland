@@ -229,3 +229,25 @@ func test_from_900_px_the_step_headings_carry_their_hints() -> void:
 	assert_int(caption.size()).override_failure_message("no size caption in upper case").is_equal(1)
 	var small := await _open(Vector2i(1280, 720))
 	assert_int(shown.call(small, "The biome defines the visual style. Terrain stays yours to place.").size()).is_equal(0)
+
+
+## Step 84 (system cards, sheet 03): from 900 px a system card is 136 px with the family eyebrow, the name in two lines
+## at 20 px, a BATTLE / SKIRMISH chip with the board in mono and a gold tick on the chosen one. At 720 the cards stay
+## one line each (red before: a one-line strip card at every size).
+func test_from_900_px_the_system_cards_are_the_sheets() -> void:
+	var dialog := await _open(Vector2i(1920, 1080))
+	var card := dialog._system_buttons[dialog.selected_system] as Control
+	assert_float(card.size.y).is_greater_equal(130.0)
+	var texts: Array = card.find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).is_visible_in_tree()).map(func(l: Node) -> String: return (l as Label).text)
+	assert_array(texts).contains(["GRIMDARK", "BATTLE", "6 × 4 FT"])
+	var ticks: Array = card.find_children("*", "TextureRect", true, false).filter(
+		func(t: Node) -> bool: return (t as Control).is_visible_in_tree())
+	assert_int(ticks.size()).override_failure_message("no tick on the chosen card").is_equal(1)
+	var other := dialog._system_buttons["aof"] as Control
+	assert_int(other.find_children("*", "TextureRect", true, false).filter(
+		func(t: Node) -> bool: return (t as Control).is_visible_in_tree()).size()).is_equal(0)
+	var small := await _open(Vector2i(1280, 720))
+	var small_texts: Array = (small._system_buttons["gf"] as Node).find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).is_visible_in_tree()).map(func(l: Node) -> String: return (l as Label).text)
+	assert_array(small_texts).not_contains(["GRIMDARK"])
