@@ -31,7 +31,10 @@ func _assert_layout(window: Vector2i) -> float:
 	var card: Control = dialog._biome_buttons.values()[0]
 	var card_aspect := card.size.x / card.size.y
 	var hero_aspect := dialog._hero.size.x / dialog._hero.size.y
-	assert_float(card_aspect).override_failure_message("%s: biome card %.2f:1" % [window, card_aspect]).is_between(2.0, 2.8)
+	if dialog._grid.columns == 6:   # one row of tall cards (step 83, sheet 03): the picture is at least 150 px high
+		assert_float(dialog._cards[0].size.y).override_failure_message("%s: picture %d px" % [window, int(dialog._cards[0].size.y)]).is_greater_equal(150.0)
+	else:
+		assert_float(card_aspect).override_failure_message("%s: biome card %.2f:1" % [window, card_aspect]).is_between(2.0, 2.8)
 	assert_float(hero_aspect).override_failure_message("%s: preview %.2f:1" % [window, hero_aspect]).is_between(2.2, 2.9)
 	assert_float(dialog._page.get_combined_minimum_size().y) \
 		.override_failure_message("%s: the page needs scrolling" % window).is_less_equal(dialog._scroll.size.y)
@@ -151,3 +154,59 @@ func test_from_900_px_the_right_column_is_the_rail_card() -> void:
 	var small := await _open(Vector2i(1280, 720))
 	assert_bool(small.find_child("RailCard", true, false).is_ancestor_of(small._create)) \
 		.override_failure_message("the 720 page lost its footer button").is_false()
+
+
+## Step 83 (sheet 03): with the rail card's wide left column the six biomes stand in one row, each picture at least
+## 150 px high over a 44 px name band in 16 px; the chosen card has a 2 px gold rim. 1280x720 keeps its grid (red
+## before: a 3 x 2 grid of flat cards).
+func test_the_six_biomes_stand_in_one_row_at_1080p() -> void:
+	var dialog := await _open(Vector2i(1920, 1080))
+	assert_int(dialog._grid.columns).is_equal(6)
+	var tops: Array = dialog._biome_buttons.values().map(func(b: Control) -> int: return int(b.get_global_rect().position.y))
+	assert_int(tops.max() - tops.min()).override_failure_message("the cards are not one row").is_less_equal(1)
+	assert_float(dialog._cards[0].size.y).is_greater_equal(150.0)
+	var chosen := dialog._biome_buttons[dialog.selected_biome] as Button
+	assert_int((chosen.get_theme_stylebox("normal") as StyleBoxFlat).border_width_top).is_equal(2)
+	var small := await _open(Vector2i(1280, 720))
+	assert_int(small._grid.columns).is_less_equal(3)
+
+
+## Step 84 (sheet 03): from 900 px the header carries the breadcrumb and a bordered "Back to main menu" with Esc, the
+## title block reads "NEW TABLE" / "Prepare your table." at 44 px and stands with step 01 in the left column, so the rail
+## card starts level with it. At 1280x720 the header and title stay as they were (red before: none of it).
+func test_from_900_px_the_header_and_title_are_the_sheets() -> void:
+	var dialog := await _open(Vector2i(1920, 1080))
+	var texts: Array = dialog.find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).is_visible_in_tree()).map(func(l: Node) -> String: return (l as Label).text.strip_edges())
+	assert_array(texts).contains(["MAIN MENU  /  PREPARE YOUR TABLE", "NEW TABLE", "Esc"])
+	var wide := dialog.find_child("BackWide", true, false) as Button
+	assert_bool(wide != null and wide.is_visible_in_tree()).override_failure_message("no bordered way back").is_true()
+	assert_bool(dialog._back.is_visible_in_tree()).is_false()
+	var title := dialog.find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).text == "Prepare your table.")[0] as Label
+	assert_int(title.get_theme_font_size("font_size")).is_equal(44)
+	assert_bool(dialog._left.is_ancestor_of(title)).override_failure_message("the title is not in the left column").is_true()
+	var card := dialog.find_child("RailCard", true, false) as Control
+	assert_float(absf(card.get_global_rect().position.y - title.get_global_rect().position.y)).is_less(60.0)
+	var small := await _open(Vector2i(1280, 720))
+	assert_bool(small._back.is_visible_in_tree()).is_true()
+	var small_title := small.find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).text == "Prepare your table.")[0] as Label
+	assert_bool(small._left.is_ancestor_of(small_title)).is_false()
+
+
+## The inner pages (who, layout) keep the title block over them at 1080p although state one carries it in its left
+## column (step 84).
+func test_the_inner_pages_keep_the_title_at_1080p() -> void:
+	get_tree().root.size = Vector2i(1920, 1080)
+	var dialog: TableSizeDialog = auto_free(TableSizeDialog.new())
+	dialog.layout_step = true
+	add_child(dialog)
+	for _i in 3:
+		await get_tree().process_frame
+	dialog._show_state("who")
+	await get_tree().process_frame
+	assert_bool(dialog._intro.is_visible_in_tree()).override_failure_message("the who page lost the title").is_true()
+	dialog._show_state("")
+	await get_tree().process_frame
+	assert_bool(dialog._left.is_ancestor_of(dialog._intro)).is_true()

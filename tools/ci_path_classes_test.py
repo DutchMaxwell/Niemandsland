@@ -102,3 +102,12 @@ def test_mp_run_is_skipped_only_when_every_changed_file_is_docs_or_look():
                   look + ["tools/ci_look_paths.txt"], ["tools/boardgen/sub/x.py"]):
         assert not skipped(files), f"MP must run for {files}"  # the last one: the filter is stricter than the classifier, never looser
         assert not (skipped(files) and not is_only(files, "look"))
+
+
+def test_the_kit_wait_door_is_main_gd_only(tmp_path):
+    """GEN-13 (lead 28.11.): the setup's board card reaches BoardgenKit.wait_state through ONE door in main.gd; the same
+    call from a setup or menu file (plant) still fails."""
+    door = "\treturn BoardgenKit.wait_state(holder, kit_theme)\n"
+    assert _tree(tmp_path, scripts__main_DOT_gd=BASE["scripts/main.gd"] + door) == []
+    assert _tree(tmp_path, scripts__setup_layout_step_DOT_gd=door)
+    assert _tree(tmp_path, scripts__main_DOT_gd=BASE["scripts/main.gd"] + "\tvar k := BoardgenKit.new(theme)\n")

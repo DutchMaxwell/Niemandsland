@@ -88,6 +88,7 @@ static func boot(suite: Node, seat: String) -> SkirmishTable:
 ## A clean table in the same seat for the next case (a seed scan, a twin): no units, no turn state, round 1, no lines.
 func reset() -> void:
 	CoreActivation.reset_all(main)
+	main.object_manager._deselect_all()   # no selection may outlive the models freed below
 	for u in main.opr_army_manager.game_units.values():
 		for m in (u as GameUnit).models:
 			(m as ModelInstance).node.queue_free()
@@ -156,6 +157,35 @@ func card_shows(gu: GameUnit, needle: String) -> bool:
 				and not c.is_queued_for_deletion():
 			return true
 	return false
+
+
+## Import the card-list JSON at `path` for `player` through the table's real import door (system check included).
+func import_list(path: String, player: int) -> OPRApiClient.OPRArmy:
+	var army := OPRApiClient.new().build_army_offline(JSON.parse_string(FileAccess.get_file_as_string(path)))
+	await main._on_opr_army_imported(army, player, false)
+	await E2EBoot.settle(_tree)
+	return army
+
+
+## The game-over summary's text as the player reads it, or "" while none stands.
+func summary_text() -> String:
+	for c in main.get_children():
+		if c is CanvasLayer and c.name == "GameOverLayer" and not c.is_queued_for_deletion():
+			var label := c.find_child("Summary", true, false) as Label
+			return label.text if label != null else ""
+	return ""
+
+
+## A table of `feet` (the size the setup screen hands the table: 4 x 4 ft for the skirmish systems).
+func table_feet(feet: Vector2) -> void:
+	main._set_table_size(feet)
+	await runner.simulate_frames(2)
+
+
+## The table's Start Game / Ready button (its deployment gate included).
+func press_start() -> void:
+	main._on_start_game_pressed()
+	await E2EBoot.settle(_tree)
 
 
 ## The card's Activate (the committed start). True when the activation is open afterwards.

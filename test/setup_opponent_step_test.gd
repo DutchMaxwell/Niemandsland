@@ -205,3 +205,21 @@ func test_at_the_table_the_key_legend_follows_the_button() -> void:
 	words = (step.get("_keys") as Control).find_children("*", "Label", false, false).map(
 		func(l: Label) -> String: return l.text)
 	assert_array(words).contains(["bring the second army"])
+
+
+## Gap review 27.11. (sheet 03b): the rail starts level with row 01, its summary rows are 40 px with a hairline under
+## each (red before: the rail at the title's height, 34 px rows without hairlines).
+func test_the_rail_starts_at_row_01_and_its_rows_have_hairlines() -> void:
+	var step := _step()
+	await get_tree().process_frame
+	var rail := step.find_child("Rail", true, false) as Control
+	var left := step.get("left") as Control
+	assert_float(absf(rail.get_global_rect().position.y - left.get_global_rect().position.y)).is_less_equal(2.0)
+	var rows: Array = rail.find_children("*", "HBoxContainer", true, false).filter(
+		func(l: Node) -> bool: return l.get_child_count() == 2 and (l.get_child(0) as Label).text in ["SYSTEM", "BIOME", "SIZE", "OPPONENT"])
+	assert_int(rows.size()).is_equal(4)
+	for row: Control in rows:
+		assert_float(row.size.y).is_greater_equal(40.0)
+		var under := row.get_parent().get_child(row.get_index() + 1) if row.get_index() + 1 < row.get_parent().get_child_count() else null
+		assert_bool(under is ColorRect and (under as Control).custom_minimum_size.y == 1.0).override_failure_message(
+			"no hairline under %s" % (row.get_child(0) as Label).text).is_true()

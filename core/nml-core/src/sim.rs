@@ -1136,6 +1136,55 @@ fn push_holds(before: &State, now: &State, si: usize, ti: usize, attacked: &[usi
     now.player[ti] != now.player[si] && attacked.contains(&ti) && !before.shaken[ti] && now.shaken[ti] && now.alive[ti] > 0
 }
 
+/// Step 29d-2: the defender's own placement after a push (`push_replace`): `<slot>:<x>,<y>,<z>` entries joined by `;`. Each
+/// named model goes there; then every other model must stand within 1 in of the pushed model `m`, base to base, on open
+/// ground and on no other model - else why not. The line names who the owner placed.
+fn place_rest(next: &mut State, ti: usize, m: usize, answer: &str, cover: Cover) -> Result<String, String> {
+    let mut placed = Vec::new();
+    for entry in answer.split(';').filter(|e| !e.is_empty()) {
+        let p = push_answer(next, ti, next.key(ti), entry)?;
+        if p.model == m {
+            return Err(format!("model {} is the pushed model", m + 1));
+        }
+        next.positions[ti][p.model] = p.to;
+        placed.push(p.model);
+    }
+    for k in (0..next.positions[ti].len()).filter(|&k| k != m) {
+        if beyond_1in(next, ti, m, k, TRANSPORT_EPS_M) {
+            return Err(format!("model {} stands more than 1 in from the pushed model", k + 1));
+        }
+    }
+    for &k in &placed {
+        let (q, rk) = (next.positions[ti][k], next.radii[ti].get(k).copied().unwrap_or(0.0));
+        if matches!(cover, Cover::Board(t) if t.solid_at(q[0] / IN2M, q[2] / IN2M)) {
+            return Err(format!("model {} stands inside a building", k + 1));
+        }
+        let clash = (0..next.positions.len()).filter(|&u| next.alive[u] > 0).any(|u| next.positions[u].iter().zip(next.radii[u].iter()).enumerate()
+            .any(|(j, (o, &ro))| !(u == ti && j == k) && (q[0] - o[0]).hypot(q[2] - o[2]) < rk + ro - 1e-6));
+        if clash {
+            return Err(format!("model {} stands on another model", k + 1));
+        }
+    }
+    let list = placed.iter().map(|k| format!("model {}", k + 1)).collect::<Vec<_>>().join(", ");
+    Ok(if list.is_empty() { String::new() } else { format!("; the owner placed {list} within 1 in of it") })
+}
+
+/// Step 29d: the `push_to` answer `<slot>:<x>,<y>,<z>` (world metres) as a push of `tkey`'s model, or why it is none -
+/// not that form, or no model of the target (the attacker moves "one model from the target", 3.6 p.15).
+fn push_answer(state: &State, ti: usize, tkey: &str, answer: &str) -> Result<crate::activation::PushInput, String> {
+    let bad = || format!("{answer} is not a spot (<slot>:<x>,<y>,<z>)");
+    let (slot, xyz) = answer.split_once(':').ok_or_else(bad)?;
+    let v: Vec<f64> = xyz.split(',').map(|n| n.trim().parse::<f64>()).collect::<Result<_, _>>().map_err(|_| bad())?;
+    let model = slot.parse::<usize>().map_err(|_| bad())?;
+    if v.len() != 3 {
+        return Err(bad());
+    }
+    if model >= state.positions[ti].len() {
+        return Err(format!("model {} is no model of {tkey}", model + 1));
+    }
+    Ok(crate::activation::PushInput { target: tkey.to_string(), model, to: [v[0], v[1], v[2]] })
+}
+
 /// The pushed model's new spot (3.6 p.15: "move one model from the target by up to 2 in in any direction"): `Ok` with the
 /// inches it moves and, when the spot lies 2 in or more below it, the inches it falls ("pushed off an elevated position at
 /// least 2 in tall"); or why not - no such model, over 2 in, up a ledge, inside a building, or overlapping another model.
@@ -13367,59 +13416,78 @@ fn resolve_with(
         }
     }
 
-    // --- PUSH (3.6 skirmish p.15: "When a unit is Shaken after being attacked, the attacker may try to push it") --- the
-    // attacker's offer (`Input::Push`), see `push_holds`.
+    // --- PUSH (3.6 skirmish p.15: "When a unit is Shaken after being attacked, the attacker may try to push it") --- step 29d
+    // (D-29-R2): the attacker decides after the dice - per unit `push_holds` names, the choice `push:<attacker>:<target>`, at
+    // most one push per attack; on yes one die (4+), then the spot `push_to:<attacker>:<target>` (`<slot>:<x>,<y>,<z>`).
+    // A push decided up front (`Tray::offer_push`) is the same answer. No answer: no push, said once per unit.
     if let Some((tray, shot)) = dice.as_mut() {
-        if let (Some(p), true) = (tray.push().cloned(), next.book(si).vertical_moves && rule_on(seams.rules_epoch, crate::acts::EPOCH_101_SKIRMISH_PUSH)) {
+        if next.book(si).vertical_moves && rule_on(seams.rules_epoch, crate::acts::EPOCH_101_SKIRMISH_PUSH) {
             let name = statics[pi_s].name.clone();
-            let line = match next.roster.index.get(&p.target).copied() {
-                Some(ti) if push_holds(state, &next, si, ti, &shot.attacked) => {
-                    // One die, 4+: the attacker may move one model of the target up to 2 in (3.6 p.15).
-                    let tname = &statics[next.roster.profile[ti]].name;
-                    tray.owner_next(Some(si));
-                    let faces = tray.roll(1);
-                    let face = faces.first().copied().unwrap_or(0);
-                    shot.rolls.push(crate::dice::Roll { kind: "push", count: 1, target: 4, faces, owner: name.clone() });
-                    if face < 4 {
-                        format!("Push: {name} rolls {face} to push {tname} - no push on 1-3")
-                    } else {
-                        match push_spot(&next, ti, &p, cover) {
-                            Ok((moved_in, fall)) => {
-                                next.positions[ti][p.model] = p.to;
-                                // Falling (3.6 p.15): pushed off 2 in or more, the model rolls one die per inch, each 1-3 a wound on
-                                // it. The pushed unit is not the active one, so no activation ends (ruling D10).
-                                let fell = fall.map(|h| {
-                                    tray.owner_next(Some(ti));
-                                    let faces = tray.roll((h - 1e-6).ceil().max(0.0) as usize);
-                                    let w = faces.iter().filter(|&&f| f <= 3).count() as i64;
-                                    shot.rolls.push(crate::dice::Roll { kind: "fall", count: faces.len() as i64, target: 4, faces: faces.clone(), owner: tname.clone() });
-                                    let take = w.min(next.wounds[ti].get(p.model).copied().unwrap_or(0));
-                                    land_wounds_in_order(&mut next, ti, take, vec![p.model]);
-                                    format!(" off a {h:.0} in drop - it falls, {faces:?}, {w} wound{} on 1-3", if w == 1 { "" } else { "s" })
-                                }).unwrap_or_default();
-                                let alive = next.positions[ti].get(p.model).is_some_and(|q| *q == p.to);
-                                let rest = if alive { push_regroup(&mut next, ti, p.model, cover) } else { String::new() };
-                                format!("Push: {name} rolls {face} and pushes {tname} model {} {moved_in:.1} in{fell}{rest}", p.model + 1)
-                            }
-                            Err(why) => format!("Push: {name} rolls {face}, but {why} - nothing moves"),
-                        }
-                    }
-                }
-                Some(ti) => format!("Push: no push - {} is not Shaken by this attack", statics[next.roster.profile[ti]].name),
-                None => format!("Push: no push - {} is no unit of this game", p.target),
-            };
-            shot.log.push(line.clone());
-            say_rule(tray, "push", next.player[si], || line);
-        } else if tray.push().is_none() && next.book(si).vertical_moves && rule_on(seams.rules_epoch, crate::acts::EPOCH_101_SKIRMISH_PUSH) {
-            // No push declared (the AI never declares one; ruling D10 / step 19): where one would hold, say so once per unit.
+            let skey = next.key(si).to_string();
+            let decided = tray.push().cloned();
             let mut seen: Vec<usize> = Vec::new();
             for &ti in &shot.attacked.clone() {
-                if !seen.contains(&ti) && push_holds(state, &next, si, ti, &shot.attacked) {
-                    seen.push(ti);
-                    let line = format!("Push: {} does not push {}", statics[pi_s].name, statics[next.roster.profile[ti]].name);
+                if seen.contains(&ti) || !push_holds(state, &next, si, ti, &shot.attacked) {
+                    continue;
+                }
+                seen.push(ti);
+                let (tkey, tname) = (next.key(ti).to_string(), statics[next.roster.profile[ti]].name.clone());
+                let up_front = decided.clone().filter(|p| p.target == tkey);
+                let yes = up_front.is_some() || tray.push_choice(&format!("push:{skey}:{tkey}"), &skey) == Some(true);
+                if !yes {
+                    let line = format!("Push: {name} does not push {tname}");
                     shot.log.push(line.clone());
                     say_rule(tray, "push", next.player[si], || line);
+                    continue;
                 }
+                // One die, 4+: the attacker may move one model of the target up to 2 in (3.6 p.15).
+                tray.owner_next(Some(si));
+                let faces = tray.roll(1);
+                let face = faces.first().copied().unwrap_or(0);
+                shot.rolls.push(crate::dice::Roll { kind: "push", count: 1, target: 4, faces, owner: name.clone() });
+                let to_id = format!("push_to:{skey}:{tkey}");
+                let line = if face < 4 {
+                    format!("Push: {name} rolls {face} to push {tname} - no push on 1-3")
+                } else {
+                    let answer = up_front.map(Ok).or_else(|| tray.reach_free(&to_id, &skey).filter(|a| a != "skip").map(|a| push_answer(&next, ti, &tkey, &a)));
+                    match answer.map(|p| p.and_then(|p| push_spot(&next, ti, &p, cover).map(|r| (p, r)))) {
+                        None => format!("Push: {name} rolls {face} to push {tname} - no spot named, nothing moves"),
+                        Some(Err(why)) => {
+                            tray.refuse_free(&to_id, format!("Push: {why}"));
+                            format!("Push: {name} rolls {face}, but {why} - nothing moves")
+                        }
+                        Some(Ok((p, (moved_in, fall)))) => {
+                            next.positions[ti][p.model] = p.to;
+                            // Falling (3.6 p.15): pushed off 2 in or more, the model rolls one die per inch, each 1-3 a wound on
+                            // it. The pushed unit is not the active one, so no activation ends (ruling D10).
+                            let fell = fall.map(|h| {
+                                tray.owner_next(Some(ti));
+                                let faces = tray.roll((h - 1e-6).ceil().max(0.0) as usize);
+                                let w = faces.iter().filter(|&&f| f <= 3).count() as i64;
+                                shot.rolls.push(crate::dice::Roll { kind: "fall", count: faces.len() as i64, target: 4, faces: faces.clone(), owner: tname.clone() });
+                                let take = w.min(next.wounds[ti].get(p.model).copied().unwrap_or(0));
+                                land_wounds_in_order(&mut next, ti, take, vec![p.model]);
+                                format!(" off a {h:.0} in drop - it falls, {faces:?}, {w} wound{} on 1-3", if w == 1 { "" } else { "s" })
+                            }).unwrap_or_default();
+                            let alive = next.positions[ti].get(p.model).is_some_and(|q| *q == p.to);
+                            // Step 29d-2 (3.6 p.15: "then the opponent must place any other models from the unit within 1"
+                            // of it"): the defender's `push_replace:<target>` - its own spots, or "auto" / no answer = the D14 placer.
+                            let rep_id = format!("push_replace:{tkey}");
+                            let rest = match (alive, tray.reach_free(&rep_id, &tkey)) {
+                                (false, _) => String::new(),
+                                (true, Some(a)) if a != "auto" => place_rest(&mut next, ti, p.model, &a, cover).unwrap_or_else(|why| {
+                                    tray.refuse_free(&rep_id, format!("Push: {why}"));
+                                    String::new()
+                                }),
+                                (true, _) => push_regroup(&mut next, ti, p.model, cover),
+                            };
+                            format!("Push: {name} rolls {face} and pushes {tname} model {} {moved_in:.1} in{fell}{rest}", p.model + 1)
+                        }
+                    }
+                };
+                shot.log.push(line.clone());
+                say_rule(tray, "push", next.player[si], || line);
+                break;
             }
         }
     }
