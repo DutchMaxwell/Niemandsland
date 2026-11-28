@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 ## solid_cells and the board's CONTAINER cells), and on the surface of its cell (its height = the cell's tier height).
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
+const ParityTable := preload("res://test/parity/parity_table.gd")
 const INCH := 0.0254
 const TRAY := Vector3(5.0, 0.0, 0.0)
 const SEED := 42
@@ -81,3 +82,50 @@ func test_nachtmahr_deploys_inside_its_band_on_legal_surfaces(do_skip := not Cla
 	# the check can fail: a model at ground height in a raised cell is off its surface
 	var raised := heights.find(heights.filter(func(h: Variant) -> bool: return float(h) > 0.0)[0])
 	assert_bool(absf(0.0 - float(heights[raised])) > 0.3).override_failure_message("plant: a ground model in a raised cell passes").is_true()
+
+
+## GEN-9 (c): NACHTMAHR activates on the board - three gff riflemen on ground cells of its band, a human rifleman on a ground
+## cell across the board - with no SCRIPT ERROR (the run would stop), and every AI model ends on a legal surface: at its cell's
+## tier height, outside a solid cell.
+@warning_ignore('unused_parameter')
+func test_nachtmahr_activates_on_the_board_and_stays_on_legal_surfaces(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded", timeout := 180000) -> void:
+	assert_bool(_main.apply_generated_board(GeneratedBoard.resolve("tiefwerk", SEED))).is_true()
+	await E2EBoot.settle(get_tree(), 8)
+	var t := AiActRecorder.tiers_of_board(_main.generated_board())
+	var heights: Array = t["tiers"]["level_in"]
+	var centre := func(cell: int) -> Vector3:
+		return Vector3(((cell % 16) * 3.0 + 1.5 - 24.0) * INCH, 0.0, ((cell / 16) * 3.0 + 1.5 - 24.0) * INCH)
+	var ground := func(rows: Array) -> Array:
+		return range(256).filter(func(c: int) -> bool: return rows.has(c / 16) and float(heights[c]) == 0.0 \
+			and not (t["solid_cells"] as Array).has(c))
+	var mine: Array = ground.call([1, 2])
+	var theirs: Array = ground.call([13, 14])
+	var ai: Array = []
+	for i in 3:
+		var u := ParityTable._make_unit(_main, {"player": 2, "name": "Ai%d" % i, "models": 1, "x_in": 0.0, "z_step_in": 0.0,
+			"quality": 4, "defense": 4, "tough": 1, "game_system": "gff", "faction_folder": "robot_legions", "rules": []},
+			{"name": "Rifle", "range_in": 24, "attacks": 1, "count": 1, "rules": []})
+		(u.models[0] as ModelInstance).node.global_position = centre.call(mine[i * (mine.size() / 3)])
+		ai.append(u)
+	var foe := ParityTable._make_unit(_main, {"player": 1, "name": "Foe", "models": 1, "x_in": 0.0, "z_step_in": 0.0,
+		"quality": 4, "defense": 4, "tough": 3, "game_system": "gff", "faction_folder": "robot_legions", "rules": []},
+		{"name": "Rifle", "range_in": 24, "attacks": 1, "count": 1, "rules": []})
+	(foe.models[0] as ModelInstance).node.global_position = centre.call(theirs[theirs.size() / 2])
+	await E2EBoot.settle(get_tree())
+	var acted := 0
+	for i in ai.size():
+		var gu: GameUnit = _main.solo_controller.activate_next_ai_unit()
+		if gu != null:
+			acted += 1
+			var r: Dictionary = _main.solo_controller.last_report
+			print("GEN9c act %s action=%s shoot=%s dist=%.1f" % [gu.get_name(), r.get("action"), r.get("shoot"), float(r.get("dist_in", 0.0))])
+		await E2EBoot.settle(get_tree())
+	assert_int(acted).override_failure_message("not every AI unit activated").is_equal(3)
+	for u: GameUnit in ai:
+		var p: Vector3 = (u.models[0] as ModelInstance).node.global_position
+		var cell := clampi(int(floor((p.z / INCH + 24.0) / 3.0)), 0, 15) * 16 + clampi(int(floor((p.x / INCH + 24.0) / 3.0)), 0, 15)
+		var where := "%s at (%.1f, %.1f, %.2f) in, tier %s" % [u.get_name(), p.x / INCH, p.z / INCH, p.y / INCH, heights[cell]]
+		print("GEN9c ", where)
+		assert_bool((t["solid_cells"] as Array).has(cell)).override_failure_message("in a solid cell: " + where).is_false()
+		assert_float(p.y / INCH).override_failure_message("off its cell's surface: " + where).is_equal_approx(float(heights[cell]), 0.3)
