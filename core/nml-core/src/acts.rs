@@ -1131,6 +1131,11 @@ pub const EPOCH_107_RUIN_LEDGES: u32 = 107;
 ///   on the target: 2 hits of Blast(3) over two units with room are 3 + 3, not 4 + 2; the remainder goes where the target's
 ///   owner picks (29b). A single hit, or no neighbour, lands as before. Only where a book spreads Blast (the skirmish books).
 pub const EPOCH_108_BLAST_EVEN: u32 = 108;
+/// PENDING (epoch 109, plan SKIRMISH-CATALOGUE): the skirmish catalogues (`rules_mechanics_gff/aofs.json`) had no
+/// primitive for Precision Charge (+1 to hit on the charge) or the unit-borne Imprecise (-1 to hit), so both never fired
+/// in a Firefight / AoF: Skirmish game. Their rows, copied from the gf / aof sibling where the 3.6 army-book text reads the
+/// same, carry `"since_epoch": 109` (`rules::Entry::since_epoch`): records stamped 108 or below replay byte-exact.
+pub const EPOCH_109_SKIRMISH_SHOT_MODS: u32 = 109;
 pub const CURRENT_RULES_EPOCH: u32 = 108;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,

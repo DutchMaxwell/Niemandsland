@@ -759,6 +759,16 @@
     "rating": "X"
    }
   },
+  "Precision Charge": {
+   "primitive": "Shot Modifier",
+   "rated": false,
+   "book_version": "3.6.0",
+   "params": {
+    "hit_bonus": 1,
+    "when": "charge"
+   },
+   "since_epoch": 109
+  },
   "Regeneration": {
    "primitive": "Regeneration",
    "rated": false,
@@ -7704,6 +7714,15 @@
      "hit_bonus": 1,
      "melee_only": true
     }
+   },
+   "Imprecise": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.6.0",
+    "params": {
+     "hit_bonus": -1
+    },
+    "since_epoch": 109
    },
    "Increased Shooting Range Aura": {
     "primitive": "Royal Legion",

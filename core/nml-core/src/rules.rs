@@ -455,6 +455,9 @@ fn gd_int(s: &str) -> i64 {
 pub struct Entry {
     pub primitive: Option<String>,
     pub params: Value,
+    /// The first rules epoch the entry answers at (`"since_epoch"`; None = always): a catalogue row added for a later epoch
+    /// stays invisible to records stamped below it, so they replay byte-exact.
+    pub since_epoch: Option<u32>,
 }
 
 impl Entry {
@@ -498,6 +501,7 @@ fn entries_of(map: &Value) -> HashMap<String, Entry> {
                 Entry {
                     primitive: v.get("primitive").and_then(|p| p.as_str()).map(String::from),
                     params: v.get("params").cloned().unwrap_or(Value::Null),
+                    since_epoch: v.get("since_epoch").and_then(|s| s.as_u64()).map(|s| s as u32),
                 },
             );
         }
@@ -541,14 +545,15 @@ impl RulesMap {
         if self.empty {
             return None;
         }
+        let live = |e: &&Entry| e.since_epoch.is_none_or(|s| crate::acts::rule_on(self.rules_epoch, s));
         if !faction.is_empty() && faction != COMMON {
             if let Some(f) = self.resolved_faction(faction).and_then(|k| self.factions.get(&k)) {
-                if let Some(e) = f.get(rule_name) {
+                if let Some(e) = f.get(rule_name).filter(live) {
                     return Some(e);
                 }
             }
         }
-        self.common.get(rule_name)
+        self.common.get(rule_name).filter(live)
     }
 
     /// The faction's OWN rule names (no common fallback), alias-resolved — the
