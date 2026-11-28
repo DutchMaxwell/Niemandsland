@@ -162,6 +162,19 @@ func test_the_news_card_shows_the_first_title_and_opens_the_notes() -> void:
 		.override_failure_message("card words: %s" % str(words)).is_true()
 	var count := WhatsNewContent.new().cards().size()
 	assert_bool(words.has("%d highlights" % count)).is_true()
+	# sheet 01: the release in three parts ("0.3.15", not "0.3.15.0-ALPHA"),
+	# and "Read ›" right after the count
+	var eyebrow := (menu.view.get("_news_eyebrow") as Label).text
+	var parts := WhatsNewContent.version().get_slice("-", 0).split(".").slice(0, 3)
+	var release := ".".join(parts).to_upper()
+	assert_bool(eyebrow.ends_with(release)).override_failure_message(eyebrow).is_true()
+	var count_label := menu.view.get("_news_count") as Label
+	await get_tree().process_frame
+	var reads := card.find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).text == "Read")
+	var read := reads[0] as Label
+	var gap := read.get_global_rect().position.x - count_label.get_global_rect().end.x
+	assert_float(gap).is_less(30.0)
 	menu.view.show_route("help")
 	assert_bool(card.visible) \
 		.override_failure_message("the card stays over an open route panel").is_false()

@@ -240,9 +240,10 @@ func _fill_grid(key: String) -> void:
 			words.add_child(chip)
 		for label: Label in words.find_children("*", "Label", true, false):
 			label.mouse_filter = MOUSE_FILTER_IGNORE
-		if i == data[3]:   # the next lesson: the gold rim and the lighter fill
+		if i == data[3]:   # the next lesson: the gold rim and the lighter fill (sheet 07 .ch.next)
 			var rim := HouseStyle.menu_theme().get_stylebox(&"normal", &"Button").duplicate() as StyleBoxFlat
-			rim.bg_color = HouseStyle.ROW_HOVER
+			rim.bg_color = HouseStyle.CARD_CHOSEN
+			rim.draw_center = true   # the theme's button box may draw its rim only (as #3838)
 			rim.border_color = HouseStyle.GOLD
 			card.add_theme_stylebox_override(&"normal", rim)
 		row.add_child(card)
