@@ -22625,6 +22625,12 @@ func generated_board() -> Dictionary:
 	return {"seed": int(_board_look.get("layout_seed")), "theme": str(_board_look.get("layout_theme")).to_lower()}
 
 
+## GEN-13 door (lead 28.11.: the one door from the setup): the board card asks `BoardgenKit.wait_state` before a table
+## exists - the menu has no main, so it calls this static through the script. Data only to the caller.
+static func board_kit_state(holder: Node, kit_theme: String) -> Dictionary:
+	return BoardgenKit.wait_state(holder, kit_theme)
+
+
 ## GEN-4, the release door: lays the generated board `record` (`GeneratedBoard.resolve`) on the table. Refused with a
 ## toast off a 4 x 4 ft table, without the core or with models on the table; a board already standing is replaced.
 func apply_generated_board(record: Dictionary) -> bool:

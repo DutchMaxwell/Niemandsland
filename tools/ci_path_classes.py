@@ -25,7 +25,10 @@ CLASSES = {
         "doors": [("scripts/main.gd", "BoardgenGreybox.attach_from_env("),
                   # test-only (plan step 27-pre P3, lead 26.11.): a rules e2e on a drawn board. Remove when the
                   # player-facing generate path (D-GEN) exists; the e2e then uses that path.
-                  ("scripts/main.gd", "_board_look = BoardgenGreybox.attach(table, ")],
+                  ("scripts/main.gd", "_board_look = BoardgenGreybox.attach(table, "),
+                  # GEN-13 (lead 28.11.): the setup's board card asks whether the kit is cached through ONE main.gd static;
+                  # no setup or menu file names the class.
+                  ("scripts/main.gd", "return BoardgenKit.wait_state(holder, kit_theme)")],
         "env": "NML_BOARDGEN_SEED",
     },
 }
