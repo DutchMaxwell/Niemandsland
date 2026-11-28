@@ -700,3 +700,11 @@ fn leaf_opener_only_parses_from_a_header_and_defaults_off() {
     assert!(!read_act_header(&head("")).unwrap().knobs.leaf_opener_only);
     assert!(!Knobs::default().leaf_opener_only);
 }
+
+#[test]
+fn leaf_frac_strength_parses_from_a_header_and_defaults_off() {
+    let head = |knobs: &str| format!(r#"{{"kind":"header","profiles":{{}},"knobs":{{{knobs}}}}}"#);
+    assert!(read_act_header(&head(r#""leaf_frac_strength":true"#)).unwrap().knobs.leaf_frac_strength);
+    assert!(!read_act_header(&head("")).unwrap().knobs.leaf_frac_strength);
+    assert!(!Knobs::default().leaf_frac_strength);
+}
