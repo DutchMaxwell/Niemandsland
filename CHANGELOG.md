@@ -7,6 +7,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Changed — rules corrections
+- **Rules epoch 105 is live: a deployment zone takes a model only when its whole base is inside.** On deployment maps
+  with shaped zones (diagonals, discs, side bands) the AI no longer sets a base that overhangs the zone line; the
+  standard front-line deployment already kept every base inside and is unchanged. Games recorded before epoch 105 replay
+  unchanged.
 - **Rules epoch 104 is live: each command upgrade lives with its own model in Age of Fantasy: Skirmish.** A command
   group's Musician is lost only when the model that carries it dies, not with the Banner's bearer; a list that names
   neither keeps one bearer for both. Games recorded before epoch 104 replay unchanged.

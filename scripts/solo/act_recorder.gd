@@ -216,7 +216,7 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## endpoints and Melee Shrouding band, Counter / Destructive / Piercing Hunter in melee) are stamped 92 with EPOCH_92_MELEE_CAUSES.
 ## The AI skirting Dangerous ground (a plain move's goal read and the sideways re-plan), the 3.6 faction folders resolving their rules
 ## and the volley's spell rider switched off are stamped 93 with EPOCH_93_DANGER_RULES_RIDER.
-static var rules_epoch: int = 104
+static var rules_epoch: int = 105
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are

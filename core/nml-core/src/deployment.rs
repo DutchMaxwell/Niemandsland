@@ -8,7 +8,7 @@
 
 use crate::acts::{
     rule_on, EPOCH_16_FREE_PLACEMENT, EPOCH_33_REDEPLOYMENT, EPOCH_64_DEPLOY_LARGE_RESPOT, EPOCH_72_PLAYTEST_RULES,
-    EPOCH_73_V36, PENDING_EPOCH_ZONE_BASE_EDGE,
+    EPOCH_73_V36, EPOCH_105_ZONE_BASE_EDGE,
 };
 use crate::objectives::Zone;
 use crate::rng::GodotRng;
@@ -586,9 +586,9 @@ pub fn zones_contain_base(zones: &[Zone], p: (f64, f64), r_m: f64) -> bool {
     base_edge_offsets(r_m).iter().all(|o| zones_contain(zones, (p.0 + f64::from(o[0]), p.1 + f64::from(o[1]))))
 }
 
-/// The deploy placer's zone test for one base: from `PENDING_EPOCH_ZONE_BASE_EDGE` the whole base, below it the centre.
+/// The deploy placer's zone test for one base: from `EPOCH_105_ZONE_BASE_EDGE` the whole base, below it the centre.
 pub(crate) fn zone_admits_base(zones: &[Zone], p: (f64, f64), base_r: f64, rules_epoch: u32) -> bool {
-    if rule_on(rules_epoch, PENDING_EPOCH_ZONE_BASE_EDGE) { zones_contain_base(zones, p, base_r) } else { zones_contain(zones, p) }
+    if rule_on(rules_epoch, EPOCH_105_ZONE_BASE_EDGE) { zones_contain_base(zones, p, base_r) } else { zones_contain(zones, p) }
 }
 
 /// D5: is the world-metre point inside a catalog zone list (the twin of the table's
