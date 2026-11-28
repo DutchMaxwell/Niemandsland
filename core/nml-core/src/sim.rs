@@ -1344,9 +1344,18 @@ fn land_blast_spill(
                 &|_| (false, "trooper".into(), 0), &|_, _| None, None, None, &[], tray,
             );
             let before = (morale_alive(next, nj, seams), morale_wounds_left(next, nj, seams));
+            // LANDING-INVARIANT find: the spread's wounds land on the neighbour (and its joined heroes) as landings of their own -
+            // the table lands only landings, so without them the neighbour kept its models on the table.
+            let chain: Vec<(usize, Vec<[f64; 3]>, Vec<i64>)> = std::iter::once(nj).chain(next.attached[nj].iter().copied())
+                .map(|u| (u, next.positions[u].clone(), next.wounds[u].clone())).collect();
             land_pool_wounds(next, nj, r.wounds, seams.tray_exact, seams, &mut shot.log);
             for &(post, gx) in &r.deadly_groups {
                 land_deadly_group(next, nj, post, gx, seams, &mut None, &mut 0);
+            }
+            for (u, at, wounds) in chain {
+                if let Some(l) = landing_of(next, u, &at, &wounds, &tray.dead_slots(u)) {
+                    tray.land(|| l);
+                }
             }
             let took = before != (morale_alive(next, nj, seams), morale_wounds_left(next, nj, seams));
             let line = format!("Blast: {} takes {h} hit{} from {owner}'s {} - {} unsaved", un.name, if h == 1 { "" } else { "s" }, p.name, r.wounds + r.deadly_groups.iter().map(|g| g.0).sum::<i64>());
