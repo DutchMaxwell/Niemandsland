@@ -216,7 +216,7 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## endpoints and Melee Shrouding band, Counter / Destructive / Piercing Hunter in melee) are stamped 92 with EPOCH_92_MELEE_CAUSES.
 ## The AI skirting Dangerous ground (a plain move's goal read and the sideways re-plan), the 3.6 faction folders resolving their rules
 ## and the volley's spell rider switched off are stamped 93 with EPOCH_93_DANGER_RULES_RIDER.
-static var rules_epoch: int = 106
+static var rules_epoch: int = 107
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -338,9 +338,9 @@ const EPOCH_105_ZONE_BASE_EDGE := 105
 ## The core's `EPOCH_106_CORE_TIERS` (acts.rs, plan step 27-pre): from it the terrain line carries a generated board's
 ## ledges (`_tiers_for_line`).
 const EPOCH_106_CORE_TIERS := 106
-## The core's `PENDING_EPOCH_RUIN_LEDGES` (acts.rs, plan step 27-pre-R): from it a free ruin's floors are ledges to the
-## core's move check. Nothing in the table gates on it; it mirrors the core's placeholder for the tests.
-const PENDING_EPOCH_RUIN_LEDGES := 107
+## The core's `EPOCH_107_RUIN_LEDGES` (acts.rs, plan step 27-pre-R): from it a free ruin's floors are ledges to the core's
+## move check. Nothing in the table gates on it; it mirrors the core's constant for the tests.
+const EPOCH_107_RUIN_LEDGES := 107
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000

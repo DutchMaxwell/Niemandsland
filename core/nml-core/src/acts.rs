@@ -1115,17 +1115,19 @@ pub const EPOCH_105_ZONE_BASE_EDGE: u32 = 105;
 ///   moves) play on the board the player sees, where the core played a flat board. Read only by the recorder mirror
 ///   (`act_recorder.gd` `_tiers_for_line`); the core reads whatever terrain it is handed.
 pub const EPOCH_106_CORE_TIERS: u32 = 106;
-pub const CURRENT_RULES_EPOCH: u32 = 106;
-/// PENDING (plan step 27-pre-R, lead 26.11.): a free ruin's floors are ledges to the core - a model on a floor that walks
-/// off it drops (`Terrain::slab_drops`), in the SAME walk-ordered edges as a tier board's cliffs, so the same bands decide
-/// (a plain drop up to `LEDGE_CLIMB_MAX_IN`, a jump by `mv::jump::drop_kind`, else refused). Sight is unchanged. A
-/// placeholder one past `CURRENT_RULES_EPOCH`. Records stamped 106 or below replay byte-exact. Read only by
-/// `activation::cliff_drop_in`'s two callers (`check_move`, `jump_dice_of`).
-pub const PENDING_EPOCH_RUIN_LEDGES: u32 = 107;
+/// The EPOCH 107 BATCH (plan O-FT-5): the change that sat behind the `EPOCH_107_RUIN_LEDGES` (107) placeholder is now one
+/// frozen constant, and `CURRENT_RULES_EPOCH` is bumped to 107 in the same change. Records stamped 106 or below replay
+/// byte-exact. The recorder mirror (`act_recorder.gd`) stamps 107 in the same change.
+/// - RUIN_LEDGES (plan step 27-pre-R, lead 26.11.): a free ruin's floors are ledges to the core - a model on a floor that
+///   walks off it drops (`Terrain::slab_drops`), in the SAME walk-ordered edges as a tier board's cliffs, so the same bands
+///   decide (a plain drop up to `LEDGE_CLIMB_MAX_IN`, a jump by `mv::jump::drop_kind`, else refused). Sight is unchanged.
+///   Read only by `activation::cliff_drop_in`'s two callers (`check_move`, `jump_dice_of`).
+pub const EPOCH_107_RUIN_LEDGES: u32 = 107;
+pub const CURRENT_RULES_EPOCH: u32 = 107;
 /// Plan step 29a (ruling D-29-R1): the skirmish Blast spread splits the WHOLE attack's hits evenly over the target and its
 /// units within reach (`dice::blast_split_at`), not each original hit on its own with the remainder always on the target:
 /// 2 hits of Blast(3) over two units with room are 3 + 3, not 4 + 2. A single hit, or no neighbour, lands as before. A
-/// placeholder past `PENDING_EPOCH_RUIN_LEDGES` (107); records stamped 107 or below replay byte-exact.
+/// placeholder one past `CURRENT_RULES_EPOCH`; records stamped 107 or below replay byte-exact.
 pub const PENDING_EPOCH_BLAST_EVEN: u32 = 108;
 /// The GROUNDED STEALTH gate (15.09., D-STEALTH): the Stealth family's
 /// terrain-conditional alias (`Grounded Stealth | primitive Stealth,
@@ -2580,7 +2582,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 106, "the live epoch is EPOCH_106_CORE_TIERS");
+        assert_eq!(CURRENT_RULES_EPOCH, 107, "the live epoch is EPOCH_107_RUIN_LEDGES");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2590,11 +2592,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":106}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":107}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 106"
+            "a fresh play_game() now stamps the bumped epoch, 107"
         );
     }
 
