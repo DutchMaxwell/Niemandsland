@@ -208,6 +208,9 @@ func test_the_inner_pages_keep_the_title_at_1080p() -> void:
 	dialog._show_state("who")
 	await get_tree().process_frame
 	assert_bool(dialog._intro.is_visible_in_tree()).override_failure_message("the who page lost the title").is_true()
+	# ...under the header and at the top, not pushed to the foot of the page (the 28.11. capture, red before)
+	assert_int(dialog._intro.get_index()).is_greater(dialog._header.get_index())
+	assert_float(dialog._intro.get_global_rect().position.y).is_less(200.0)
 	dialog._show_state("")
 	await get_tree().process_frame
 	assert_bool(dialog._left.is_ancestor_of(dialog._intro)).is_true()
@@ -264,3 +267,18 @@ func test_the_rail_cards_create_table_reads_as_drawn() -> void:
 	assert_bool(cap != null and cap.visible).override_failure_message("no Enter cap").is_true()
 	var small := await _open(Vector2i(1280, 720))
 	assert_bool((small._create.get_node("EnterCap") as Control).visible).is_false()
+
+
+
+## At 1280x720 the who page keeps the setup's title on top as well (the 28.11. capture: it stood over the key legend).
+func test_the_who_page_keeps_the_title_on_top_at_720p() -> void:
+	get_tree().root.size = Vector2i(1280, 720)
+	var dialog: TableSizeDialog = auto_free(TableSizeDialog.new())
+	dialog.layout_step = true
+	add_child(dialog)
+	for _i in 3:
+		await get_tree().process_frame
+	dialog._show_state("who")
+	for _i in 3:
+		await get_tree().process_frame
+	assert_float(dialog._intro.get_global_rect().position.y).is_less(160.0)
