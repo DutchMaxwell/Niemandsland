@@ -104,13 +104,26 @@ static func generated_board(main: Node, seed_value: int, theme: String) -> void:
 	main._attach_generated_board_for_test(seed_value, theme)
 
 
-## GEN-9: NACHTMAHR's guided deployment as main runs it - main's blocked tests from the table, Front Line `depth_in`,
-## the AI on the negative edge (it won the roll-off) - with the human side out, so the AI places every unit it has.
+## GEN-9: NACHTMAHR's guided deployment as main runs it - main's blocked tests from the
+## table, Front Line `depth_in`, the AI on the negative edge (it won the roll-off) - with the
+## human side out, so the AI places every unit it has.
 static func ai_deploys_all(main: Node, depth_in := 12.0, seed_value := 5) -> void:
 	var blocked: Dictionary = AiDeployment.make_blocked_tests(main.terrain_overlay)
 	var feet: Vector2 = main.table.table_size
-	main._solo_deploy_fsm = {"phase": "side", "winner_is_ai": true, "human_turn": false, "human_out": false,
-		"objectives": [], "blocked_normal": blocked["normal"], "blocked_flying": blocked["flying"], "seed": seed_value,
-		"w": feet.x * 0.3048, "d": feet.y * 0.3048, "depth": depth_in * 0.0254, "human_placed": {}, "outcome": []}
+	main._solo_deploy_fsm = {
+		"phase": "side",
+		"winner_is_ai": true,
+		"human_turn": false,
+		"human_out": false,
+		"objectives": [],
+		"blocked_normal": blocked["normal"],
+		"blocked_flying": blocked["flying"],
+		"seed": seed_value,
+		"w": feet.x * 0.3048,
+		"d": feet.y * 0.3048,
+		"depth": depth_in * 0.0254,
+		"human_placed": {},
+		"outcome": [],
+	}
 	await main._solo_deploy_begin_side(true)
 	await main._solo_deploy_human_out()
