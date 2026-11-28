@@ -194,6 +194,15 @@ func summary_text() -> String:
 	return ""
 
 
+## Press the visible button whose text is `text` anywhere in the main scene (a board prompt's answer); false if none.
+func press_button(text: String) -> bool:
+	for b in main.find_children("*", "Button", true, false):
+		if (b as Button).text == text and (b as Button).is_visible_in_tree() and not b.is_queued_for_deletion():
+			(b as Button).pressed.emit()
+			return true
+	return false
+
+
 ## A table of `feet` (the size the setup screen hands the table: 4 x 4 ft for the skirmish systems).
 func table_feet(feet: Vector2) -> void:
 	main._set_table_size(feet)
