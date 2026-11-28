@@ -159,6 +159,14 @@ func card_shows(gu: GameUnit, needle: String) -> bool:
 	return false
 
 
+## Import the card-list JSON at `path` for `player` through the table's real import door (system check included).
+func import_list(path: String, player: int) -> OPRApiClient.OPRArmy:
+	var army := OPRApiClient.new().build_army_offline(JSON.parse_string(FileAccess.get_file_as_string(path)))
+	await main._on_opr_army_imported(army, player, false)
+	await E2EBoot.settle(_tree)
+	return army
+
+
 ## The game-over summary's text as the player reads it, or "" while none stands.
 func summary_text() -> String:
 	for c in main.get_children():
