@@ -553,3 +553,19 @@ func test_the_hand_over_never_shows_the_engine_grey() -> void:
 	await get_tree().process_frame
 	assert_float(overlay._content.modulate.a).override_failure_message("the loading picture fades in over bare grey").is_equal(1.0)
 	overlay.queue_free()
+
+
+## Gap review 28.11. (06b), second half: the setup fades out onto the loading picture, not onto its own window's clear
+## colour - the window drops its background for the fade (red before: one flat frame of (14, 22, 28) between them).
+func test_the_setup_fades_out_onto_the_loading_picture() -> void:
+	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	probe.set_script(MenuTransitionProbe)
+	add_child(probe)
+	probe.setup_lists = false
+	probe._show_table_setup()
+	var setup: Window = probe._table_setup
+	setup._confirm()
+	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.05).timeout   # the commit beat, then the fade starts
+	assert_bool(probe.entered_game).is_true()
+	assert_bool(is_instance_valid(setup) and setup.transparent_bg).override_failure_message(
+		"the fading setup draws its own background").is_true()
