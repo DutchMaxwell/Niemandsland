@@ -1107,17 +1107,19 @@ pub const EPOCH_104_TWO_BEARERS: u32 = 104;
 ///   and a base overhung the line by up to one radius. Moves AI deployment spots in every system. Read only by
 ///   `deployment::zone_admits_base`.
 pub const EPOCH_105_ZONE_BASE_EDGE: u32 = 105;
-pub const CURRENT_RULES_EPOCH: u32 = 105;
-/// PENDING (plan step 27-pre): the table hands the core a generated board's ledges - the `tiers` and `solid_cells` of
-/// `boardgen::plain::to_plain` for the board on the table - so a table game's jumps, falls and climbs (and the AI's moves)
-/// play on the board the player sees, where the core played a flat board. A placeholder one past
-/// `CURRENT_RULES_EPOCH`. Records stamped 105 or below replay byte-exact (their terrain line has no `tiers`). Read
-/// only by the recorder mirror (`act_recorder.gd` `_tiers_for_line`); the core reads whatever terrain it is handed.
-pub const PENDING_EPOCH_CORE_TIERS: u32 = 106;
+/// The EPOCH 106 BATCH (plan O-FT-5): the change that sat behind the `EPOCH_106_CORE_TIERS` (106) placeholder is now one
+/// frozen constant, and `CURRENT_RULES_EPOCH` is bumped to 106 in the same change. Records stamped 105 or below replay
+/// byte-exact (their terrain line has no `tiers`). The recorder mirror (`act_recorder.gd`) stamps 106 in the same change.
+/// - CORE_TIERS (plan step 27-pre): the table hands the core a generated board's ledges - the `tiers` and `solid_cells` of
+///   `boardgen::plain::to_plain` for the board on the table - so a table game's jumps, falls and climbs (and the AI's
+///   moves) play on the board the player sees, where the core played a flat board. Read only by the recorder mirror
+///   (`act_recorder.gd` `_tiers_for_line`); the core reads whatever terrain it is handed.
+pub const EPOCH_106_CORE_TIERS: u32 = 106;
+pub const CURRENT_RULES_EPOCH: u32 = 106;
 /// PENDING (plan step 27-pre-R, lead 26.11.): a free ruin's floors are ledges to the core - a model on a floor that walks
 /// off it drops (`Terrain::slab_drops`), in the SAME walk-ordered edges as a tier board's cliffs, so the same bands decide
 /// (a plain drop up to `LEDGE_CLIMB_MAX_IN`, a jump by `mv::jump::drop_kind`, else refused). Sight is unchanged. A
-/// placeholder past `PENDING_EPOCH_CORE_TIERS` (106). Records stamped 106 or below replay byte-exact. Read only by
+/// placeholder one past `CURRENT_RULES_EPOCH`. Records stamped 106 or below replay byte-exact. Read only by
 /// `activation::cliff_drop_in`'s two callers (`check_move`, `jump_dice_of`).
 pub const PENDING_EPOCH_RUIN_LEDGES: u32 = 107;
 /// Plan step 29a (ruling D-29-R1): the skirmish Blast spread splits the WHOLE attack's hits evenly over the target and its
@@ -2578,7 +2580,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 105, "the live epoch is EPOCH_105_ZONE_BASE_EDGE");
+        assert_eq!(CURRENT_RULES_EPOCH, 106, "the live epoch is EPOCH_106_CORE_TIERS");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2588,11 +2590,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":105}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":106}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 105"
+            "a fresh play_game() now stamps the bumped epoch, 106"
         );
     }
 

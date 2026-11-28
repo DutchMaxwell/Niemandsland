@@ -73,7 +73,7 @@ func _ledge(layout: Dictionary) -> Array:
 ## cell's back, so after the fall they stand more than 1 in from it. Model 1 is dropped off the ledge (seed 0: it misses the
 ## jump). Returns the unit; `foe` adds an enemy on the low ground in rifle range.
 func _fallen_leaper(foe := false) -> Array:
-	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_CORE_TIERS
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_106_CORE_TIERS
 	var core: Object = ClassDB.instantiate("NmlCore")
 	var layout: Dictionary = core.boardgen_layout_themed(7, "")
 	SoloHarness.generated_board(_main, 7, "")

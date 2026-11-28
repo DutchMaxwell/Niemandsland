@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Plan step 27-pre P3: on a generated board (from PENDING_EPOCH_CORE_TIERS the core sees its ledges), a player's skirmish
+## Plan step 27-pre P3: on a generated board (from EPOCH_106_CORE_TIERS the core sees its ledges), a player's skirmish
 ## model that drops off a ledge in its open activation is rolled ONCE - by the core, when the activation resolves. Its drop
 ## check lists the jump (the session's `core_jump`), so the table's own jump branch stands aside. One run observes both
 ## halves: the table's line ("<unit> jumps ...") and the core's ("Jump: <unit> model 1 jumps down ...").
@@ -61,7 +61,7 @@ func _ledge(layout: Dictionary) -> Array:
 @warning_ignore('unused_parameter')
 func test_a_jump_the_core_sees_is_rolled_once(do_skip := not ClassDB.class_exists("NmlCore"),
 		skip_reason := "NmlCore extension not loaded") -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.PENDING_EPOCH_CORE_TIERS
+	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_106_CORE_TIERS
 	var core: Object = ClassDB.instantiate("NmlCore")
 	var layout: Dictionary = core.boardgen_layout_themed(7, "")
 	SoloHarness.generated_board(_main, 7, "")   # main's test-only door: the drawn board, the class never named here

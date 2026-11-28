@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Plan step 27-pre P2: from PENDING_EPOCH_CORE_TIERS the terrain line the table hands the core carries the generated
+## Plan step 27-pre P2: from EPOCH_106_CORE_TIERS the terrain line the table hands the core carries the generated
 ## board's ledges (`tiers`, `solid_cells`) of the board main's door drew (`generated_board()`: its seed and theme) - the
 ## SAME layout the player sees, so the core's jumps, falls and climbs happen on it. Below the epoch, or with no generated
 ## board, the line keeps its bytes (no key). The board look itself stays behind main.gd's door (tools/ci_path_classes.py).
@@ -30,8 +30,8 @@ func test_the_line_reads_the_board_of_the_overlays_owner() -> void:
 	owner_node.add_child(mid)
 	var ov: Node = auto_free(Node.new())
 	mid.add_child(ov)
-	assert_bool(AiActRecorder._tiers_for_line(ov, AiActRecorder.PENDING_EPOCH_CORE_TIERS).has("tiers")).is_true()
-	assert_dict(AiActRecorder._tiers_for_line(ov, AiActRecorder.PENDING_EPOCH_CORE_TIERS - 1)).is_empty()
+	assert_bool(AiActRecorder._tiers_for_line(ov, AiActRecorder.EPOCH_106_CORE_TIERS).has("tiers")).is_true()
+	assert_dict(AiActRecorder._tiers_for_line(ov, AiActRecorder.EPOCH_105_ZONE_BASE_EDGE)).is_empty()
 
 
 func _core() -> Object:
@@ -56,15 +56,19 @@ func test_the_ledges_are_the_drawn_boards() -> void:
 
 
 func test_below_the_epoch_or_without_a_board_the_line_keeps_its_bytes() -> void:
-	assert_dict(AiActRecorder._tiers_for_line(_ov, AiActRecorder.PENDING_EPOCH_CORE_TIERS)) \
+	assert_dict(AiActRecorder._tiers_for_line(_ov, AiActRecorder.EPOCH_106_CORE_TIERS)) \
 		.override_failure_message("this scene has no generated board").is_empty()
 	assert_dict(AiActRecorder.tiers_of_board({})).is_empty()
 	if _core() == null:
 		return
 	var board := {"seed": 7, "theme": "deepworks"}
-	assert_dict(AiActRecorder.tiers_at_epoch(board, AiActRecorder.PENDING_EPOCH_CORE_TIERS - 1)) \
+	assert_dict(AiActRecorder.tiers_at_epoch(board, AiActRecorder.EPOCH_105_ZONE_BASE_EDGE)) \
 		.override_failure_message("one epoch below: the line a record played").is_empty()
-	assert_bool(AiActRecorder.tiers_at_epoch(board, AiActRecorder.PENDING_EPOCH_CORE_TIERS).has("tiers")).is_true()
+	assert_bool(AiActRecorder.tiers_at_epoch(board, AiActRecorder.EPOCH_106_CORE_TIERS).has("tiers")).is_true()
+	# The bump's value pins: the hand-over is frozen at 106, and a fresh table stamps it (106 is the shipped epoch).
+	assert_int(AiActRecorder.EPOCH_106_CORE_TIERS).is_equal(106)
+	assert_bool(AiActRecorder.tiers_at_epoch(board, AiActRecorder.rules_epoch).has("tiers")) \
+		.override_failure_message("the shipped epoch hands the ledges over").is_true()
 
 
 ## GEN-8: the board's cover classes reach the core - `tiers_of_board` hands `to_plain`'s cells as `board_cells`, and the
