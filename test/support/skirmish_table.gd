@@ -11,6 +11,11 @@ const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const INCH := 0.0254
 
+## The receive doors main connects in _ready ([signal of the manager, main's handler]) that the O seat rewires.
+const RECEIVE_DOORS := [["remote_activation_updated", "_on_remote_activation_updated"],
+	["turn_state_received", "_on_turn_state_received"], ["command_received", "_on_network_command"],
+	["remote_wounds_updated", "_on_remote_wounds_updated"], ["remote_round_advanced", "_on_remote_round_advanced"]]
+
 ## Every epoch a feature test pinned through `need_epoch` (the shipped-epoch gate reads it).
 static var pins: Array[int] = []
 
@@ -72,9 +77,13 @@ static func boot(suite: Node, seat: String) -> SkirmishTable:
 			t.main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
 			t.main.solo_ai_slots = {}
 			t.net = WireNet.new()
+			t.net.is_host = true   # this table is the host, slot 1: it owns the turn token
 			t.net.army_manager = t.main.opr_army_manager
 			t.main.network_manager = t.net
 			t.main.radial_menu_controller.network_manager = t.net
+			for pair in RECEIVE_DOORS:   # main wired its receive doors to the real manager in _ready: wire the swapped one
+				if t.net.has_signal(pair[0]) and t.main.has_method(pair[1]):
+					t.net.connect(pair[0], Callable(t.main, pair[1]))
 			SoloHarness.controller(t.main)
 			t.main._apply_turn_token(1)
 	SoloHarness.instant(t.main)
@@ -194,6 +203,33 @@ func press_start() -> void:
 	await E2EBoot.settle(_tree)
 
 
+## A ladder-free x-ledge of the generated board `seed_value` that drops `drop_in` inches: [high, low] cell centres in
+
+
+## world metres (y = the cell's height), or [] when the board has none.
+static func ledge(seed_value: int, drop_in: float) -> Array:
+	var layout: Dictionary = (ClassDB.instantiate("NmlCore") as Object).call("boardgen_layout_themed", seed_value, "")
+	var nx := int(layout["nx"])
+	var cell := float(layout["cell_in"])
+	var cells: Array = layout["cells"]
+	var lv: Array = layout["level_in"]
+	var ladders := {}
+	for c in layout["connectors"]:
+		ladders[[int(c["low"]), int(c["high"])]] = true
+	for i in cells.size():
+		if i % nx + 1 >= nx:
+			continue
+		var a := int(cells[i]["level"])
+		var b := int(cells[i + 1]["level"])
+		if a <= b or ladders.has([i + 1, i]) or not is_equal_approx(float(lv[a]) - float(lv[b]), drop_in):
+			continue
+		var centre := func(k: int, lvl: int) -> Vector3:
+			return Vector3(((k % nx) + 0.5 - nx / 2.0) * cell * INCH, float(lv[lvl]) * INCH,
+				((k / nx) + 0.5 - int(layout["nz"]) / 2.0) * cell * INCH)
+		return [centre.call(i, a), centre.call(i + 1, b)]
+	return []
+
+
 ## The card's Activate (the committed start). True when the activation is open afterwards.
 func start(gu: GameUnit) -> bool:
 	return await E2EBoot.start_activation(main, gu)
@@ -204,12 +240,18 @@ func end(gu: GameUnit) -> void:
 	await main.radial_menu_controller.card_end_activation(gu)
 
 
-## A player's drag of `model` to `to` (world metres) over `inches`, through the drop door.
-func drop(model: ModelInstance, to: Vector3, inches: float) -> void:
+## A player's drag of `model` to `to` (world metres) over `inches`, released as the drag's release runs it: the table's
+## drop check first (the core's move check, a jump included; a refusal puts the model back), then the drop door.
+## False when the drop was refused.
+func drop(model: ModelInstance, to: Vector3, inches: float) -> bool:
 	var from: Vector3 = model.node.global_position
 	model.node.global_position = to
+	if main.attacked_unit_drag_refused(model.unit, inches):
+		model.node.global_position = from
+		return false
 	await SoloHarness.drop(main, [{"node": model.node, "inches": inches, "from_raw": from,
 		"path": PackedVector2Array([Vector2(from.x, from.z), Vector2(to.x, to.z)])}])
+	return true
 
 
 ## A player's real drag of every live model of `gu` (or only the models `only`) by (dx_in, dz_in) inches under the

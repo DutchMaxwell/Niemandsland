@@ -62,6 +62,7 @@ var _wide_only: Array[Control] = []   # the breadcrumb and the eyebrow "NEW TABL
 var _intro: VBoxContainer
 var _headings: Array = []    # [number, name, hint] of each step heading (step 84: 22 px, mono number, hint at the right)
 var _size_texts: Array = []  # [caption, value, sub-line] of each size card
+var _system_parts: Dictionary = {}   # id -> [column, family, name, tag line, chip row, tick] of each system card (step 84)
 var _size_note: Label        # "Table size is fixed once you create it." under the cards; the heading's hint from 900 px
 var _title: Label
 var _preview: TextureRect
@@ -574,10 +575,40 @@ func _add_system_cards() -> void:
 		column.offset_right = -8
 		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		button.add_child(column)
-		column.add_child(_label(GameSystem.label(id),14))
+		var family := _label("GRIMDARK" if id.begins_with("gf") else "FANTASY",13,HouseStyle.MUTED)
+		column.add_child(family)
+		var system_name := _label(GameSystem.label(id),14)
+		column.add_child(system_name)
 		var board := GameSystem.default_board_feet(id)
 		var tag := "Skirmish" if GameSystem.scale(id) == GameSystem.SCALE_SKIRMISH else "Battle"
-		column.add_child(_label("%s  ·  %d × %d ft" % [tag,board.x,board.y],11,HouseStyle.MUTED))
+		var tag_line := _label("%s  ·  %d × %d ft" % [tag,board.x,board.y],11,HouseStyle.MUTED)
+		column.add_child(tag_line)
+		var chips := HBoxContainer.new()   # from 900 px: a BATTLE / SKIRMISH chip and the board in mono (sheet 03)
+		chips.add_theme_constant_override("separation",8)
+		chips.size_flags_vertical = Control.SIZE_EXPAND | Control.SIZE_SHRINK_END   # at the card's foot
+		var chip := PanelContainer.new()
+		var chip_box := _box(Color.TRANSPARENT,HouseStyle.LINE)
+		chip_box.content_margin_left = 7
+		chip_box.content_margin_right = 7
+		chip.add_theme_stylebox_override("panel",chip_box)
+		chip.add_child(_label(tag.to_upper(),12,HouseStyle.MUTED))
+		chips.add_child(chip)
+		chips.add_child(_label("%d × %d FT" % [board.x,board.y],13,HouseStyle.MUTED))
+		for text: Label in [chip.get_child(0),chips.get_child(1)]:
+			text.add_theme_font_override("font",HouseStyle.mono())
+		column.add_child(chips)
+		var tick := TextureRect.new()   # the chosen card's gold tick, top right
+		tick.texture = HouseStyle.svg_icon(MenuView.ICON_SVG % SetupLayoutStep.TICK)
+		tick.modulate = HouseStyle.GOLD
+		tick.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tick.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+		tick.offset_left = -34
+		tick.offset_top = 12
+		tick.offset_right = -12
+		tick.offset_bottom = 34
+		tick.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		button.add_child(tick)
+		_system_parts[id] = [column,family,system_name,tag_line,chips,tick]
 		button.pressed.connect(func() -> void: set_system(id))
 		row.add_child(button)
 		_system_buttons[id] = button
@@ -695,6 +726,7 @@ func _refresh() -> void:
 	_system_option.select(GameSystem.IDS.find(selected_system))
 	for id in _system_buttons:
 		_style(_system_buttons[id],id == selected_system)
+		_system_parts[id][5].visible = _rail_body.visible and id == selected_system
 	for key in _biome_buttons:
 		_biome_buttons[key].visible = key in shown
 		_style(_biome_buttons[key],key == selected_biome)
@@ -854,6 +886,20 @@ func _set_rail(on: bool) -> void:
 			texts[i].add_theme_font_size_override("font_size",[14,20,15][i] if on else [11,13,10][i])
 	for button in _size_buttons.values():
 		button.custom_minimum_size.y = 108 if on else 76
+	for id: String in _system_parts:
+		var parts: Array = _system_parts[id]
+		parts[0].alignment = BoxContainer.ALIGNMENT_BEGIN if on else BoxContainer.ALIGNMENT_CENTER
+		parts[0].offset_top = 14 if on else 0
+		parts[0].offset_bottom = -14 if on else 0
+		for i: int in [1,4]:
+			parts[i].visible = on
+		parts[3].visible = not on
+		parts[5].visible = on and id == selected_system
+		parts[2].add_theme_font_size_override("font_size",20 if on else 14)
+		parts[2].add_theme_font_override("font",HouseStyle.font(500) if on else FONT)
+		parts[2].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if on else TextServer.AUTOWRAP_OFF
+		if on:
+			_system_buttons[id].custom_minimum_size.y = 136
 	for pair: Array in [[_intro,0],[_system_step,1]]:
 		var home: Node = _left if on and _columns.visible else _page   # the inner pages keep the title over them
 		if pair[0].get_parent() != home:

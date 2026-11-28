@@ -113,8 +113,8 @@ func test_the_theme_is_a_battle_scale_offer() -> void:
 func test_generated_boards_follow_setting_and_scale_and_availability() -> void:
 	for system in ALL:
 		assert_bool(GameSystem.offers("generated_board", "tiefwerk", system)).is_equal(system == "gff")
-		# the ruined town row exists but nothing is shipped: offered nowhere until `available` flips (Part 2)
-		assert_bool(GameSystem.offers("generated_board", "ruined_town", system)).is_false()
+		# GEN-14: the ruined town ships for AoF: Skirmish only
+		assert_bool(GameSystem.offers("generated_board", "ruined_town", system)).is_equal(system == "aofs")
 
 
 func test_an_id_or_kind_without_a_row_is_offered() -> void:
