@@ -41,6 +41,7 @@ var _keys: HBoxContainer
 var _folded: Array[Control] = []
 var _head: HBoxContainer
 var _objectives: Label
+var _tool_cards: Array[PanelContainer] = []   # the tools and the two option cards: roomier from 800 px (sheet 03c)
 
 
 func setup(layout: SetupLayout, values: Array) -> void:
@@ -126,6 +127,16 @@ func _place() -> void:
 			needs.text = needs.text.trim_prefix("NEEDS ") if compact else "NEEDS " + needs.text.trim_prefix("NEEDS ")
 	_legend.add_theme_constant_override(&"separation", 8 if compact else 18)
 	fit_rail_lines(_rail, compact)
+	left.add_theme_constant_override(&"separation", 8 if compact else 14)
+	for card in _tool_cards:   # 20 px inside the cards from 800 px, as drawn; the 720 page keeps the tight cards
+		card.remove_theme_stylebox_override(&"panel")
+		if not compact:
+			var roomy := card.get_theme_stylebox(&"panel").duplicate() as StyleBox
+			for side: String in ["left", "right"]:
+				roomy.set("content_margin_" + side, 20.0)
+			for side: String in ["top", "bottom"]:
+				roomy.set("content_margin_" + side, 16.0)
+			card.add_theme_stylebox_override(&"panel", roomy)
 	_keys.position = Vector2(pad, size.y - (44.0 if compact else 60.0))
 	for box: Control in [left, _rail]:   # a container keeps its old height: shrink both to their new content
 		box.reset_size.call_deferred()
@@ -160,7 +171,9 @@ func _tools() -> PanelContainer:
 	row.add_child(edit)
 	for b: BaseButton in [_again, _mirror, edit]:
 		b.focus_mode = FOCUS_ALL
-	return HouseStyle.card(row)
+	var card := HouseStyle.card(row)
+	_tool_cards.append(card)
+	return card
 
 
 ## DEPLOYMENT ZONES (the editor's own three types; Custom Zones opens its Deployment tab) and MISSION OBJECTIVES
@@ -171,6 +184,8 @@ func _zones_and_objectives() -> HBoxContainer:
 	var zones := VBoxContainer.new()
 	zones.add_child(_text("DEPLOYMENT ZONES", 14, HouseStyle.eyebrow_font(), HouseStyle.MUTED))
 	var segments := HouseStyle.button_row(["None", "Front Line (12\")", "Custom Zones"], HouseStyle.SEGMENT, 40)
+	segments.size_flags_horizontal = SIZE_SHRINK_BEGIN   # a compact joined group at the left (sheet 03c)
+	segments.add_theme_constant_override(&"separation", 0)
 	for i in 3:
 		var segment := segments.get_child(i) as Button
 		segment.name = ["ZoneNone", "ZoneFrontLine", "ZoneCustom"][i]
@@ -197,6 +212,7 @@ func _zones_and_objectives() -> HBoxContainer:
 	for part: VBoxContainer in [zones, aims]:
 		var card := HouseStyle.card(part)
 		card.size_flags_horizontal = SIZE_EXPAND_FILL
+		_tool_cards.append(card)
 		row.add_child(card)
 	return row
 

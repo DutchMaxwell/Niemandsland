@@ -210,3 +210,22 @@ func test_the_inner_pages_keep_the_title_at_1080p() -> void:
 	dialog._show_state("")
 	await get_tree().process_frame
 	assert_bool(dialog._left.is_ancestor_of(dialog._intro)).is_true()
+
+
+## Step 84 (type, sheet 03): from 900 px each step heading is 22 px with its number in mono and its hint at the right in
+## 15 px; the size cards read caption 14 px mono upper case, value 20 px, sub-line 15 px. At 720 the hints stay hidden
+## (red before: 17 px headings, the hints as lines under the cards).
+func test_from_900_px_the_step_headings_carry_their_hints() -> void:
+	var dialog := await _open(Vector2i(1920, 1080))
+	var shown := func(d: Node, text: String) -> Array: return d.find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).text == text and (l as Label).is_visible_in_tree())
+	for hint: String in ["The biome defines the visual style. Terrain stays yours to place.", "Table size is fixed once you create it."]:
+		assert_int(shown.call(dialog, hint).size()).override_failure_message(hint).is_equal(1)
+	var name_label: Array = shown.call(dialog, "Choose a biome")
+	assert_int(name_label.size()).is_equal(1)
+	if name_label.size() == 1:
+		assert_int((name_label[0] as Label).get_theme_font_size("font_size")).is_equal(22)
+	var caption: Array = shown.call(dialog, "STANDARD")
+	assert_int(caption.size()).override_failure_message("no size caption in upper case").is_equal(1)
+	var small := await _open(Vector2i(1280, 720))
+	assert_int(shown.call(small, "The biome defines the visual style. Terrain stays yours to place.").size()).is_equal(0)

@@ -168,7 +168,13 @@ fn the_defender_places_the_rest_within_1_in() {
     let to = format!("0:{},0,{}", first[0] + 1.5 * IN2M, first[2]);   // survivor 1 pushed 1.5 in east, the other left behind
     let base = [("push:a:b", "push"), ("push_to:a:b", to.as_str())];
     match play3(&[base[0], base[1], ("push_replace:b", "")]).0 {
-        ActStep::NeedChoice { id, options, owner, .. } => assert_eq!((id.as_str(), options.len(), owner.as_str()), ("push_replace:b", 0, "b")),
+        ActStep::NeedChoice { id, options, owner, landings, .. } => {
+            assert_eq!((id.as_str(), owner.as_str()), ("push_replace:b", "b"));
+            assert_eq!(options, vec!["pushed:0".to_string()], "the hint names the pushed model");
+            // step 29e-2a: the push lands first, so the defender places at the model's new spot
+            let mv = landings.iter().rev().find(|l| l.unit == 2 && !l.moved_to.is_empty()).expect("the push move landed before the ask");
+            assert!((mv.moved_to[0][0] - first[0] - 1.5 * IN2M).abs() < 1e-9, "{:?}", mv.moved_to);
+        }
         other => panic!("expected NeedChoice, got {other:?}"),
     }
     let (_, auto) = play3(&[base[0], base[1], ("push_replace:b", "auto")]);
