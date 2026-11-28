@@ -4,9 +4,8 @@ extends GdUnitTestSuite
 ## within 2 in of the bottom, the unit's other models within 1 in of it, and the activation ends at once.
 ## Scene: the drawn generated board 7, its 6 in ledge (no ladder); a 3-model Tough(3) unit on the high cell, model 1 drops
 ## to the foot. Tray seed 0 (R-FT3 scan): jump dice 6 4 3 1 4 1 (a 1: it falls), fall dice 6 6 6 6 2 4 (one 1-3: 1 wound).
-## Green: the fall line, its dice and wound, the End lock, "Place for me" lifts it. FINDING #3872 (R-FT2): the player's
-## OWN placement of models 2 and 3 within 1 in is checked as a move (a jump line, then "moved 9.4\" - the Advance
-## allowance is 6.0\"") - kept as a skipped case.
+## Green: the fall line, its dice and wound, the End lock, "Place for me" lifts it, and the player's OWN placement of
+## models 2 and 3 within 1 in lifts it too - a placement, not a move (#3872 fixed: it was checked as a move).
 ## Real: the main scene, the drawn board, the card's Activate / End and its lock, the table's drop check and drop door.
 
 const INCH := 0.0254
@@ -64,8 +63,7 @@ func test_a_fall_wounds_on_1_to_3_and_locks_the_end(timeout := 180000) -> void:
 
 
 @warning_ignore("unused_parameter")
-func test_the_owner_places_the_others_by_hand(timeout := 180000, do_skip := true,
-		skip_reason := "FINDING #3872: a hand placement after a fall is checked as a move (jump, 6 in cap)") -> void:
+func test_the_owner_places_the_others_by_hand(timeout := 180000) -> void:
 	var f := await _fall()
 	var u: GameUnit = f[0]
 	var m1: ModelInstance = f[1]
