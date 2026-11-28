@@ -944,8 +944,11 @@ def _book_table(list_path: str | Path):
     front-line zones follow that book (every helper reads them at call time), and they are restored after it. A 72 x 48
     book leaves the module untouched, so a gf / aof game plays byte-identical. Not re-entrant: one game at a time per process."""
     global TABLE_W_IN, TABLE_D_IN, FRONT_LINE_ZONES
-    with open(list_path, encoding="utf-8") as f:
-        w_in, d_in = nml_core.book_board_in(str(json.load(f).get("gameSystem", "")))
+    try:
+        with open(list_path, encoding="utf-8") as f:
+            w_in, d_in = nml_core.book_board_in(str(json.load(f).get("gameSystem", "")))
+    except (OSError, ValueError, AttributeError):
+        w_in, d_in = TABLE_W_IN, TABLE_D_IN   # an unreadable list: `_play_game` reports it (or the caller's bad argument)
     saved = (TABLE_W_IN, TABLE_D_IN, FRONT_LINE_ZONES)
     if (w_in, d_in) != (TABLE_W_IN, TABLE_D_IN):
         hw, hd = w_in / 2.0, d_in / 2.0
