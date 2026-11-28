@@ -219,3 +219,22 @@ func test_the_name_field_is_46_px() -> void:
 		return
 	await get_tree().process_frame
 	assert_float((hub.get("name_field") as Control).size.y).is_greater_equal(46.0)
+
+
+## The Join button's Enter cap never covers its word (seen on the 28.11. capture after the menu buttons took the
+## mockups' 18 px padding and 17 px text: "Join" ran under the cap; red before).
+func test_join_keeps_its_word_clear_of_the_enter_cap() -> void:
+	var hub := await _hub()
+	if hub == null:
+		return
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var join := hub.find_child("JoinWithCode", true, false) as Button
+	var cap := join.get_child(0) as Control
+	var font := join.get_theme_font(&"font")
+	var text_end := join.get_theme_stylebox(&"normal").content_margin_left \
+		+ font.get_string_size(join.text, HORIZONTAL_ALIGNMENT_LEFT, -1, join.get_theme_font_size(&"font_size")).x
+	assert_float(cap.position.x).override_failure_message("cap at %d, word ends at %d" % [int(cap.position.x), int(text_end)]) \
+		.is_greater_equal(text_end + 4.0)
+	var block := join.get_parent().get_parent() as Control
+	assert_float(join.get_global_rect().end.x).is_less_equal(block.get_global_rect().end.x + 1.0)

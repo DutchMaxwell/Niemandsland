@@ -301,3 +301,20 @@ func test_the_board_card_waits_for_its_kit() -> void:
 	answer.merge({"state": "not_used", "pct": 100}, true)
 	step.call("poll_kit")
 	assert_bool(card.disabled).is_false()
+
+
+## At 1280x720 nothing of the left column runs under the rail (the 28.11. capture: Change, the Load card and Deploy
+## Objectives stood under it; red before).
+func test_at_720p_the_left_column_stays_left_of_the_rail() -> void:
+	var step := _step(Vector2(6, 4))
+	if step == null:
+		return
+	step.size = Vector2(1280, 720)
+	for _i in 3:
+		await get_tree().process_frame
+	var rail := (step.find_child("Rail", true, false) as Control).get_global_rect()
+	for control: Node in (step.get("left") as Control).find_children("*", "Button", true, false):
+		if (control as Control).is_visible_in_tree():
+			assert_float((control as Control).get_global_rect().end.x).override_failure_message(
+				"%s ends at %d, the rail starts at %d" % [control.name, int((control as Control).get_global_rect().end.x), int(rail.position.x)]) \
+				.is_less_equal(rail.position.x)

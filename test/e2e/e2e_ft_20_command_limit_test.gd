@@ -3,8 +3,7 @@ extends GdUnitTestSuite
 ## may only have one model with each of Sergeant / Musician / Banner.
 ## Scene: an aofs table, the own-stats fixture card_list_aofs_own_stats_two_banners.json (two units with a Banner), imported
 ## through the real import door, then battle start.
-## FINDING #3862 (R-FT2): no line at import or at battle start; both Banners get command picks. The book case stays here,
-## skipped with that issue; its red state unskipped is the proof it can fail (there is no table check to plant against).
+## #3862 (fixed, O-FT-1): the import writes one warning line from the core's command limit (a warning, never a refusal).
 ## Real: the main scene, the table system switch, the import door, battle start and its command picks.
 
 const FIXTURE := "res://test/fixtures/card_list_aofs_own_stats_two_banners.json"
@@ -22,9 +21,8 @@ func after_test() -> void:
 	_t = null
 
 
-@warning_ignore("unused_parameter")
-func test_a_second_banner_is_named_by_battle_start(timeout := 120000, do_skip := true,
-		skip_reason := "FINDING #3862: a second Banner in an aofs list imports and plays silently") -> void:
+## #3862 (O-FT-1): the import warns with one line naming the second Banner and the book page; the list still plays.
+func test_a_second_banner_is_named_by_battle_start(timeout := 120000) -> void:
 	assert_bool(_t.main.set_table_system("aofs", "P1")).is_true()
 	_t.main.opr_army_manager.set_game_phase(OPRArmyManager.GamePhase.DEPLOYMENT)
 	await _t.import_list(FIXTURE, 1)
