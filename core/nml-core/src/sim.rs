@@ -1136,6 +1136,39 @@ fn push_holds(before: &State, now: &State, si: usize, ti: usize, attacked: &[usi
     now.player[ti] != now.player[si] && attacked.contains(&ti) && !before.shaken[ti] && now.shaken[ti] && now.alive[ti] > 0
 }
 
+/// Step 29d-2: the defender's own placement after a push (`push_replace`): `<slot>:<x>,<y>,<z>` entries joined by `;`. Each
+/// named model goes there; then every other model must stand within 1 in of the pushed model `m`, base to base, on open
+/// ground and on no other model - else why not. The line names who the owner placed.
+fn place_rest(next: &mut State, ti: usize, m: usize, answer: &str, cover: Cover) -> Result<String, String> {
+    let mut placed = Vec::new();
+    for entry in answer.split(';').filter(|e| !e.is_empty()) {
+        let p = push_answer(next, ti, next.key(ti), entry)?;
+        if p.model == m {
+            return Err(format!("model {} is the pushed model", m + 1));
+        }
+        next.positions[ti][p.model] = p.to;
+        placed.push(p.model);
+    }
+    for k in (0..next.positions[ti].len()).filter(|&k| k != m) {
+        if beyond_1in(next, ti, m, k, TRANSPORT_EPS_M) {
+            return Err(format!("model {} stands more than 1 in from the pushed model", k + 1));
+        }
+    }
+    for &k in &placed {
+        let (q, rk) = (next.positions[ti][k], next.radii[ti].get(k).copied().unwrap_or(0.0));
+        if matches!(cover, Cover::Board(t) if t.solid_at(q[0] / IN2M, q[2] / IN2M)) {
+            return Err(format!("model {} stands inside a building", k + 1));
+        }
+        let clash = (0..next.positions.len()).filter(|&u| next.alive[u] > 0).any(|u| next.positions[u].iter().zip(next.radii[u].iter()).enumerate()
+            .any(|(j, (o, &ro))| !(u == ti && j == k) && (q[0] - o[0]).hypot(q[2] - o[2]) < rk + ro - 1e-6));
+        if clash {
+            return Err(format!("model {} stands on another model", k + 1));
+        }
+    }
+    let list = placed.iter().map(|k| format!("model {}", k + 1)).collect::<Vec<_>>().join(", ");
+    Ok(if list.is_empty() { String::new() } else { format!("; the owner placed {list} within 1 in of it") })
+}
+
 /// Step 29d: the `push_to` answer `<slot>:<x>,<y>,<z>` (world metres) as a push of `tkey`'s model, or why it is none -
 /// not that form, or no model of the target (the attacker moves "one model from the target", 3.6 p.15).
 fn push_answer(state: &State, ti: usize, tkey: &str, answer: &str) -> Result<crate::activation::PushInput, String> {
@@ -13437,7 +13470,17 @@ fn resolve_with(
                                 format!(" off a {h:.0} in drop - it falls, {faces:?}, {w} wound{} on 1-3", if w == 1 { "" } else { "s" })
                             }).unwrap_or_default();
                             let alive = next.positions[ti].get(p.model).is_some_and(|q| *q == p.to);
-                            let rest = if alive { push_regroup(&mut next, ti, p.model, cover) } else { String::new() };
+                            // Step 29d-2 (3.6 p.15: "then the opponent must place any other models from the unit within 1"
+                            // of it"): the defender's `push_replace:<target>` - its own spots, or "auto" / no answer = the D14 placer.
+                            let rep_id = format!("push_replace:{tkey}");
+                            let rest = match (alive, tray.reach_free(&rep_id, &tkey)) {
+                                (false, _) => String::new(),
+                                (true, Some(a)) if a != "auto" => place_rest(&mut next, ti, p.model, &a, cover).unwrap_or_else(|why| {
+                                    tray.refuse_free(&rep_id, format!("Push: {why}"));
+                                    String::new()
+                                }),
+                                (true, _) => push_regroup(&mut next, ti, p.model, cover),
+                            };
                             format!("Push: {name} rolls {face} and pushes {tname} model {} {moved_in:.1} in{fell}{rest}", p.model + 1)
                         }
                     }
