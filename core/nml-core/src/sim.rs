@@ -13477,13 +13477,17 @@ fn resolve_with(
                             // Step 29d-2 (3.6 p.15: "then the opponent must place any other models from the unit within 1"
                             // of it"): the defender's `push_replace:<target>` - its own spots, or "auto" / no answer = the D14 placer.
                             let rep_id = format!("push_replace:{tkey}");
-                            let rest = match (alive, tray.reach_free_hinted(&rep_id, &tkey, vec![format!("pushed:{}", p.model)])) {
-                                (false, _) => String::new(),
-                                (true, Some(a)) if a != "auto" => place_rest(&mut next, ti, p.model, &a, cover).unwrap_or_else(|why| {
-                                    tray.refuse_free(&rep_id, format!("Push: {why}"));
-                                    String::new()
-                                }),
-                                (true, _) => push_regroup(&mut next, ti, p.model, cover),
+                            // #3943: only "any other models" are placed - a lone survivor is never asked (no choice is reached).
+                            let rest = if !alive || next.alive[ti] <= 1 {
+                                String::new()
+                            } else {
+                                match tray.reach_free_hinted(&rep_id, &tkey, vec![format!("pushed:{}", p.model)]) {
+                                    Some(a) if a != "auto" => place_rest(&mut next, ti, p.model, &a, cover).unwrap_or_else(|why| {
+                                        tray.refuse_free(&rep_id, format!("Push: {why}"));
+                                        String::new()
+                                    }),
+                                    _ => push_regroup(&mut next, ti, p.model, cover),
+                                }
                             };
                             format!("Push: {name} rolls {face} and pushes {tname} model {} {moved_in:.1} in{fell}{rest}", p.model + 1)
                         }

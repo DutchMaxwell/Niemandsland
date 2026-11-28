@@ -9,8 +9,7 @@ extends GdUnitTestSuite
 ##   seed 0  - hits 6 4 3 1, saves 4 1 6: 2 lost, morale 6 (passes): no push.
 ## Real: the main scene, the card's Activate, the radial targeting and click, the core's volley / morale / push, the
 ## "Push?" prompt, the 2 in ring and the table's own drag of the target model (its drop is the core's push_to answer).
-## FINDING #3943 (R-FT2): a lone pushed survivor still asks its owner "Place the rest" (nothing to place) - its case is
-## skipped with that issue; the other cases answer that prompt with "Place for me".
+## A lone pushed survivor asks nobody to "Place the rest" (#3943 fixed: it was asked with nothing to place).
 
 const INCH := 0.0254
 const PUSH_SEED := 7
@@ -121,9 +120,7 @@ func test_a_steady_target_gets_no_push(timeout := 180000) -> void:
 
 ## The book places "any other models" of the pushed unit (FF36 p.15 l.1268-1269): a lone survivor leaves nothing to
 ## place, so its owner is asked nothing.
-@warning_ignore("unused_parameter")
-func test_a_lone_pushed_model_asks_nobody_to_place_the_rest(timeout := 180000, do_skip := true,
-		skip_reason := "FINDING #3943: a pushed lone survivor still asks its owner to place the rest") -> void:
+func test_a_lone_pushed_model_asks_nobody_to_place_the_rest(timeout := 180000) -> void:
 	var r := await _shot(PUSH_SEED, "push", [1.9])
 	assert_int(_t.count("Push: Gunners rolls 4 and pushes Target model")).is_equal(1)
 	assert_bool(r["placed_asked"]).override_failure_message("Place the rest asked with nothing to place: %s" % [_t.lines]).is_false()

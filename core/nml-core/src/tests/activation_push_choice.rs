@@ -127,6 +127,17 @@ fn the_spot_moves_the_picked_model_on_4_plus() {
     assert!((after.positions[2][0][0] - 12.0 * IN2M).abs() < 1e-9, "no push on 1-3");
 }
 
+/// #3943 (FT-15): the defender places "any other models" of the pushed unit (3.6 p.15). A lone survivor leaves nothing to
+/// place: even with the table's probe for it, the step API never asks `push_replace` - the push ends there.
+#[test]
+fn a_lone_pushed_survivor_asks_nobody_to_place_the_rest() {
+    let to = spot(0, 13.0);
+    let (done, after) = play(&[("push:a:b", "push"), ("push_to:a:b", &to), ("push_replace:b", "")], 5);
+    assert!(matches!(done, ActStep::Done { .. }), "no re-place asked for a lone survivor: {done:?}");
+    assert_eq!(after.alive[2], 1, "the push left one model");
+    assert!((after.positions[2][0][0] - 13.0 * IN2M).abs() < 1e-9, "and moved it: {:?}", after.positions[2]);
+}
+
 /// Lead condition (1): the attacker picks which model, but only one of the target's.
 #[test]
 fn a_slot_outside_the_target_or_a_far_spot_is_refused() {
