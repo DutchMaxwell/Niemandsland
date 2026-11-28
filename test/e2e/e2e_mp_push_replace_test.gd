@@ -10,6 +10,7 @@ extends GdUnitTestSuite
 ## the timeout goes on the wire for the other table.
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
+const OwnerResendHarness := preload("res://test/support/owner_resend_harness.gd")
 const INCH := 0.0254
 const HOST_PEER := 1
 const GUEST_PEER := 42
@@ -127,7 +128,7 @@ func _round_trip(answer: String, wire := Callable()) -> Array:
 			# The guest's machine: the request opens its placement; its owner drags and presses Enter.
 			_net.my_slot = 2
 			var rq: Dictionary = asks[0][1]
-			(func() -> void: await _main._rpc_request_roll(rq, HOST_PEER)).call()
+			(func() -> void: await OwnerResendHarness.new(_main).owner_receives(rq, HOST_PEER)).call()
 			var wait_until := Time.get_ticks_msec() + 10000
 			while CoreActivation.replace_pick.is_empty() and Time.get_ticks_msec() < wait_until:
 				for c in _main.find_children("*", "PromptCard", false, false):
@@ -150,7 +151,7 @@ func _round_trip(answer: String, wire := Callable()) -> Array:
 			assert_bool(reply.is_empty()).override_failure_message("the guest's machine never answered").is_false()
 			if not reply.is_empty():
 				var faces: Array = (reply[0][1] as Dictionary)["faces"]
-				_main._rpc_roll_result(int(rq["req"]), wire.call(faces) if wire.is_valid() else faces)
+				OwnerResendHarness.new(_main).host_receives(int(rq["req"]), wire.call(faces) if wire.is_valid() else faces)
 		await get_tree().process_frame
 	assert_object(done[0]).override_failure_message("the host's drive did not end").is_not_null()
 	return [done[0] if done[0] != null else {}, squad, spot[0]]
@@ -174,7 +175,7 @@ func test_the_guest_places_and_the_host_lands_its_spots(do_skip := not ClassDB.c
 @warning_ignore('unused_parameter')
 func test_no_answer_within_the_bound_is_the_d14_placer_named_on_the_wire(do_skip := not ClassDB.class_exists("NmlCore"),
 		skip_reason := "NmlCore extension not loaded") -> void:
-	_main._owner_roll_timeout_s = 1.0
+	OwnerResendHarness.new(_main).set_timeout(1.0)
 	var r := await _round_trip("none")
 	assert_str(str((r[0] as Dictionary).get("step", ""))).is_equal("done")
 	assert_bool(_net.logs.has("Push: no answer from Guest within 1 s - the core places the rest within 1 in")) \

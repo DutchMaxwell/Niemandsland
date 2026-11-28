@@ -31,6 +31,16 @@ func is_pending(req: int) -> bool:
 	return _main._solo_remote_save_waiters.has(req)
 
 
+## The owner's machine receives the host's request (`main._rpc_request_roll`); await it for its whole answer.
+func owner_receives(request: Dictionary, from_peer: int) -> void:
+	await _main._rpc_request_roll(request, from_peer)
+
+
+## The host's waiting driver receives the owner's reply (`main._rpc_roll_result`).
+func host_receives(req: int, faces: Array) -> void:
+	_main._rpc_roll_result(req, faces)
+
+
 ## The owner's answer arrives on the command channel.
 func answer(req: int, faces: Array, peer: int) -> void:
 	_main._on_network_command("roll_result", {"req": req, "faces": faces}, peer)
