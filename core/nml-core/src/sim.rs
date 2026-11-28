@@ -13458,6 +13458,10 @@ fn resolve_with(
                         }
                         Some(Ok((p, (moved_in, fall)))) => {
                             next.positions[ti][p.model] = p.to;
+                            // Step 29e-2a (H-8, as the fall): the push lands as its own move before its fall and the re-place,
+                            // so the table shows the pushed model where it went before anyone places the rest.
+                            let moved_to = next.positions[ti].clone();
+                            tray.land(|| crate::landing::Landing { unit: ti, models: Vec::new(), loss_line: false, moved_to });
                             // Falling (3.6 p.15): pushed off 2 in or more, the model rolls one die per inch, each 1-3 a wound on
                             // it. The pushed unit is not the active one, so no activation ends (ruling D10).
                             let fell = fall.map(|h| {
@@ -13473,7 +13477,7 @@ fn resolve_with(
                             // Step 29d-2 (3.6 p.15: "then the opponent must place any other models from the unit within 1"
                             // of it"): the defender's `push_replace:<target>` - its own spots, or "auto" / no answer = the D14 placer.
                             let rep_id = format!("push_replace:{tkey}");
-                            let rest = match (alive, tray.reach_free(&rep_id, &tkey)) {
+                            let rest = match (alive, tray.reach_free_hinted(&rep_id, &tkey, vec![format!("pushed:{}", p.model)])) {
                                 (false, _) => String::new(),
                                 (true, Some(a)) if a != "auto" => place_rest(&mut next, ti, p.model, &a, cover).unwrap_or_else(|why| {
                                     tray.refuse_free(&rep_id, format!("Push: {why}"));
