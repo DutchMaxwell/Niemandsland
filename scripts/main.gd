@@ -20993,6 +20993,11 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_contro
 	if not version_warning.is_empty():
 		print("VERSION WARNING: %s" % version_warning)
 		_solo_show_toast(version_warning, 8.0)
+	# #3862 (O-FT-1): a list over its book's command-upgrade limit imports with one warning line, never a refusal.
+	var command_warning := CommandPicks.limit_warning(army)
+	if not command_warning.is_empty():
+		_log_rule_event(BattleLog.Category.GENERAL, command_warning)
+		_solo_show_toast(command_warning, 8.0)
 	# #196 — a slot a connected human occupies can never be designated as the AI's.
 	if ai_controlled and network_manager != null and network_manager.slot_has_human_peer(player_id):
 		ai_controlled = false
