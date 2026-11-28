@@ -55,3 +55,46 @@ func test_an_import_remembers_its_list() -> void:
 		assert_str(str(lists[0].link)).is_equal("https://army-forge.onepagerules.com/share?id=IRON")
 		assert_str(str(lists[0].system)).is_equal("gf")
 	dlg.queue_free()
+
+
+class StubClient extends OPRApiClient:
+	var asked: Array = []
+
+	func import_from_share_link(link: String) -> OPRArmy:
+		asked.append(link)
+		return null
+
+
+## Step 51.2 (sheet 04): three stored lists show three rows with their tag and points; Load puts the stored link into
+## the field and loads it (fresh, through the client); no stored list, no section (red before: no section at all).
+func test_the_import_shows_the_recent_lists_and_load_fetches_one() -> void:
+	for i in 3:
+		RecentArmyLists.remember(_entry(i), PATH)
+	var dlg := OPRImportDialog.new()
+	dlg.recent_path = PATH
+	add_child(dlg)
+	dlg.hide()
+	await get_tree().process_frame
+	var stub := StubClient.new()
+	dlg.api_client = stub
+	dlg.add_child(stub)
+	dlg.show()
+	await get_tree().process_frame
+	var section := dlg.find_child("RecentLists", true, false) as Control
+	assert_object(section).override_failure_message("no recent lists").is_not_null()
+	if section == null:
+		dlg.queue_free()
+		return
+	var texts: Array = section.find_children("*", "Label", true, false).map(func(l: Node) -> String: return (l as Label).text)
+	assert_array(texts).contains(["RECENT LISTS", "List 2", "List 1", "List 0", "GF", "1002 PTS"])
+	var load_buttons := section.find_children("*", "Button", true, false).filter(func(b: Node) -> bool: return (b as Button).text == "Load")
+	assert_int(load_buttons.size()).is_equal(3)
+	(load_buttons[0] as Button).pressed.emit()
+	await get_tree().process_frame
+	assert_str(dlg.share_link_input.text).is_equal(str(_entry(2).link))
+	assert_array(stub.asked).is_equal([str(_entry(2).link)])
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(PATH))
+	dlg.hide()
+	dlg.show()
+	assert_bool(section.visible).override_failure_message("a section without lists").is_false()
+	dlg.queue_free()
