@@ -97,3 +97,25 @@ func test_release_notes_have_the_language_pair_a_full_width_close_and_no_placeho
 	if picture != null:
 		assert_that(picture.custom_minimum_size).is_equal(Vector2(150, 84))
 		picture.free()
+
+
+## Gap review 28.11. (sheet 08): the release notes sheet takes the height its cards need instead of leaving the lower
+## half of an 884 px sheet empty (red before: the list ended far above the Close row).
+func test_the_release_notes_sheet_fits_its_cards() -> void:
+	get_tree().root.size = Vector2i(1920, 1080)
+	var dialog = auto_free(load(SCRIPT).new())
+	dialog.state_path = STATE
+	add_child(dialog)
+	dialog._locale = "en"
+	dialog.open()
+	await get_tree().process_frame
+	dialog.size = dialog.DIALOG_SIZE   # the menu's size: a headless run wraps the window to its controls
+	if dialog.has_method("_fit_to_cards"):
+		dialog.call("_fit_to_cards")
+	for _i in 3:
+		await get_tree().process_frame
+	var scroll := dialog._cards.get_parent() as Control
+	var spare: float = scroll.size.y - dialog._cards.size.y
+	assert_float(spare).override_failure_message("%d px empty under the cards of a %d px sheet" % [int(spare), dialog.size.y]
+		).is_less_equal(2.0)
+	assert_int(dialog.size.y).is_less_equal(884)
