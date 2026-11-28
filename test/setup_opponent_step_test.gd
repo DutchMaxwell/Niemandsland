@@ -223,3 +223,11 @@ func test_the_rail_starts_at_row_01_and_its_rows_have_hairlines() -> void:
 		var under := row.get_parent().get_child(row.get_index() + 1) if row.get_index() + 1 < row.get_parent().get_child_count() else null
 		assert_bool(under is ColorRect and (under as Control).custom_minimum_size.y == 1.0).override_failure_message(
 			"no hairline under %s" % (row.get_child(0) as Label).text).is_true()
+
+
+## Gap review 27.11. (03b at 1280x720): the rows start under the setup's title (4 % of the width, x 51), not 24 px left
+## of it at 28 (red before).
+func test_at_720p_the_rows_start_under_the_title() -> void:
+	var step := _step(MANIFEST, Vector2(1280, 720))
+	await get_tree().process_frame
+	assert_float((step.get("left") as Control).position.x).is_equal_approx(1280.0 * 0.04, 1.0)
