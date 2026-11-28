@@ -7,6 +7,24 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Changed — rules corrections
+- **Rules epoch 108 is live: a Blast splits the whole attack evenly in the two skirmish games.** The hits of one Blast
+  attack are shared evenly between the target and the units within reach (up to each unit's room), and the defender
+  picks where the remainder goes. A single hit, or a target alone, lands as before. Games recorded before epoch 108 replay
+  unchanged.
+- **Rules epoch 107 is live: a ruin's upper floors are ledges in the two skirmish games.** Stepping off a ruin's floor
+  now drops, jumps or is refused by the same rules as a step on a generated board. Line of sight is unchanged. Games
+  recorded before epoch 107 replay unchanged.
+- **Rules epoch 106 is live: jumps and falls in the two skirmish games play on the board you see.** On a generated
+  board the core now knows its ledges, so a model that jumps or is pushed off a step rolls its jump and fall dice and
+  the others re-place within 1 in, the same online. Games recorded before epoch 106 replay unchanged (they played a
+  flat board), and tables without steps are unchanged.
+- **Rules epoch 105 is live: a deployment zone takes a model only when its whole base is inside.** On deployment maps
+  with shaped zones (diagonals, discs, side bands) the AI no longer sets a base that overhangs the zone line; the
+  standard front-line deployment already kept every base inside and is unchanged. Games recorded before epoch 105 replay
+  unchanged.
+- **Rules epoch 104 is live: each command upgrade lives with its own model in Age of Fantasy: Skirmish.** A command
+  group's Musician is lost only when the model that carries it dies, not with the Banner's bearer; a list that names
+  neither keeps one bearer for both. Games recorded before epoch 104 replay unchanged.
 - **Rules epoch 103 is live: command groups in Age of Fantasy: Skirmish, and the Firefight casualty chain.** A
   command group's Banner (+1 to morale test rolls after shooting or melee) and Musician (+1" on move actions) also reach
   the units its list picked, and both are lost - for the own unit and the picks - once the model carrying them is

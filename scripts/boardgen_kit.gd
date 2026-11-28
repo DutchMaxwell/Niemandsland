@@ -174,3 +174,34 @@ static func with_lods(mesh: ArrayMesh) -> ImporterMesh:
 		im.add_surface(Mesh.PRIMITIVE_TRIANGLES, mesh.surface_get_arrays(s), [], {}, material())
 	im.generate_lods(25.0, 60.0, [])
 	return im
+
+
+## GEN-13: may a player lay a generated board of kit `theme` ("tiefwerk", "ruintown") now? {"state", "pct"}: "ready" (every
+## module and texture set cached), "not_used" (this run draws no kit - headless, below Medium, Compatibility - nothing to wait
+## for), or "waiting" with the cached share while the download runs under `holder` (the first ask starts it; ask again to
+## follow it). The setup's board card asks this through main.gd's door before any board exists.
+static func wait_state(holder: Node, theme: String) -> Dictionary:
+	if DisplayServer.get_name() == "headless":
+		return {"state": "not_used", "pct": 100}
+	var kit := holder.get_node_or_null("KitWait_" + theme) as BoardgenKit
+	if kit == null:
+		kit = BoardgenKit.new(theme)
+		kit.name = "KitWait_" + theme
+		holder.add_child(kit)
+		var made := TiefwerkLibrary.new(theme)
+		made.name = "Sets"
+		kit.add_child(made)
+	if not kit.usable([]):
+		return {"state": "not_used", "pct": 100}
+	var lib := kit.get_node("Sets") as TiefwerkLibrary
+	var names := kit.module_names()
+	var done := names.filter(func(n: String) -> bool: return not kit.cached_path(n).is_empty()).size()
+	var sets_ok := lib.set_names().is_empty() or lib.sets_cached()
+	if done == names.size() and sets_ok:
+		return {"state": "ready", "pct": 100}
+	if not kit.has_meta("started"):
+		kit.set_meta("started", true)
+		kit.prefetch(names)
+		if not sets_ok:
+			lib.ensure_sets()
+	return {"state": "waiting", "pct": int(100.0 * (done + int(sets_ok)) / (names.size() + 1))}

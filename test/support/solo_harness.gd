@@ -98,7 +98,68 @@ static func drop(main: Node, moves: Array) -> void:
 	await main._on_units_dropped(moves)
 
 
-## Plan step 27-pre P3: a drawn generated board of `seed_value` / `theme` on the table,
-## through main's test-only door.
+## Plan step 27-pre P3 / GEN-7: a drawn generated board of `seed_value` / `theme` on a 4 x 4 ft
+## table, through the player's door (main.apply_generated_board): lay it before any model.
 static func generated_board(main: Node, seed_value: int, theme: String) -> void:
-	main._attach_generated_board_for_test(seed_value, theme)
+	main.table.setup_table(Vector2(4, 4))
+	var id := "ruined_town" if theme.to_lower() == "ruintown" else "tiefwerk"
+	main.apply_generated_board(GeneratedBoard.resolve(id, seed_value))
+
+
+## GEN-9: NACHTMAHR's guided deployment as main runs it - main's blocked tests from the
+## table, Front Line `depth_in`, the AI on the negative edge (it won the roll-off) - with the
+## human side out, so the AI places every unit it has.
+static func ai_deploys_all(main: Node, depth_in := 12.0, seed_value := 5) -> void:
+	var blocked: Dictionary = AiDeployment.make_blocked_tests(main.terrain_overlay)
+	var feet: Vector2 = main.table.table_size
+	main._solo_deploy_fsm = {
+		"phase": "side",
+		"winner_is_ai": true,
+		"human_turn": false,
+		"human_out": false,
+		"objectives": [],
+		"blocked_normal": blocked["normal"],
+		"blocked_flying": blocked["flying"],
+		"seed": seed_value,
+		"w": feet.x * 0.3048,
+		"d": feet.y * 0.3048,
+		"depth": depth_in * 0.0254,
+		"human_placed": {},
+		"outcome": [],
+	}
+	await main._solo_deploy_begin_side(true)
+	await main._solo_deploy_human_out()
+
+
+## GEN-1: a player's Shoot at `target` through the radial's targeting door and a left click
+## from straight above its first live model (on a generated board a camera ray from the side
+## meets a raised block first). Pick bodies as SkirmishTable.aim gives spawned models.
+static func shoot_from_above(main: Node, att: GameUnit, target: GameUnit) -> void:
+	await main.solo_begin_targeting(att, false)
+	for m in target.get_alive_models():
+		var n: Node3D = (m as ModelInstance).node
+		if n.get_node_or_null("FtPick") == null:
+			var body := StaticBody3D.new()
+			body.name = "FtPick"
+			body.set_meta("game_unit", target)
+			var shape := CollisionShape3D.new()
+			var ball := SphereShape3D.new()
+			ball.radius = 0.016
+			shape.shape = ball
+			body.add_child(shape)
+			n.add_child(body)
+			body.position = Vector3(0, 0.03, 0)
+	var at: Vector3 = (
+		(target.get_alive_models()[0] as ModelInstance).node.global_position + Vector3(0, 0.03, 0)
+	)
+	var cam := main.get_viewport().get_camera_3d()
+	var above := Transform3D(Basis.looking_at(Vector3.DOWN, Vector3.FORWARD), at + Vector3(0, 1, 0))
+	for i in 3:  # the camera's own view tween may still run: set it again until it holds
+		cam.global_transform = above
+		await main.get_tree().physics_frame
+	cam.global_transform = above
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = cam.unproject_position(at)
+	await main._solo_targeting_input(click)

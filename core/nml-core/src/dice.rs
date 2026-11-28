@@ -310,7 +310,7 @@ impl Tray {
     /// Step 29d: the transcript names a free-answer choice `id` (`None` = only asked). A seeded tray ignores the call.
     pub fn offer_free(&mut self, id: String, answer: Option<String>) {
         if let Some(feed) = self.feed.as_mut() {
-            feed.free_choices.push(FreeChoice { id, answer, reached: None, bad: None, lines: Vec::new(), landings: Vec::new(), order: 0 });
+            feed.free_choices.push(FreeChoice { id, hints: Vec::new(), answer, reached: None, bad: None, lines: Vec::new(), landings: Vec::new(), order: 0 });
         }
     }
 
@@ -329,6 +329,14 @@ impl Tray {
             }
         }
         c.answer.clone()
+    }
+
+    /// [`Tray::reach_free`] with `hints` the owner's side reads (step 29e-2a: `pushed:<slot>`, the model the rest gather at).
+    pub fn reach_free_hinted(&mut self, id: &str, owner: &str, hints: Vec<String>) -> Option<String> {
+        if let Some(c) = self.feed.as_mut().and_then(|f| f.free_choices.iter_mut().find(|c| c.id == id)) {
+            c.hints = hints;
+        }
+        self.reach_free(id, owner)
     }
 
     /// Step 29d: the core refuses the free answer of `id` with `why` (the step answers Refused at that input).
@@ -612,6 +620,7 @@ pub struct InterferenceChoice {
 #[derive(Debug, Clone)]
 pub struct FreeChoice {
     pub id: String,
+    pub hints: Vec<String>,
     pub answer: Option<String>,
     pub reached: Option<(usize, String)>,
     pub bad: Option<String>,
@@ -1142,12 +1151,12 @@ pub fn blast_split(hits: i64, x: i64, target_models: i64, neighbour_models: &[i6
     one.iter().map(|n| n * hits.max(0)).collect()
 }
 
-/// [`blast_split`] at `rules_epoch`: from `PENDING_EPOCH_BLAST_EVEN` (ruling D-29-R1) the whole attack's hits split evenly -
+/// [`blast_split`] at `rules_epoch`: from `EPOCH_108_BLAST_EVEN` (ruling D-29-R1) the whole attack's hits split evenly -
 /// every unit the same share up to its room (`hits` x its models, as a hit's X never put more than one hit per model on a
 /// unit), what a full unit cannot take shared among the rest, the remainder one each in unit order (target first). The total
 /// stays `hits x min(X, all models)`, so a single hit or a lone target lands exactly as before; below the epoch, `blast_split`.
 pub fn blast_split_at(hits: i64, x: i64, target_models: i64, neighbour_models: &[i64], rules_epoch: u32) -> Vec<i64> {
-    if !rule_on(rules_epoch, crate::acts::PENDING_EPOCH_BLAST_EVEN) {
+    if !rule_on(rules_epoch, crate::acts::EPOCH_108_BLAST_EVEN) {
         return blast_split(hits, x, target_models, neighbour_models);
     }
     let (out, caps, left) = blast_even_base(hits, x, target_models, neighbour_models);
@@ -2544,7 +2553,7 @@ pub(crate) fn resolve_volley_with_pick_label(
         // (main.gd `_solo_hits`, TC-023) and the save reads the pick's own square.
         if hits > 0 && p.blast > 1 && !blast_spread.is_empty() && !unit_of_one {
             let cap = def.blast_models.unwrap_or(def.models).max(1);
-            let split = if rule_on(att.rules_epoch, crate::acts::PENDING_EPOCH_BLAST_EVEN) {
+            let split = if rule_on(att.rules_epoch, crate::acts::EPOCH_108_BLAST_EVEN) {
                 // Step 29b (D-29-R1 "defender picks how"): the remainder goes where the target's owner says.
                 let (base, caps, left) = blast_even_base(hits, p.blast, cap, blast_spread);
                 let open: Vec<usize> = (0..base.len()).filter(|&i| base[i] < caps[i]).collect();

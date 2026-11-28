@@ -11,6 +11,11 @@ const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 const ParityTable := preload("res://test/parity/parity_table.gd")
 const INCH := 0.0254
 
+## The receive doors main connects in _ready ([signal of the manager, main's handler]) that the O seat rewires.
+const RECEIVE_DOORS := [["remote_activation_updated", "_on_remote_activation_updated"],
+	["turn_state_received", "_on_turn_state_received"], ["command_received", "_on_network_command"],
+	["remote_wounds_updated", "_on_remote_wounds_updated"], ["remote_round_advanced", "_on_remote_round_advanced"]]
+
 ## Every epoch a feature test pinned through `need_epoch` (the shipped-epoch gate reads it).
 static var pins: Array[int] = []
 
@@ -26,8 +31,9 @@ class WireNet extends "res://scripts/network_manager.gd":
 	func send_command(type: String, payload: Variant = {}, target_peer: int = 0) -> bool:
 		wire.append({"t": type, "p": payload, "to": target_peer})
 		return true
-	func slot_has_human_peer(_slot: int) -> bool:
-		return false
+	var human_slots: Array = []   # the slots a human peer plays (their units are asked through the wire)
+	func slot_has_human_peer(slot: int) -> bool:
+		return human_slots.has(slot)
 	func get_my_peer_id() -> int:
 		return 1
 	func get_my_player_slot() -> int:
@@ -72,9 +78,13 @@ static func boot(suite: Node, seat: String) -> SkirmishTable:
 			t.main.opr_army_manager.rules_automation = RulesAutomation.Level.AUTOMATIC
 			t.main.solo_ai_slots = {}
 			t.net = WireNet.new()
+			t.net.is_host = true   # this table is the host, slot 1: it owns the turn token
 			t.net.army_manager = t.main.opr_army_manager
 			t.main.network_manager = t.net
 			t.main.radial_menu_controller.network_manager = t.net
+			for pair in RECEIVE_DOORS:   # main wired its receive doors to the real manager in _ready: wire the swapped one
+				if t.net.has_signal(pair[0]) and t.main.has_method(pair[1]):
+					t.net.connect(pair[0], Callable(t.main, pair[1]))
 			SoloHarness.controller(t.main)
 			t.main._apply_turn_token(1)
 	SoloHarness.instant(t.main)
@@ -159,6 +169,22 @@ func card_shows(gu: GameUnit, needle: String) -> bool:
 	return false
 
 
+## Import the card-list JSON at `path` for `player` through the table's real import door (system check included).
+func import_list(path: String, player: int) -> OPRApiClient.OPRArmy:
+	var client := OPRApiClient.new()   # a Node: freed here, or the suite reports it as an orphan (CI exit 101)
+	var army := client.build_army_offline(JSON.parse_string(FileAccess.get_file_as_string(path)))
+	client.free()
+	await main._on_opr_army_imported(army, player, false)
+	await E2EBoot.settle(_tree)
+	return army
+
+
+## A whole AI-vs-AI game on this table through the table's own both-AI loop, `opener` taking round 1's first turn.
+func run_ai_game(opener := 1) -> void:
+	await main._solo_run_both_ai_game(opener)
+	await E2EBoot.settle(_tree)
+
+
 ## The game-over summary's text as the player reads it, or "" while none stands.
 func summary_text() -> String:
 	for c in main.get_children():
@@ -177,6 +203,45 @@ func press_button(text: String) -> bool:
 	return false
 
 
+## A table of `feet` (the size the setup screen hands the table: 4 x 4 ft for the skirmish systems).
+func table_feet(feet: Vector2) -> void:
+	main._set_table_size(feet)
+	await runner.simulate_frames(2)
+
+
+## The table's Start Game / Ready button (its deployment gate included).
+func press_start() -> void:
+	main._on_start_game_pressed()
+	await E2EBoot.settle(_tree)
+
+
+## A ladder-free x-ledge of the generated board `seed_value` that drops `drop_in` inches: [high, low] cell centres in
+
+
+## world metres (y = the cell's height), or [] when the board has none.
+static func ledge(seed_value: int, drop_in: float) -> Array:
+	var layout: Dictionary = (ClassDB.instantiate("NmlCore") as Object).call("boardgen_layout_themed", seed_value, "")
+	var nx := int(layout["nx"])
+	var cell := float(layout["cell_in"])
+	var cells: Array = layout["cells"]
+	var lv: Array = layout["level_in"]
+	var ladders := {}
+	for c in layout["connectors"]:
+		ladders[[int(c["low"]), int(c["high"])]] = true
+	for i in cells.size():
+		if i % nx + 1 >= nx:
+			continue
+		var a := int(cells[i]["level"])
+		var b := int(cells[i + 1]["level"])
+		if a <= b or ladders.has([i + 1, i]) or not is_equal_approx(float(lv[a]) - float(lv[b]), drop_in):
+			continue
+		var centre := func(k: int, lvl: int) -> Vector3:
+			return Vector3(((k % nx) + 0.5 - nx / 2.0) * cell * INCH, float(lv[lvl]) * INCH,
+				((k / nx) + 0.5 - int(layout["nz"]) / 2.0) * cell * INCH)
+		return [centre.call(i, a), centre.call(i + 1, b)]
+	return []
+
+
 ## The card's Activate (the committed start). True when the activation is open afterwards.
 func start(gu: GameUnit) -> bool:
 	return await E2EBoot.start_activation(main, gu)
@@ -187,12 +252,18 @@ func end(gu: GameUnit) -> void:
 	await main.radial_menu_controller.card_end_activation(gu)
 
 
-## A player's drag of `model` to `to` (world metres) over `inches`, through the drop door.
-func drop(model: ModelInstance, to: Vector3, inches: float) -> void:
+## A player's drag of `model` to `to` (world metres) over `inches`, released as the drag's release runs it: the table's
+## drop check first (the core's move check, a jump included; a refusal puts the model back), then the drop door.
+## False when the drop was refused.
+func drop(model: ModelInstance, to: Vector3, inches: float) -> bool:
 	var from: Vector3 = model.node.global_position
 	model.node.global_position = to
+	if main.attacked_unit_drag_refused(model.unit, inches):
+		model.node.global_position = from
+		return false
 	await SoloHarness.drop(main, [{"node": model.node, "inches": inches, "from_raw": from,
 		"path": PackedVector2Array([Vector2(from.x, from.z), Vector2(to.x, to.z)])}])
+	return true
 
 
 ## A player's real drag of every live model of `gu` (or only the models `only`) by (dx_in, dz_in) inches under the
@@ -247,6 +318,42 @@ func aim(att: GameUnit, target: GameUnit, melee := false) -> void:
 	click.position = main.get_viewport().get_camera_3d().unproject_position(at)
 	await main._solo_targeting_input(click)
 	await E2EBoot.settle(_tree)
+
+
+## The guided solo deployment (vs the AI) standing in its SCOUT phase with the human on turn and `placed` (units already
+## down) recorded - the state the deploy flow reaches after the main phase (as e2e_deploy_phases_test arms it).
+func scout_phase(placed: Array) -> void:
+	var seen := {}
+	for u in placed:
+		seen[(u as GameUnit).unit_id] = true
+	main._solo_deploy_fsm = {"phase": "scout", "winner_is_ai": false, "human_turn": true, "human_out": false,
+		"human_placed": seen, "objectives": [], "seed": 5}
+
+
+## The human's "✓ Unit placed" in the guided deployment; true when the placement was taken (the unit is on record).
+func deploy_done(gu: GameUnit) -> bool:
+	main._solo_deploy_human_done_one()
+	await runner.simulate_frames(2)
+	return (main._solo_deploy_fsm.get("human_placed", {}) as Dictionary).has(gu.unit_id)
+
+
+## The solo action toast's text (the deployment refusals speak there).
+func toast_text() -> String:
+	var t := main.get_node_or_null("UI/SoloActionToast") as Label
+	return "" if t == null else t.text
+
+
+## O seat: a human guest (peer 2) holds slot 2 - its units' owner choices go over the wire; `timeout_s` bounds the wait.
+func seat_guest(timeout_s: float) -> void:
+	net.human_slots = [2]
+	net.peer_to_slot = {1: 1, 2: 2}
+	net.connected_peers.assign([2])
+	main._owner_requests_instance().timeout_s = timeout_s
+
+
+## The guest's answer frame to the owner request `req`, through the host's command receive door.
+func answer_owner(req: int, faces: Array) -> void:
+	main._on_network_command("roll_result", {"req": req, "faces": faces}, 2)
 
 
 ## Pin the table to the pending rules epoch `n` and record the pin (R-FT1); teardown restores the shipped epoch.

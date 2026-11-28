@@ -1,7 +1,7 @@
 {
  "cases": [
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -134,7 +134,7 @@
    "seed": 0
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 8,
@@ -267,7 +267,7 @@
    "seed": 17
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 7,
@@ -400,7 +400,7 @@
    "seed": 49
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -525,7 +525,7 @@
    "seed": 225
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 8,
@@ -647,7 +647,7 @@
    "seed": 0
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 9,
@@ -769,7 +769,7 @@
    "seed": 17
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 9,
@@ -891,7 +891,7 @@
    "seed": 49
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -1009,7 +1009,7 @@
    "seed": 225
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -1131,7 +1131,7 @@
    "seed": 0
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -1253,7 +1253,7 @@
    "seed": 17
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -1375,7 +1375,7 @@
    "seed": 49
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -1497,7 +1497,7 @@
    "seed": 225
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 8,
@@ -1619,7 +1619,7 @@
    "seed": 0
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 9,
@@ -1741,7 +1741,7 @@
    "seed": 17
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 9,
@@ -1863,7 +1863,7 @@
    "seed": 49
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -1981,7 +1981,7 @@
    "seed": 225
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -2098,7 +2098,7 @@
    "seed": 0
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -2215,7 +2215,7 @@
    "seed": 17
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -2332,7 +2332,7 @@
    "seed": 49
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -2449,7 +2449,7 @@
    "seed": 225
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -2566,7 +2566,7 @@
    "seed": 0
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -2683,7 +2683,7 @@
    "seed": 17
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -2800,7 +2800,7 @@
    "seed": 49
   },
   {
-   "epoch": 103,
+   "epoch": 108,
    "final": [
     {
      "alive": 10,
@@ -2919,7 +2919,7 @@
  ],
  "family": "melee_shapes",
  "provenance": {
-  "epoch": 103,
+  "epoch": 108,
   "git_sha": "2abece540731f88ccc0630c8b3e7073c54278d96",
   "registry_sha256": "425decb0652c95d5718359a87107f2f3738e3287e9d67a13369b0a00a3f0df0e",
   "registry_system": "gf"

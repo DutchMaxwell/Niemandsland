@@ -19,7 +19,7 @@ const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 
 ## Stands in for NetworkManager at main's seam: a live session. `slot_has_human_peer` stays
 ## false — a plain human-vs-human room, no AI-held slot anywhere.
-class FakeNet extends Node:
+class FakeNet extends "res://test/support/presence_stub_net.gd":
 	var active: bool = true
 	func is_multiplayer_active() -> bool:
 		return active

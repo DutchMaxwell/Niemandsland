@@ -28,7 +28,7 @@ func before_test() -> void:
 	SoloHarness.fast(_main)
 	SoloHarness.auto_saves(_main)
 	SoloHarness.lesson_paused(_main)
-	AiActRecorder.rules_epoch = 108   # the core's PENDING_EPOCH_BLAST_EVEN
+	AiActRecorder.rules_epoch = 108   # the core's EPOCH_108_BLAST_EVEN
 	_lines = []
 	_main.battle_log.entry_added.connect(_tap)
 

@@ -137,3 +137,20 @@ func test_a_guest_sees_a_tag_on_its_own_row_only_and_ready_calls_the_game() -> v
 	assert_array(tags).is_equal([true, false])   # own row first; another player's flag is unknown to a guest
 	(card.find_child("ReadyButton", true, false) as Button).pressed.emit()
 	assert_int((parts[2] as StubMain).starts).is_equal(1)
+
+
+## Gap review 27.11. (sheet 02b): the empty seat is a dashed frame without the card's solid box, and the ready tag is a
+## bordered chip (red before: a solid card, bare mono text).
+func test_the_empty_seat_is_dashed_and_the_tag_is_a_chip() -> void:
+	var parts := await _hosted_card(true)
+	if parts.is_empty():
+		return
+	var card: Control = parts[0]
+	var seat := card.find_child("WaitingSeat", true, false) as PanelContainer
+	assert_object(seat).override_failure_message("no dashed seat").is_not_null()
+	if seat != null:
+		assert_bool(seat.get_theme_stylebox(&"panel") is StyleBoxEmpty).is_true()
+	var tag: Array = (_player_rows(card)[0] as Node).find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).text == "Not ready")
+	assert_bool(not tag.is_empty() and (tag[0] as Node).get_parent() is PanelContainer \
+		and (tag[0] as Node).get_parent() != _player_rows(card)[0]).override_failure_message("the tag is not a chip").is_true()

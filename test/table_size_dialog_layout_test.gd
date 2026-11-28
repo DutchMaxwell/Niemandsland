@@ -35,7 +35,8 @@ func _assert_layout(window: Vector2i) -> float:
 		assert_float(dialog._cards[0].size.y).override_failure_message("%s: picture %d px" % [window, int(dialog._cards[0].size.y)]).is_greater_equal(150.0)
 	else:
 		assert_float(card_aspect).override_failure_message("%s: biome card %.2f:1" % [window, card_aspect]).is_between(2.0, 2.8)
-	assert_float(hero_aspect).override_failure_message("%s: preview %.2f:1" % [window, hero_aspect]).is_between(2.2, 2.9)
+	var hero_min: float = TableSizeDialog.RAIL_HERO_ASPECT if dialog._rail_body.visible else 2.2   # the rail card: sheet 03's 1.6
+	assert_float(hero_aspect).override_failure_message("%s: preview %.2f:1" % [window, hero_aspect]).is_between(hero_min - 0.01, 2.9)
 	assert_float(dialog._page.get_combined_minimum_size().y) \
 		.override_failure_message("%s: the page needs scrolling" % window).is_less_equal(dialog._scroll.size.y)
 	assert_bool(Rect2(Vector2.ZERO, area).encloses(dialog._create.get_global_rect())) \
@@ -169,3 +170,128 @@ func test_the_six_biomes_stand_in_one_row_at_1080p() -> void:
 	assert_int((chosen.get_theme_stylebox("normal") as StyleBoxFlat).border_width_top).is_equal(2)
 	var small := await _open(Vector2i(1280, 720))
 	assert_int(small._grid.columns).is_less_equal(3)
+
+
+## Step 84 (sheet 03): from 900 px the header carries the breadcrumb and a bordered "Back to main menu" with Esc, the
+## title block reads "NEW TABLE" / "Prepare your table." at 44 px and stands with step 01 in the left column, so the rail
+## card starts level with it. At 1280x720 the header and title stay as they were (red before: none of it).
+func test_from_900_px_the_header_and_title_are_the_sheets() -> void:
+	var dialog := await _open(Vector2i(1920, 1080))
+	var texts: Array = dialog.find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).is_visible_in_tree()).map(func(l: Node) -> String: return (l as Label).text.strip_edges())
+	assert_array(texts).contains(["MAIN MENU  /  PREPARE YOUR TABLE", "NEW TABLE", "Esc"])
+	var wide := dialog.find_child("BackWide", true, false) as Button
+	assert_bool(wide != null and wide.is_visible_in_tree()).override_failure_message("no bordered way back").is_true()
+	assert_bool(dialog._back.is_visible_in_tree()).is_false()
+	var title := dialog.find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).text == "Prepare your table.")[0] as Label
+	assert_int(title.get_theme_font_size("font_size")).is_equal(44)
+	assert_bool(dialog._left.is_ancestor_of(title)).override_failure_message("the title is not in the left column").is_true()
+	var card := dialog.find_child("RailCard", true, false) as Control
+	assert_float(absf(card.get_global_rect().position.y - title.get_global_rect().position.y)).is_less(60.0)
+	var small := await _open(Vector2i(1280, 720))
+	assert_bool(small._back.is_visible_in_tree()).is_true()
+	var small_title := small.find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).text == "Prepare your table.")[0] as Label
+	assert_bool(small._left.is_ancestor_of(small_title)).is_false()
+
+
+## The inner pages (who, layout) keep the title block over them at 1080p although state one carries it in its left
+## column (step 84).
+func test_the_inner_pages_keep_the_title_at_1080p() -> void:
+	get_tree().root.size = Vector2i(1920, 1080)
+	var dialog: TableSizeDialog = auto_free(TableSizeDialog.new())
+	dialog.layout_step = true
+	add_child(dialog)
+	for _i in 3:
+		await get_tree().process_frame
+	dialog._show_state("who")
+	await get_tree().process_frame
+	assert_bool(dialog._intro.is_visible_in_tree()).override_failure_message("the who page lost the title").is_true()
+	# ...under the header and at the top, not pushed to the foot of the page (the 28.11. capture, red before)
+	assert_int(dialog._intro.get_index()).is_greater(dialog._header.get_index())
+	assert_float(dialog._intro.get_global_rect().position.y).is_less(200.0)
+	dialog._show_state("")
+	await get_tree().process_frame
+	assert_bool(dialog._left.is_ancestor_of(dialog._intro)).is_true()
+
+
+## Step 84 (type, sheet 03): from 900 px each step heading is 22 px with its number in mono and its hint at the right in
+## 15 px; the size cards read caption 14 px mono upper case, value 20 px, sub-line 15 px. At 720 the hints stay hidden
+## (red before: 17 px headings, the hints as lines under the cards).
+func test_from_900_px_the_step_headings_carry_their_hints() -> void:
+	var dialog := await _open(Vector2i(1920, 1080))
+	var shown := func(d: Node, text: String) -> Array: return d.find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).text == text and (l as Label).is_visible_in_tree())
+	for hint: String in ["The biome defines the visual style. Terrain stays yours to place.", "Table size is fixed once you create it."]:
+		assert_int(shown.call(dialog, hint).size()).override_failure_message(hint).is_equal(1)
+	var name_label: Array = shown.call(dialog, "Choose a biome")
+	assert_int(name_label.size()).is_equal(1)
+	if name_label.size() == 1:
+		assert_int((name_label[0] as Label).get_theme_font_size("font_size")).is_equal(22)
+	var caption: Array = shown.call(dialog, "STANDARD")
+	assert_int(caption.size()).override_failure_message("no size caption in upper case").is_equal(1)
+	var small := await _open(Vector2i(1280, 720))
+	assert_int(shown.call(small, "The biome defines the visual style. Terrain stays yours to place.").size()).is_equal(0)
+
+
+## Step 84 (system cards, sheet 03): from 900 px a system card is 136 px with the family eyebrow, the name in two lines
+## at 20 px, a BATTLE / SKIRMISH chip with the board in mono and a gold tick on the chosen one. At 720 the cards stay
+## one line each (red before: a one-line strip card at every size).
+func test_from_900_px_the_system_cards_are_the_sheets() -> void:
+	var dialog := await _open(Vector2i(1920, 1080))
+	var card := dialog._system_buttons[dialog.selected_system] as Control
+	assert_float(card.size.y).is_greater_equal(130.0)
+	var texts: Array = card.find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).is_visible_in_tree()).map(func(l: Node) -> String: return (l as Label).text)
+	assert_array(texts).contains(["GRIMDARK", "BATTLE", "6 × 4 FT"])
+	var ticks: Array = card.find_children("*", "TextureRect", true, false).filter(
+		func(t: Node) -> bool: return (t as Control).is_visible_in_tree())
+	assert_int(ticks.size()).override_failure_message("no tick on the chosen card").is_equal(1)
+	var other := dialog._system_buttons["aof"] as Control
+	assert_int(other.find_children("*", "TextureRect", true, false).filter(
+		func(t: Node) -> bool: return (t as Control).is_visible_in_tree()).size()).is_equal(0)
+	var small := await _open(Vector2i(1280, 720))
+	var small_texts: Array = (small._system_buttons["gf"] as Node).find_children("*", "Label", true, false).filter(
+		func(l: Node) -> bool: return (l as Label).is_visible_in_tree()).map(func(l: Node) -> String: return (l as Label).text)
+	assert_array(small_texts).not_contains(["GRIMDARK"])
+
+
+## Sheets 03/03b: in the rail card "Create table" is 18 px semibold at the left with its Enter cap (red before: 14 px
+## regular, centred, an arrow glyph).
+func test_the_rail_cards_create_table_reads_as_drawn() -> void:
+	var dialog := await _open(Vector2i(1920, 1080))
+	assert_str(dialog._create.text).is_equal("Create table")
+	assert_int(dialog._create.get_theme_font_size("font_size")).is_equal(18)
+	var cap := dialog._create.get_node_or_null("EnterCap") as Control
+	assert_bool(cap != null and cap.visible).override_failure_message("no Enter cap").is_true()
+	var small := await _open(Vector2i(1280, 720))
+	assert_bool((small._create.get_node("EnterCap") as Control).visible).is_false()
+
+
+
+## At 1280x720 the who page keeps the setup's title on top as well (the 28.11. capture: it stood over the key legend).
+func test_the_who_page_keeps_the_title_on_top_at_720p() -> void:
+	get_tree().root.size = Vector2i(1280, 720)
+	var dialog: TableSizeDialog = auto_free(TableSizeDialog.new())
+	dialog.layout_step = true
+	add_child(dialog)
+	for _i in 3:
+		await get_tree().process_frame
+	dialog._show_state("who")
+	for _i in 3:
+		await get_tree().process_frame
+	assert_float(dialog._intro.get_global_rect().position.y).is_less(160.0)
+
+
+## Gap review 28.11. (sheets 02-04): every Enter cap sits beside its word, centred on the button - one placement in
+## HouseStyle - not low in the corner (red before: the cap's top at the button's middle, about 12 px low).
+func test_the_enter_cap_is_centred_on_its_button() -> void:
+	var dialog := await _open(Vector2i(1920, 1080))
+	await get_tree().process_frame
+	var cap := dialog._create.get_node_or_null("EnterCap") as Control
+	assert_object(cap).is_not_null()
+	if cap == null:
+		return
+	var low := cap.get_global_rect().get_center().y - dialog._create.get_global_rect().get_center().y
+	assert_float(absf(low)).override_failure_message("the cap stands %d px off the button's middle" % int(low)).is_less_equal(1.0)

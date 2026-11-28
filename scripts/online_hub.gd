@@ -7,6 +7,7 @@ extends MenuPage
 signal host_requested(settings: Dictionary)
 signal join_requested(code: String, url: String, player_name: String, button: Button)
 
+const JOIN_W := 124   # the Join-with-a-code button: its word, then its Enter cap (sheet 02)
 const LOCK := "<rect x='5' y='11' width='14' height='9' rx='1.5'/><path d='M8 11V8a4 4 0 0 1 8 0v3'/>"
 const JOIN_CODE_LEN := 6
 const TIMEOUT_S := 8.0
@@ -38,6 +39,7 @@ func _init() -> void:
 	left.add_child(caption)
 	name_field = NetDialog.line_edit(PlayerIdentity.load_saved_name(), "Player name")
 	name_field.max_length = PlayerIdentity.MAX_NAME_LEN
+	name_field.custom_minimum_size.y = HouseStyle.MENU_H_FIELD   # sheet 02 .field
 	name_field.text_submitted.connect(func(_typed: String) -> void: _on_prepare())
 	left.add_child(name_field)
 	var create := _block(MenuView._icon(&"table"), "Create a room", "Prepare a table for your group")
@@ -89,8 +91,8 @@ func _ready() -> void:
 	count_label = _text("", HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
 	count_label.add_theme_color_override(&"font_color", HouseStyle.MUTED)
 	head.add_child(count_label)
-	var again := HouseStyle.button("", HouseStyle.ICON, 32)
-	again.custom_minimum_size.x = 32
+	var again := HouseStyle.button("", HouseStyle.ICON, HouseStyle.MENU_H_ACTION)   # a 44 px framed button (sheet 02)
+	again.custom_minimum_size.x = HouseStyle.MENU_H_ACTION
 	again.focus_mode = FOCUS_ALL
 	again.icon = HouseStyle.svg_icon(MenuView.ICON_SVG % REFRESH)
 	again.add_theme_constant_override(&"icon_max_width", 18)
@@ -107,6 +109,10 @@ func _ready() -> void:
 	box.add_child(_rows)
 	status_label = _text("", HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
 	_rows.add_child(status_label)
+	var info := _text("The list shows what the relay reports today: a code and its player count.",
+		HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
+	info.add_theme_color_override(&"font_color", HouseStyle.MUTED)
+	box.add_child(info)
 	relay_field.text_submitted.connect(func(_url: String) -> void: refresh())
 	_chain()
 	if lists_on_open:
@@ -140,6 +146,8 @@ func _on_rooms(rooms: Array, gen: int) -> void:
 	count_label.text = "%d game%s online" % [rooms.size(), "" if rooms.size() == 1 else "s"]
 	for room: Dictionary in rooms:
 		_rows.add_child(_room_row(str(room.get("code", "")), int(room.get("players", 0))))
+	if not rooms.is_empty():
+		_choose_room(_rows.get_child(1) as PanelContainer)   # child 0 is the status line
 	_chain()
 
 
@@ -158,9 +166,11 @@ func _show_status(text: String) -> void:
 
 
 ## A room: its code in mono, eight pips (as many filled as players are in), "<n> / 8 players" and Join.
-func _room_row(code: String, players: int) -> HBoxContainer:
+func _room_row(code: String, players: int) -> PanelContainer:
+	var card := PanelContainer.new()   # the chosen room is filled, its Join gold (sheet 02 .room.on)
+	card.name = "Room" + code
 	var row := HBoxContainer.new()
-	row.name = "Room" + code
+	card.add_child(row)
 	row.custom_minimum_size.y = 64
 	row.add_theme_constant_override(&"separation", 18)
 	row.add_child(_text(NetDialog.code_as_typed(code), 24, HouseStyle.mono()))
@@ -189,11 +199,30 @@ func _room_row(code: String, players: int) -> HBoxContainer:
 	join.size_flags_horizontal = SIZE_SHRINK_END
 	join.size_flags_vertical = SIZE_SHRINK_CENTER
 	join.focus_mode = FOCUS_ALL
+	join.name = "Join"
 	join.pressed.connect(func() -> void:
 		_drop_lobby()
 		join_requested.emit(code, _relay(), PlayerIdentity.sanitize(name_field.text), join))
+	join.focus_entered.connect(_choose_room.bind(card))
 	row.add_child(join)
-	return row
+	return card
+
+
+## The chosen room (the first, then the one whose Join has the focus): the 10 % accent fill, the soft rim, a gold Join.
+func _choose_room(chosen: PanelContainer) -> void:
+	for card: Node in _rows.get_children():
+		if not card is PanelContainer:
+			continue
+		var box := StyleBoxFlat.new()
+		box.bg_color = HouseStyle.ROW_HOVER if card == chosen else Color.TRANSPARENT
+		box.border_color = HouseStyle.LINE_SOFT if card == chosen else Color.TRANSPARENT
+		box.set_border_width_all(1)
+		box.set_corner_radius_all(HouseStyle.RADIUS_CARD)
+		box.content_margin_left = 16
+		box.content_margin_right = 16
+		(card as PanelContainer).add_theme_stylebox_override(&"panel", box)
+		(card.find_child("Join", true, false) as Button).theme_type_variation = \
+			HouseStyle.PRIMARY if card == chosen else HouseStyle.BUTTON
 
 
 func _relay() -> String:
@@ -263,14 +292,9 @@ func _build_join() -> void:
 	join_button.focus_mode = FOCUS_ALL
 	join_button.disabled = true
 	join_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	join_button.custom_minimum_size.x = JOIN_W   # "Join" and its Enter cap side by side at the menu's button scale
 	join_button.pressed.connect(_on_join)
-	var cap := HouseStyle.key_cap("Enter")
-	cap.mouse_filter = MOUSE_FILTER_IGNORE
-	cap.set_anchors_preset(PRESET_CENTER_RIGHT)
-	cap.grow_horizontal = GROW_DIRECTION_BEGIN
-	cap.offset_left = -10
-	cap.offset_right = -10
-	join_button.add_child(cap)
+	HouseStyle.place_key_cap(join_button, HouseStyle.key_cap("Enter"))
 	row.add_child(join_button)
 	block.get_child(0).add_child(row)
 	join_error = _text("", HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))

@@ -7908,7 +7908,10 @@ fn live_morale_ctx(statics: &[UnitStatic], state: &State, i: usize, melee: bool,
     let mut lender = morale_hero(statics, state, root, seams);
     if let Some((h, quality)) = hero_aura_quality(statics, state, i, ctx.quality, seams) {
         ctx.quality = quality;
-        let line = format!("{} (Tough 9+) lends its Quality to {shown}'s morale test (Q{}+)", statics[state.roster.profile[h]].name, quality);
+        // HERO-AURA-LINE: the line names the book's own floor - the big games' "(Tough 9+)", none in the skirmish books.
+        let floor = state.book(i).hero_aura_at(seams.rules_epoch).min_tough;
+        let label = if floor > 0 { format!(" (Tough {floor}+)") } else { String::new() };
+        let line = format!("{}{label} lends its Quality to {shown}'s morale test (Q{}+)", statics[state.roster.profile[h]].name, quality);
         shot.log.push(line.clone());
         say_rule(tray, "morale", state.player[i], || line);
         lender = None;
@@ -8042,10 +8045,10 @@ fn bearer_dead(state: &State, u: usize) -> bool {
     matches!(state.cmd_bearer.get(u), Some(None))
 }
 
-/// KIT-BEARER-NAME (lead ruling 26.11., `PENDING_EPOCH_TWO_BEARERS`): the Musician dies with the model that carries it,
+/// KIT-BEARER-NAME (lead ruling 26.11., `EPOCH_104_TWO_BEARERS`): the Musician dies with the model that carries it,
 /// which may not be the Banner's; below the placeholder it rides with the one bearer (`bearer_dead`), as recorded.
 fn musician_dead(state: &State, u: usize, rules_epoch: u32) -> bool {
-    if rule_on(rules_epoch, crate::acts::PENDING_EPOCH_TWO_BEARERS) { matches!(state.musician_bearer(u), Some(None)) } else { bearer_dead(state, u) }
+    if rule_on(rules_epoch, crate::acts::EPOCH_104_TWO_BEARERS) { matches!(state.musician_bearer(u), Some(None)) } else { bearer_dead(state, u) }
 }
 
 /// Ruling D16: the friendly command-group unit with `rule` whose profile picked unit `i` (`Profile::command_picks`).
@@ -13449,7 +13452,7 @@ fn resolve_with(
                 let line = if face < 4 {
                     format!("Push: {name} rolls {face} to push {tname} - no push on 1-3")
                 } else {
-                    let answer = up_front.map(Ok).or_else(|| tray.reach_free(&to_id, &skey).map(|a| push_answer(&next, ti, &tkey, &a)));
+                    let answer = up_front.map(Ok).or_else(|| tray.reach_free(&to_id, &skey).filter(|a| a != "skip").map(|a| push_answer(&next, ti, &tkey, &a)));
                     match answer.map(|p| p.and_then(|p| push_spot(&next, ti, &p, cover).map(|r| (p, r)))) {
                         None => format!("Push: {name} rolls {face} to push {tname} - no spot named, nothing moves"),
                         Some(Err(why)) => {
@@ -13458,6 +13461,10 @@ fn resolve_with(
                         }
                         Some(Ok((p, (moved_in, fall)))) => {
                             next.positions[ti][p.model] = p.to;
+                            // Step 29e-2a (H-8, as the fall): the push lands as its own move before its fall and the re-place,
+                            // so the table shows the pushed model where it went before anyone places the rest.
+                            let moved_to = next.positions[ti].clone();
+                            tray.land(|| crate::landing::Landing { unit: ti, models: Vec::new(), loss_line: false, moved_to });
                             // Falling (3.6 p.15): pushed off 2 in or more, the model rolls one die per inch, each 1-3 a wound on
                             // it. The pushed unit is not the active one, so no activation ends (ruling D10).
                             let fell = fall.map(|h| {
@@ -13466,14 +13473,20 @@ fn resolve_with(
                                 let w = faces.iter().filter(|&&f| f <= 3).count() as i64;
                                 shot.rolls.push(crate::dice::Roll { kind: "fall", count: faces.len() as i64, target: 4, faces: faces.clone(), owner: tname.clone() });
                                 let take = w.min(next.wounds[ti].get(p.model).copied().unwrap_or(0));
+                                // #3961: the fall's wounds are a landing of their own (as the volley's and the active fall's) - the
+                                // table lands only landings, so without it the pushed model stayed alive there.
+                                let (at, wounds) = (next.positions[ti].clone(), next.wounds[ti].clone());
                                 land_wounds_in_order(&mut next, ti, take, vec![p.model]);
+                                if let Some(l) = landing_of(&next, ti, &at, &wounds, &tray.dead_slots(ti)) {
+                                    tray.land(|| l);   // the push line names the wounds, the table says the loss (as the fall's)
+                                }
                                 format!(" off a {h:.0} in drop - it falls, {faces:?}, {w} wound{} on 1-3", if w == 1 { "" } else { "s" })
                             }).unwrap_or_default();
                             let alive = next.positions[ti].get(p.model).is_some_and(|q| *q == p.to);
                             // Step 29d-2 (3.6 p.15: "then the opponent must place any other models from the unit within 1"
                             // of it"): the defender's `push_replace:<target>` - its own spots, or "auto" / no answer = the D14 placer.
                             let rep_id = format!("push_replace:{tkey}");
-                            let rest = match (alive, tray.reach_free(&rep_id, &tkey)) {
+                            let rest = match (alive, tray.reach_free_hinted(&rep_id, &tkey, vec![format!("pushed:{}", p.model)])) {
                                 (false, _) => String::new(),
                                 (true, Some(a)) if a != "auto" => place_rest(&mut next, ti, p.model, &a, cover).unwrap_or_else(|why| {
                                     tray.refuse_free(&rep_id, format!("Push: {why}"));

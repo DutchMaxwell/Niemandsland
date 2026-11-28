@@ -647,3 +647,28 @@ func test_the_menus_display_and_gameplay_pages_are_one_row_per_setting() -> void
 	assert_str(value.text).is_equal("%.1fs" % beat.value)
 	assert_float(GraphicsSettings.combat_stage_hold_s).is_equal_approx(beat.value, 0.01)
 	beat.value = before
+
+
+## Sheet 05: Quality is one joined group of 40 px segments, a dropdown in a row is 44 px high (red before: five loose
+## 26 px buttons, 30 px dropdowns).
+func test_the_menus_quality_is_one_group_and_dropdowns_are_44_px() -> void:
+	_panel.set_modal(true)
+	var row := _panel.find_child("QualityRow", true, false) as HBoxContainer
+	assert_int(row.get_theme_constant(&"separation")).is_equal(0)
+	assert_float((row.get_child(0) as Control).custom_minimum_size.y).is_equal(40.0)
+	var frame := _panel.find_child("TableFrameOption", true, false) as Control
+	assert_float(frame.custom_minimum_size.y).is_equal(44.0)
+
+
+## Gap review 28.11. (sheet 05): in the menu the rail is set off - a darker column with a hairline at its right - and the
+## Graphics page carries its heading "How the table looks" under the eyebrow (red before: neither).
+func test_the_menus_rail_is_set_off_and_graphics_has_its_heading() -> void:
+	_panel.set_modal(true)
+	await get_tree().process_frame
+	var column := _panel.find_child("RailColumn", true, false) as PanelContainer
+	var box := column.get_theme_stylebox(&"panel") as StyleBoxFlat if column != null else null
+	assert_bool(box != null and box.border_width_right >= 1 and box.bg_color.a > 0.0).override_failure_message(
+		"the rail is not set off").is_true()
+	var heading := _panel.find_child("PageHeading", true, false) as Label
+	assert_str(heading.text if heading != null else "").is_equal("How the table looks")
+	_panel.set_modal(false)

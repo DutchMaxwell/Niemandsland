@@ -6,7 +6,7 @@ extends GdUnitTestSuite
 const IN2M := 0.0254
 
 
-class FakeNet extends Node:
+class FakeNet extends "res://test/support/presence_stub_net.gd":
 	var batches := 0
 	var activations := 0
 	var casts := 0

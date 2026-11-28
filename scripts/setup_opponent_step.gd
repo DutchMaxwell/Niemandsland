@@ -59,6 +59,11 @@ func setup(opponent: SetupOpponent, values: Array) -> void:
 	for entry: Array in WHO:
 		cards.add_child(_who_card(entry[0], entry[1], entry[2], entry[3]))
 	_solo = _solo_card()
+	var air := Control.new()   # 12 px between the cards and the Solo fields (sheet 03b), on top of the column's 8
+	air.custom_minimum_size.y = 4
+	air.visible = false
+	_solo.visibility_changed.connect(func() -> void: air.visible = _solo.visible)
+	left.add_child(air)
 	left.add_child(_solo)
 	_off = SetupLayoutStep._text("", 15, HouseStyle.font(400), HouseStyle.MUTED)
 	left.add_child(_off)
@@ -89,7 +94,7 @@ func setup(opponent: SetupOpponent, values: Array) -> void:
 ## captions, so a 1280 x 720 window shows the page without scrolling.
 func _place() -> void:
 	var compact := size.y < 800
-	var pad := 28.0 if compact else maxf(28.0, size.x * 0.04)
+	var pad := maxf(28.0, size.x * 0.04)   # the setup's own margin, so the rows stand under its title (720p too)
 	var rail_w := 504.0 if compact else minf(684.0, size.x * 0.36)
 	_rail.custom_minimum_size.x = rail_w
 	_rail.position = Vector2(size.x - pad - rail_w, 100.0 if compact else 232.0)   # level with row 01 (sheet 03b)
@@ -158,12 +163,7 @@ func _build_rail(values: Array) -> void:
 	create.focus_mode = FOCUS_ALL
 	create.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	create.pressed.connect(func() -> void: create_requested.emit())
-	var cap := HouseStyle.key_cap_on_gold("Enter")
-	cap.set_anchors_preset(PRESET_CENTER_RIGHT)
-	cap.grow_horizontal = GROW_DIRECTION_BEGIN
-	cap.offset_left = -16
-	cap.offset_right = -16
-	create.add_child(cap)
+	HouseStyle.place_key_cap(create, HouseStyle.key_cap_on_gold("Enter"))
 	box.add_child(create)
 	var next := SetupLayoutStep._text("Next at the table: bring your own army, then deploy.", 15, HouseStyle.font(400),
 		HouseStyle.MUTED)

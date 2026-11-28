@@ -216,7 +216,7 @@ const EPOCH_63_MELEE_HEIGHT := 63
 ## endpoints and Melee Shrouding band, Counter / Destructive / Piercing Hunter in melee) are stamped 92 with EPOCH_92_MELEE_CAUSES.
 ## The AI skirting Dangerous ground (a plain move's goal read and the sideways re-plan), the 3.6 faction folders resolving their rules
 ## and the volley's spell rider switched off are stamped 93 with EPOCH_93_DANGER_RULES_RIDER.
-static var rules_epoch: int = 103
+static var rules_epoch: int = 108
 ## The live activation identity the Ethereal placement band penalty is keyed to (MOR-19b): the
 ## Solo AI advances it once per activation, the Teleport beat stamps the unit's
 ## `teleport_activation` with it, and the band pass prices the -6"/-6" only while the two are
@@ -333,12 +333,14 @@ const EPOCH_101_SKIRMISH_PUSH := 101
 ## on them; they mirror the core's live epoch.
 const EPOCH_102_CASUALTY_CHAIN := 102
 const EPOCH_103_COMMAND_BANNER := 103
-## The core's `PENDING_EPOCH_CORE_TIERS` (acts.rs, plan step 27-pre): from it the terrain line carries a generated board's
+## The core's `EPOCH_105_ZONE_BASE_EDGE` (acts.rs): the epoch below the tier hand-over - the old leg its tests pin.
+const EPOCH_105_ZONE_BASE_EDGE := 105
+## The core's `EPOCH_106_CORE_TIERS` (acts.rs, plan step 27-pre): from it the terrain line carries a generated board's
 ## ledges (`_tiers_for_line`).
-const PENDING_EPOCH_CORE_TIERS := 106
-## The core's `PENDING_EPOCH_RUIN_LEDGES` (acts.rs, plan step 27-pre-R): from it a free ruin's floors are ledges to the
-## core's move check. Nothing in the table gates on it; it mirrors the core's placeholder for the tests.
-const PENDING_EPOCH_RUIN_LEDGES := 107
+const EPOCH_106_CORE_TIERS := 106
+## The core's `EPOCH_107_RUIN_LEDGES` (acts.rs, plan step 27-pre-R): from it a free ruin's floors are ledges to the core's
+## move check. Nothing in the table gates on it; it mirrors the core's constant for the tests.
+const EPOCH_107_RUIN_LEDGES := 107
 const SPAWN_PROFILES_EPOCH := 8
 
 static var _max := 5000
@@ -867,13 +869,29 @@ static func _terrain_line(terrain_cb: Callable, school_world: Dictionary = {}) -
 	if rules_epoch >= EPOCH_73_V36:
 		line["containers"] = _container_boxes(ov)
 	line.merge(_tiers_for_line(ov, rules_epoch))
+	_add_board_cells(line)
 	return line
+
+
+## GEN-8: the generated board's cover cells (`board_cells` of `tiers_of_board`) join the line's `cells`; the overlay's
+## own cell wins on the same grid cell. No board = no key: the line keeps its bytes.
+static func _add_board_cells(line: Dictionary) -> void:
+	var board: Array = line.get("board_cells", [])
+	line.erase("board_cells")
+	if board.is_empty():
+		return
+	var own := {}
+	for c: Array in line["cells"]:
+		own[Vector2i(int(c[0]), int(c[1]))] = true
+	for c: Array in board:
+		if not own.has(Vector2i(int(c[0]), int(c[1]))):
+			(line["cells"] as Array).append([int(c[0]), int(c[1]), int(c[2])])
 
 
 ## Plan step 27-pre: a generated board's ledges for the terrain line - `{"tiers", "solid_cells"}` of the board on the table
 ## (main's `generated_board()`, main being the overlay's ancestor: its seed and theme, through `NmlCore.boardgen_tiers`, the
 ## core's `to_plain`) from
-## `PENDING_EPOCH_CORE_TIERS`; {} below it, with no generated board or without the core, so that line keeps its bytes.
+## `EPOCH_106_CORE_TIERS`; {} below it, with no generated board or without the core, so that line keeps its bytes.
 static func _tiers_for_line(ov: Object, epoch: int) -> Dictionary:
 	# main owns the overlay: the nearest ancestor that answers `generated_board` (the tree's current scene is not main
 	# under every runner, so it is not asked)
@@ -883,17 +901,23 @@ static func _tiers_for_line(ov: Object, epoch: int) -> Dictionary:
 	return tiers_at_epoch(n.call("generated_board") if n != null else {}, epoch)
 
 
-## `tiers_of_board` from `PENDING_EPOCH_CORE_TIERS` on; {} below it (the line a record before it played keeps its bytes).
+## `tiers_of_board` from `EPOCH_106_CORE_TIERS` on; {} below it (the line a record before it played keeps its bytes).
 static func tiers_at_epoch(board: Dictionary, epoch: int) -> Dictionary:
-	return tiers_of_board(board) if epoch >= PENDING_EPOCH_CORE_TIERS else {}
+	return tiers_of_board(board) if epoch >= EPOCH_106_CORE_TIERS else {}
 
 
-## The ledges of `board` (`{"seed", "theme"}`, main's `generated_board()`): {} for none or without the core.
+## The ledges of `board` (`{"seed", "theme"}`, main's `generated_board()`) and its cover cells as `board_cells` (GEN-8):
+## {} for none or without the core.
 static func tiers_of_board(board: Dictionary) -> Dictionary:
 	if board.is_empty() or not ClassDB.class_exists("NmlCore"):
 		return {}
 	var t: Dictionary = (ClassDB.instantiate("NmlCore") as Object).call("boardgen_tiers", int(board["seed"]), str(board["theme"]))
-	return {"tiers": t["tiers"], "solid_cells": t["solid_cells"]} if t.has("tiers") else {}
+	if not t.has("tiers"):
+		return {}
+	var out := {"tiers": t["tiers"], "solid_cells": t["solid_cells"]}
+	if not (t.get("cells", []) as Array).is_empty():   # GEN-8: the board's cover classes, for _add_board_cells
+		out["board_cells"] = t["cells"]
+	return out
 
 
 ## F-CONT (rules 3.6, EPOCH_73_V36, lead ruling D5): the placed containers' exact 6x3 boxes `{c, he, yaw}` in world

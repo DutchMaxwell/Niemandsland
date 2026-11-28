@@ -97,14 +97,15 @@ fn a_fixed_hits_weapon_rolls_only_the_saves() {
     assert_eq!(r.wounds, 2, "two saves fail (1, 2); Rending reads no attack faces");
 }
 
-/// Ruling D-29-R1 (plan step 29a): from `PENDING_EPOCH_BLAST_EVEN` the WHOLE attack's hits split evenly - 2 hits of Blast(3)
+/// Ruling D-29-R1 (plan step 29a): from `EPOCH_108_BLAST_EVEN` the WHOLE attack's hits split evenly - 2 hits of Blast(3)
 /// over two units with room are 3 + 3, not 4 + 2 (each original hit's remainder on the target); one epoch below, as before.
 #[test]
 fn d29_r1_the_whole_attack_splits_evenly_from_its_epoch() {
-    use crate::acts::PENDING_EPOCH_BLAST_EVEN as E;
+    use crate::acts::EPOCH_108_BLAST_EVEN as E;
     use crate::dice::blast_split_at;
     assert_eq!(blast_split_at(2, 3, 5, &[5], E), vec![3, 3]);
-    assert_eq!(blast_split_at(2, 3, 5, &[5], E - 1), vec![4, 2], "a record below the epoch replays as recorded");
+    assert_eq!(E, 108);
+    assert_eq!(blast_split_at(2, 3, 5, &[5], crate::acts::EPOCH_107_RUIN_LEDGES), vec![4, 2], "a record at 107 replays as recorded");
     assert_eq!(blast_split_at(2, 4, 5, &[5, 5], E), vec![3, 3, 2], "the remainder one each, target first");
     assert_eq!(blast_split_at(2, 4, 1, &[5], E), vec![2, 6], "a full unit's share goes to the rest");
     assert_eq!(blast_split_at(3, 6, 2, &[1, 1, 1], E), vec![6, 3, 3, 3], "the book example: room caps every unit");
@@ -123,7 +124,7 @@ fn d29_r1_the_whole_attack_splits_evenly_from_its_epoch() {
 }
 
 /// The shooting volley reads the attacker's epoch: two Blast(3) hits on a 5-model unit beside a 5-model neighbour keep 3
-/// on the target from `PENDING_EPOCH_BLAST_EVEN`, 4 one epoch below.
+/// on the target from `EPOCH_108_BLAST_EVEN`, 4 one epoch below.
 #[test]
 fn d29_r1_the_volley_splits_by_the_record_epoch() {
     let def = Ctx { quality: 4, defense: 4, models: 5, ..Default::default() };
@@ -136,6 +137,21 @@ fn d29_r1_the_volley_splits_by_the_record_epoch() {
             &|_| (false, "trooper".into(), 0), &|_, _| None, None, None, &[5], &mut tray);
         (r.rolls[1].count, r.blast_spill[0].hits.clone())
     };
-    assert_eq!(kept(crate::acts::PENDING_EPOCH_BLAST_EVEN), (3, vec![3]));
-    assert_eq!(kept(crate::acts::PENDING_EPOCH_BLAST_EVEN - 1), (4, vec![2]));
+    assert_eq!(kept(crate::acts::EPOCH_108_BLAST_EVEN), (3, vec![3]));
+    assert_eq!(kept(crate::acts::EPOCH_107_RUIN_LEDGES), (4, vec![2]));
+}
+
+/// 108 scope: the even split only plays where a book spreads Blast. gf / aof spread nothing at 107 or 108, so their Blast
+/// keeps the plain multiply (the volley gets no neighbours: `sim::blast_spread_units` reads this book field); the two
+/// skirmish books spread 3 in at both epochs, and only the split between them moves.
+#[test]
+fn the_even_split_is_a_skirmish_rule_only() {
+    for epoch in [crate::acts::EPOCH_107_RUIN_LEDGES, crate::acts::EPOCH_108_BLAST_EVEN] {
+        for sys in ["gf", "aof"] {
+            assert_eq!(crate::rules::book(sys).blast_spread_in_at(epoch), None, "{sys} at {epoch} spreads no Blast");
+        }
+        for sys in ["gff", "aofs"] {
+            assert_eq!(crate::rules::book(sys).blast_spread_in_at(epoch), Some(3.0), "{sys} at {epoch} spreads 3 in");
+        }
+    }
 }

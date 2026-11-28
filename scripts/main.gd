@@ -3550,7 +3550,7 @@ func hotseat_off_turn_drag(unit: GameUnit) -> bool:
 	if unit == null or opr_army_manager == null \
 			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING:
 		return false
-	if hotseat_turn_refusal(unit_owner_slot(unit.unit_properties)) == "":
+	if hotseat_turn_refusal(unit_owner_slot(unit.unit_properties)) == "" or CoreActivation.replacing(unit):
 		return false
 	var text := "%s is not on turn — moved back" % unit.get_name()
 	hotseat_log_refusal(text)
@@ -3563,8 +3563,8 @@ func hotseat_off_turn_drag(unit: GameUnit) -> bool:
 ## caller filters plain clicks) and name the refusal once.
 func attacked_unit_drag_refused(unit: GameUnit, distance_in := 0.0) -> bool:
 	if unit == null or opr_army_manager == null \
-			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING:
-		return false
+			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING or CoreActivation.replacing(unit):
+		return false   # #3872 / 29e-2a: placing the rest after a fall or a push is no move - End measures the 1 in
 	# One-core P3 step 34 (N2 b): a move-path unit's drop inside its open activation is re-checked by the core at the
 	# declared mode. A unit that already shot this round keeps the shot lock below.
 	if int(unit.unit_properties.get("shot_round", -1)) != opr_army_manager.current_round \
@@ -3631,6 +3631,8 @@ func core_activation_start(gu: GameUnit) -> bool:
 ## Step 40b: `for_drag` (the drag machine's gate) lets a unit that already activated through while "Enforce Movement Limit"
 ## is off - the escape hatch of O1/O2; the doors keep the lock.
 func core_drag_blocked(gu: GameUnit, for_drag := false) -> bool:
+	if CoreActivation.replacing(gu):
+		return false   # step 29e-2a: the owner places the rest after a push
 	if not CoreActivation.is_lifecycle_unit(self, gu) or CoreActivation.session_open(gu.unit_id) \
 			or CoreActivation.session_open(_solo_combat_unit(gu).unit_id):
 		return false
@@ -11729,6 +11731,9 @@ func _owner_choice(unit: GameUnit, id: String, options: Array, purpose: String, 
 	if id.begins_with("interference:"):   # CC-14a (O3): the table's own words for a foe nobody answers for (`_solo_remote_interference`)
 		_log_rule_event(BattleLog.Category.COMBAT, ("%s: %s's seat is empty — no interference" if owner_peer == 0
 			else "%s: no answer from %s — no interference") % [purpose, _solo_owner_name(unit)], true)
+	elif id.begins_with("push_replace:"):   # step 29e-2a/b: the timeout is named on both tables, the core places the rest
+		_log_rule_event(BattleLog.Category.MOVEMENT, ("Push: %s's seat is empty - the core places the rest within 1 in" if owner_peer == 0
+			else "Push: no answer from %%s within %d s - the core places the rest within 1 in" % ceili(_owner_roll_timeout_s)) % _solo_owner_name(unit), true)
 	elif battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"%s: no answer to the %s — the automatic pick stands" % [_solo_owner_name(unit), purpose], true)
@@ -11757,6 +11762,14 @@ func _solo_choice_local(unit: GameUnit, id: String, options: Array, wounds := 0,
 	if id.get_slice(":", 0) == "versatile_mode":   # step 22b: the table's own Versatile prompt, the answer as the core's option
 		var vm: Dictionary = await _solo_prompt_versatile(str(ctx.get("weapon", "Weapon")), ctx.get("recommended", {"ap": 1, "hit_mod": 0}))
 		return "ap" if int(vm.get("ap", 0)) > 0 else "hit"
+	if id.get_slice(":", 0) == "push":   # step 29e-1 (D-29-R2): the attacker decides after the dice
+		var pushed := opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2))
+		return "push" if await _solo_ask("Push?", "%s is Shaken after your attack.\nTry to push one of its models up to 2 in (4+)?" % (
+			pushed.get_name() if pushed else "The target"), "Try to push", "No") else "no"
+	if id.get_slice(":", 0) == "push_to":
+		return await CoreActivation.pick_push_spot(self, opr_army_manager.get_game_unit_by_id(id.get_slice(":", 2)))
+	if id.get_slice(":", 0) == "push_replace":   # step 29e-2a: the defender places the rest
+		return await CoreActivation.pick_push_replace(self, opr_army_manager.get_game_unit_by_id(id.get_slice(":", 1)), options)
 	if id.get_slice(":", 0) == "blast_split":   # step 29c: the defender picks which units take the Blast remainder
 		return await _solo_ask_blast_split(opr_army_manager.get_game_unit_by_id(id.get_slice(":", 1)), options)
 	if id.get_slice(":", 0) == "spot_markers":   # the table's own marker dialog; the count is one of the core's options "0".."N"
@@ -14634,6 +14647,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Esc that reached the table unowned opens / closes the ☰ game menu (maintainer 03.10.2026, Esc = A): a
 	# LAST fallback, every window, ghost, radial, drag and pick mode before it keeps its own Esc.
 	var key := event as InputEventKey
+	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
+		if CoreActivation.skip_push_pick() or CoreActivation.finish_replace_pick(false):   # 29e-1/2a: Esc skips / places for me
+			get_viewport().set_input_as_handled()
+			return
+	if key != null and key.pressed and not key.echo and key.keycode in [KEY_ENTER, KEY_KP_ENTER] and CoreActivation.finish_replace_pick(true):
+		get_viewport().set_input_as_handled()   # step 29e-2a: Enter answers the placed spots
+		return
 	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
 		if not _esc_owned:
 			# maintainer test 7, 26.10.2026: Esc with a selection deselects first; the menu opens on the next Esc.
@@ -20973,6 +20993,11 @@ func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_contro
 	if not version_warning.is_empty():
 		print("VERSION WARNING: %s" % version_warning)
 		_solo_show_toast(version_warning, 8.0)
+	# #3862 (O-FT-1): a list over its book's command-upgrade limit imports with one warning line, never a refusal.
+	var command_warning := CommandPicks.limit_warning(army)
+	if not command_warning.is_empty():
+		_log_rule_event(BattleLog.Category.GENERAL, command_warning)
+		_solo_show_toast(command_warning, 8.0)
 	# #196 — a slot a connected human occupies can never be designated as the AI's.
 	if ai_controlled and network_manager != null and network_manager.slot_has_human_peer(player_id):
 		ai_controlled = false
@@ -22605,6 +22630,11 @@ func _on_units_dropped(moves: Array) -> void:
 	if opr_army_manager == null or opr_army_manager.is_deployment_phase():
 		return
 	for mv in moves:
+		if CoreActivation.take_push_drop(self, mv):   # step 29e-1: the push spot is the drop, not a move of that unit
+			return
+		if CoreActivation.replacing(UnitUtils.get_game_unit((mv as Dictionary).get("node") as Node3D)):
+			return   # step 29e-2a: placing the rest after a push is no move of that unit
+	for mv in moves:
 		if float((mv as Dictionary).get("inches", 0.0)) <= 0.1:
 			continue
 		var unit := UnitUtils.get_game_unit((mv as Dictionary).get("node") as Node3D)
@@ -22623,6 +22653,12 @@ func generated_board() -> Dictionary:
 	if not _board_record.is_empty():
 		return _board_record.duplicate()
 	return {"seed": int(_board_look.get("layout_seed")), "theme": str(_board_look.get("layout_theme")).to_lower()}
+
+
+## GEN-13 door (lead 28.11.: the one door from the setup): the board card asks `BoardgenKit.wait_state` before a table
+## exists - the menu has no main, so it calls this static through the script. Data only to the caller.
+static func board_kit_state(holder: Node, kit_theme: String) -> Dictionary:
+	return BoardgenKit.wait_state(holder, kit_theme)
 
 
 ## GEN-4, the release door: lays the generated board `record` (`GeneratedBoard.resolve`) on the table. Refused with a
@@ -22670,15 +22706,6 @@ func restore_generated_board(record: Dictionary) -> void:
 		restore_generated_board({})
 		return
 	_lay_generated_board(record)
-
-
-## Plan step 27-pre P3, TEST-ONLY door (lead 26.11.; retires in GEN-7 when the e2e uses the player path): a rules e2e
-## puts a drawn generated board of `seed_value` / `theme` on the table through the release door's laying (without its
-## table-size and models checks: those rules tests place their models first). Debug builds only.
-func _attach_generated_board_for_test(seed_value: int, theme: String) -> void:
-	if not OS.is_debug_build() or not ClassDB.class_exists("NmlCore"):
-		return
-	_lay_generated_board({"seed": seed_value, "theme": theme})
 
 
 ## Check coherency for all currently selected units

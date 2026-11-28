@@ -213,7 +213,7 @@ func test_the_preview_is_one_row_per_unit() -> void:
 	_dlg._show_loaded()
 	_dlg._update_preview()
 	var texts: Array = _dlg.army_preview.find_children("*", "Label", true, false).map(func(l: Node) -> String: return (l as Label).text)
-	assert_array(texts).contains(["Command Squad", "× 5", "310", "Line Infantry", "× 10", "280", "Q4+ D4+", "590 PTS · 2 UNITS"])
+	assert_array(texts).contains(["Command Squad", "× 5", "310", "Line Infantry", "× 10", "280", "590 PTS · 2 UNITS"])
 	var cost: Label = _dlg.army_preview.find_children("*", "Label", true, false).filter(
 		func(l: Node) -> bool: return (l as Label).text == "310")[0]
 	assert_object(cost.get_theme_font("font")).is_same(HouseStyle.mono())
@@ -237,3 +237,50 @@ func test_a_wide_window_shows_two_columns() -> void:
 	for _i in 2:
 		await get_tree().process_frame
 	assert_float(_dlg.army_preview.get_parent().get_global_rect().position.y).is_greater(_dlg.share_link_input.get_global_rect().end.y)
+
+
+## Sheet 04's finish: the field names are muted eyebrows in capitals, "Import army" carries its Enter cap and stands 44 px
+## high (red before: sentence-case captions, no cap, 40 px).
+func test_the_import_reads_as_sheet_04() -> void:
+	var caption := _label("Army Forge share link or list ID")
+	assert_bool(caption != null and caption.uppercase).override_failure_message("not an eyebrow").is_true()
+	var import := _button("Import army")
+	var caps := import.find_children("*", "Label", false, false).filter(func(l: Node) -> bool: return (l as Label).text == "Enter")
+	assert_int(caps.size()).is_equal(1)
+	assert_float(import.custom_minimum_size.y).is_equal(float(HouseStyle.MENU_H_ACTION))
+
+
+## Gap review 28.11. (sheet 04 finish): on open the link field takes the focus, not "Open Army Forge" in a white box; the
+## field is 46 px with the example under it; one line per unit (the profile is the row's tooltip); system and rules as
+## bordered chips; the 44 px close box (red before: focus on the link, Q4+ D4+ lines, plain gold system text, 28 px box).
+func test_the_import_finish_matches_sheet_04() -> void:
+	_dlg.visible = false
+	_dlg.visible = true
+	for _i in 3:
+		await get_tree().process_frame
+	assert_object(_dlg.get_viewport().gui_get_focus_owner()).override_failure_message("the field does not take the focus").is_same(_dlg.share_link_input)
+	assert_float(_dlg.share_link_input.custom_minimum_size.y).is_equal(float(HouseStyle.MENU_H_FIELD))
+	var example := _label("e.g. https://army-forge.onepagerules.com/share?id=XXX")
+	assert_float(example.get_global_rect().position.y).override_failure_message("the example is above the field").is_greater(
+		_dlg.share_link_input.get_global_rect().position.y)
+	var close := _dlg.find_child("CloseButton", true, false) as Button
+	assert_float(close.custom_minimum_size.x).is_equal(float(HouseStyle.MENU_SHEET_CLOSE))
+	var army := _load_fake_army()
+	army.game_system = "gf"
+	army.book_version = "3.6.0"
+	var unit := OPRApiClient.OPRUnit.new()
+	unit.name = "Command Squad"
+	unit.quality = 4
+	unit.defense = 4
+	army.units.append(unit)
+	_dlg._show_loaded()
+	_dlg._update_preview()
+	var labels: Array = _dlg.army_preview.find_children("*", "Label", true, false)
+	var texts: Array = labels.map(func(l: Node) -> String: return (l as Label).text)
+	assert_array(texts).override_failure_message("a second line per unit: %s" % [texts]).not_contains(["Q4+ D4+"])
+	assert_array(texts).contains(["Rules 3.6"])
+	var name_row := (labels.filter(func(l: Node) -> bool: return (l as Label).text == "Command Squad")[0] as Node).get_parent() as Control
+	assert_str(name_row.tooltip_text).contains("Q4+ D4+")
+	var chips: Array = labels.filter(func(l: Node) -> bool: return (l as Label).text == "Rules 3.6")
+	assert_bool(not chips.is_empty() and (chips[0] as Label).has_theme_stylebox_override("normal")).override_failure_message(
+		"no rimmed rules chip").is_true()

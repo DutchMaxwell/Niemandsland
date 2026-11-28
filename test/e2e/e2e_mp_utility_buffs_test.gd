@@ -29,7 +29,7 @@ const INCH := 0.0254
 ## Stands in for NetworkManager at main's seam: a live session that records every outbound frame.
 ## Both senders are here because the buff path produces both — the record list (this wave) and the
 ## hidden-state stamps (NML-927), and the suite has to be able to tell them apart.
-class FakeNet extends Node:
+class FakeNet extends "res://test/support/presence_stub_net.gd":
 	var active: bool = true
 	var sent: Array = []
 	func is_multiplayer_active() -> bool:

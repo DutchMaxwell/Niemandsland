@@ -528,3 +528,44 @@ func test_the_next_setup_opens_on_the_remembered_opponent() -> void:
 	probe._show_table_setup()
 	assert_str(probe._table_setup.opponent.who).is_equal("local")
 	probe._table_setup._on_close()
+
+
+## Sheet 08 / 01: the core notice is a warning, its title gold; the version line has its dot (red before: accent title,
+## no dot).
+func test_the_core_notice_title_is_gold_and_the_version_line_has_its_dot() -> void:
+	var card: PromptCard = _menu._show_core_missing_dialog()
+	var title := card.get("_title_label") as Label
+	assert_str(title.get_theme_color("font_color").to_html(false)).is_equal(HouseStyle.GOLD.to_html(false))
+	card.ok_button.pressed.emit()
+	assert_str(_menu.view.version.text).contains("OnePageRules  ·  ")
+
+
+## Gap review 28.11. (sheet 06b): after "Create table" the setup faded out onto the engine's grey (76, 76, 76) for about
+## 0.3 s - the menu hidden, the loading picture still fading in from 0. Now the clear colour is the sheet colour and the
+## loading picture stands opaque from its first frame (red before: clear colour (0.3, 0.3, 0.3), no such helper).
+func test_the_hand_over_never_shows_the_engine_grey() -> void:
+	var clear: Color = ProjectSettings.get_setting("rendering/environment/defaults/default_clear_color", Color(0.3, 0.3, 0.3))
+	assert_bool(clear.is_equal_approx(HouseStyle.SHEET_FILL)).override_failure_message("clear colour %s" % clear).is_true()
+	assert_bool(_menu.has_method("_add_loading_overlay")).override_failure_message("no opaque hand-over overlay").is_true()
+	if not _menu.has_method("_add_loading_overlay"):
+		return
+	var overlay: LoadingOverlay = _menu.call("_add_loading_overlay")
+	await get_tree().process_frame
+	assert_float(overlay._content.modulate.a).override_failure_message("the loading picture fades in over bare grey").is_equal(1.0)
+	overlay.queue_free()
+
+
+## Gap review 28.11. (06b), second half: the setup fades out onto the loading picture, not onto its own window's clear
+## colour - the window drops its background for the fade (red before: one flat frame of (14, 22, 28) between them).
+func test_the_setup_fades_out_onto_the_loading_picture() -> void:
+	var probe = auto_free(load("res://scenes/startup_menu.tscn").instantiate())
+	probe.set_script(MenuTransitionProbe)
+	add_child(probe)
+	probe.setup_lists = false
+	probe._show_table_setup()
+	var setup: Window = probe._table_setup
+	setup._confirm()
+	await get_tree().create_timer(HudTokens.DUR_COMMIT + 0.05).timeout   # the commit beat, then the fade starts
+	assert_bool(probe.entered_game).is_true()
+	assert_bool(is_instance_valid(setup) and setup.transparent_bg).override_failure_message(
+		"the fading setup draws its own background").is_true()

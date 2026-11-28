@@ -229,6 +229,23 @@ func test_the_chosen_way_card_has_the_sheets_fill() -> void:
 	assert_bool(box.draw_center).override_failure_message("the fill is not drawn").is_true()
 
 
+## Gap review 27.11. (sheet 03c): at 1080p the deployment zones are a compact joined group at the left, and the cards
+## of the page stand 14 px apart with 20 px inside (red before: three stretched buttons, 8 px gaps, 10 px inside).
+func test_the_tools_and_zones_have_room_at_1080p() -> void:
+	var step := _step(Vector2(6, 4))
+	if step == null:
+		return
+	await get_tree().process_frame
+	var none := step.find_child("ZoneNone", true, false) as Control
+	var custom := step.find_child("ZoneCustom", true, false) as Control
+	var group := none.get_parent() as Control
+	assert_float(group.size.x).override_failure_message("the zones stretch across the card").is_less(group.get_parent().size.x * 0.8)
+	assert_float(custom.get_global_rect().position.x - none.get_global_rect().end.x).is_less(200.0)
+	assert_int((step.get("left") as Control).get_theme_constant(&"separation")).is_equal(14)
+	var tools := (step.find_child("GenerateAgain", true, false) as Node).get_parent().get_parent() as PanelContainer
+	assert_float(tools.get_theme_stylebox(&"panel").content_margin_left).is_equal(20.0)
+
+
 ## GEN-6: the board card - offered for gff on 4 x 4 ft, "New board" (and G) changes the code in the rail; gf has no
 ## card; off 4 x 4 ft the card is there but off.
 @warning_ignore('unused_parameter')
@@ -259,3 +276,69 @@ func test_the_generated_board_card(do_skip := not ClassDB.class_exists("NmlCore"
 	assert_str(_layout.way).is_equal("empty")
 	var plain := _step(Vector2(4, 4), "gf")
 	assert_bool(_way(plain, "board").visible).override_failure_message("gf was offered a board").is_false()
+
+
+## GEN-13: the board card waits for its kit - downloading (a stub door says "waiting") -> off with the share in its caption;
+## cached ("ready") -> on; not used in this run ("not_used": headless, low preset, Compatibility) -> on, nothing to wait for.
+func test_the_board_card_waits_for_its_kit() -> void:
+	var step := _step(Vector2(4, 4), "gff")
+	if step == null or _way(step, "board") == null:
+		return
+	var card := _way(step, "board")
+	var answer := {"state": "waiting", "pct": 37}
+	var asked: Array = []
+	step.set("kit_state", func(kit_theme: String) -> Dictionary:
+		asked.append(kit_theme)
+		return answer)
+	step.call("poll_kit")
+	assert_array(asked).contains(["tiefwerk"])
+	assert_bool(card.disabled).override_failure_message("a board without its kit can be chosen").is_true()
+	var texts: Array = card.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	assert_array(texts).contains(["Downloading the board kit ... 37 %"])
+	answer.merge({"state": "ready", "pct": 100}, true)   # in place: the stub holds this dictionary
+	step.call("poll_kit")
+	assert_bool(card.disabled).is_false()
+	answer.merge({"state": "not_used", "pct": 100}, true)
+	step.call("poll_kit")
+	assert_bool(card.disabled).is_false()
+
+
+## At 1280x720 nothing of the left column runs under the rail (the 28.11. capture: Change, the Load card and Deploy
+## Objectives stood under it; red before).
+func test_at_720p_the_left_column_stays_left_of_the_rail() -> void:
+	var step := _step(Vector2(6, 4))
+	if step == null:
+		return
+	step.size = Vector2(1280, 720)
+	for _i in 3:
+		await get_tree().process_frame
+	var rail := (step.find_child("Rail", true, false) as Control).get_global_rect()
+	for control: Node in (step.get("left") as Control).find_children("*", "Button", true, false):
+		if (control as Control).is_visible_in_tree():
+			assert_float((control as Control).get_global_rect().end.x).override_failure_message(
+				"%s ends at %d, the rail starts at %d" % [control.name, int((control as Control).get_global_rect().end.x), int(rail.position.x)]) \
+				.is_less_equal(rail.position.x)
+
+
+## Gap review 28.11.: at 1280x720 the GENERATED way (Generate again + the mirror switch in the tools row) pushed the
+## left column under the rail, and "No objectives placed" was cut to "No ob" (red before: both).
+func test_at_720p_the_generated_way_stays_left_of_the_rail_and_says_its_objectives() -> void:
+	for way: String in ["generated", "empty"]:
+		var step := await _sized_step(Vector2(1280, 720))
+		if step == null:
+			return
+		_layout.choose(way)
+		for _i in 3:
+			await get_tree().process_frame
+		var rail := (step.find_child("Rail", true, false) as Control).get_global_rect()
+		var left: Control = step.get("left")
+		assert_float(left.get_global_rect().end.x).override_failure_message("%s: the left column ends at %d, the rail starts at %d" % [
+			way, int(left.get_global_rect().end.x), int(rail.position.x)]).is_less_equal(rail.position.x)
+		var said: Label = step.get("_objectives")
+		var needed := said.get_theme_font("font").get_string_size(said.text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			said.get_theme_font_size("font_size")).x
+		assert_float(said.size.x).override_failure_message("%s: '%s' needs %d px, has %d" % [way, said.text, int(needed),
+			int(said.size.x)]).is_greater_equal(needed)
+		var keys: Control = step.get("_keys")
+		assert_float(keys.get_global_rect().position.y).override_failure_message("%s: the key legend overlaps the left column" % way
+			).is_greater_equal(left.get_global_rect().end.y)

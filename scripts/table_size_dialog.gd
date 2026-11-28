@@ -11,6 +11,7 @@ const CM_TO_FEET := 1.0/30.48
 const PAGE_ASPECT := 1768.0/1080.0
 ## Spare window height grows the preview and the biome cards only down to these proportions.
 const HERO_MIN_ASPECT := 2.2
+const RAIL_HERO_ASPECT := 1.6   # the rail card's picture may grow to sheet 03's 594 x 372
 const RAIL_MIN_H := 900.0
 const SIX_MIN_W := 1000.0   # a left column this wide shows the six biomes in one row (step 83, sheet 03)
 const SIX_PHOTO_H := 150.0
@@ -19,6 +20,7 @@ const SIX_MIN_ASPECT := 0.6   # a card of the one-row form grows up to 0.6 : 1 t
 const CARD_MIN_ASPECT := 2.0
 const CARD_MAX_ASPECT := 2.8
 const FONT = preload("res://assets/ui_glassmorphism/fonts/Inter.ttf")
+const MenuView = preload("res://scripts/startup_menu_view.gd")
 const LOGO = preload("res://assets/ui_glassmorphism/fonts/Orbitron.ttf")
 # Keys are the TABLE's biome ids (table.gd BIOMES): the selection goes straight into table.set_biome.
 const BIOMES := {
@@ -56,6 +58,14 @@ var _error: Label
 var _summary: Dictionary = {}   # "System" / "Biome" / "Size" -> its value in the summary row above Create table
 var _create: Button
 var _back: Button
+var _back_wide: HBoxContainer   # from 900 px: a bordered "Back to main menu" with its Esc cap (step 84)
+var _wide_only: Array[Control] = []   # the breadcrumb and the eyebrow "NEW TABLE": shown from 900 px only
+var _intro: VBoxContainer
+var _headings: Array = []    # [number, name, hint] of each step heading (step 84: 22 px, mono number, hint at the right)
+var _size_texts: Array = []  # [caption, value, sub-line] of each size card
+var _system_parts: Dictionary = {}   # id -> [column, family, name, tag line, chip row, tick] of each system card (step 84)
+var _size_note: Label        # "Table size is fixed once you create it." under the cards; the heading's hint from 900 px
+var _title: Label
 var _preview: TextureRect
 var _preview_title: Label
 var _preview_description: Label
@@ -132,7 +142,7 @@ func _ready() -> void:
 	visibility_changed.connect(func() -> void:
 		if visible:
 			_fit_host()
-			_back.grab_focus.call_deferred())
+			(_back if _back.visible else _back_wide.get_child(0) as Button).grab_focus.call_deferred())
 	_fit_host()
 	_sync_inputs()
 	set_system(selected_system)   # the row's pick (default gf) filters the biomes and preselects the size
@@ -175,6 +185,10 @@ func _build_ui() -> void:
 	var land := _label("LAND",27,HouseStyle.ACCENT)
 	land.add_theme_font_override("font",LOGO)
 	wordmark.add_child(land)
+	var crumb := _label("    MAIN MENU  /  PREPARE YOUR TABLE",14,HouseStyle.MUTED)
+	crumb.add_theme_font_override("font",HouseStyle.mono())
+	crumb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_header.add_child(crumb)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_header.add_child(spacer)
@@ -182,12 +196,30 @@ func _build_ui() -> void:
 	_back.flat = true
 	_back.pressed.connect(_on_close)
 	_header.add_child(_back)
+	_back_wide = HBoxContainer.new()
+	_back_wide.theme = HouseStyle.menu_theme()
+	_back_wide.add_theme_constant_override("separation",HouseStyle.GAP_ROW)
+	var back := HouseStyle.button("Back to main menu",HouseStyle.BUTTON,HouseStyle.MENU_H_ACTION)
+	back.name = "BackWide"
+	back.focus_mode = Control.FOCUS_ALL
+	back.icon = HouseStyle.svg_icon(MenuView.ICON_SVG % "<path d='M15 5l-7 7 7 7'/>")
+	back.add_theme_constant_override("icon_max_width",16)
+	back.pressed.connect(_on_close)
+	_back_wide.add_child(back)
+	_back_wide.add_child(HouseStyle.key_cap("Esc"))
+	_header.add_child(_back_wide)
 	var intro := VBoxContainer.new()
+	_intro = intro
 	intro.add_theme_constant_override("separation",8)
 	_page.add_child(intro)
+	var eyebrow := _label("NEW TABLE",HouseStyle.MENU_FONT_EYEBROW,HouseStyle.ACCENT)
+	eyebrow.add_theme_font_override("font",HouseStyle.eyebrow_font())
+	intro.add_child(eyebrow)
+	_wide_only = [crumb,eyebrow]
 	_title_row = BoxContainer.new()   # the first row of the setup: the game system sits on the title line, so it costs no height
 	intro.add_child(_title_row)
 	var title := _label("Prepare your table.",34)
+	_title = title
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title_row.add_child(title)
 	var system_caption := _label("Game system",12,HouseStyle.MUTED)
@@ -217,7 +249,7 @@ func _build_ui() -> void:
 	left.size_flags_stretch_ratio = 1
 	left.add_theme_constant_override("separation",14)
 	_columns.add_child(left)
-	left.add_child(_label("02   Choose a biome",17))
+	left.add_child(_step_heading("02","Choose a biome","The biome defines the visual style. Terrain stays yours to place."))
 	_grid = GridContainer.new()
 	_grid.columns = 3
 	_grid.add_theme_constant_override("h_separation",10)
@@ -251,7 +283,7 @@ func _build_ui() -> void:
 	_add_left_air(left)
 	var size_header := HBoxContainer.new()
 	left.add_child(size_header)
-	var size_title := _label("03   Set the table size",17)
+	var size_title := _step_heading("03","Set the table size","Table size is fixed once you create it.")
 	size_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_header.add_child(size_title)
 	_unit_option = OptionButton.new()
@@ -288,10 +320,11 @@ func _build_ui() -> void:
 		column.offset_right = -8
 		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		button.add_child(column)
-		column.add_child(_label(spec[1],11,HouseStyle.MUTED))
-		var value := _label("Your dimensions",13)
-		column.add_child(value)
-		column.add_child(_label(spec[2],10,HouseStyle.MUTED))
+		var texts := [_label(spec[1],11,HouseStyle.MUTED),_label("Your dimensions",13),_label(spec[2],10,HouseStyle.MUTED)]
+		for text in texts:
+			column.add_child(text)
+		_size_texts.append(texts)
+		var value: Label = texts[1]
 		_size_labels[spec[0]] = value
 		button.pressed.connect(_select_size.bind(spec[0]))
 		presets.add_child(button)
@@ -317,7 +350,8 @@ func _build_ui() -> void:
 			_length_input = input
 	_error = _label("",12,Color("eab2a2"),true)
 	left.add_child(_error)
-	left.add_child(_label("Table size is fixed once you create it.",11,HouseStyle.MUTED))
+	_size_note = _label("Table size is fixed once you create it.",11,HouseStyle.MUTED)
+	left.add_child(_size_note)
 	_add_left_air(left)
 	left.add_child(HSeparator.new())
 	if layout_step:
@@ -434,6 +468,9 @@ func _build_ui() -> void:
 		keys.add_child(HouseStyle.label(pair[0],HouseStyle.KEYCAP))
 		keys.add_child(_label(pair[1]+"   ",12,HouseStyle.MUTED))
 	_create = _button("Create table     →")
+	var cap := HouseStyle.place_key_cap(_create, HouseStyle.key_cap_on_gold("Enter"))   # shown in the rail card only
+	cap.name = "EnterCap"
+	cap.visible = false
 	_create.custom_minimum_size = Vector2(230,50)
 	_create.pressed.connect(_confirm)
 	_footer.add_child(_create)
@@ -498,6 +535,7 @@ func _show_state(state: String) -> void:
 		part.visible = state.is_empty()
 	if is_instance_valid(_step04):
 		_step04.queue_free()
+	_layout()   # the title block follows: in the left column in state one, over an inner page otherwise
 	if state.is_empty():
 		return
 	var values := [_summary.System.text, _summary.Biome.text, _summary.Size.text]
@@ -521,7 +559,8 @@ func _add_system_cards() -> void:
 	step.add_theme_constant_override("separation",10)
 	_page.add_child(step)
 	_system_step = step
-	var heading := _label("01   Choose a game system",17)
+	var heading := _step_heading("01","Choose a game system",
+		"Sets the terrain on offer, the starting table size and the army lists the table accepts.")
 	heading.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	step.add_child(heading)
 	var row := HBoxContainer.new()
@@ -540,10 +579,40 @@ func _add_system_cards() -> void:
 		column.offset_right = -8
 		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		button.add_child(column)
-		column.add_child(_label(GameSystem.label(id),14))
+		var family := _label("GRIMDARK" if id.begins_with("gf") else "FANTASY",13,HouseStyle.MUTED)
+		column.add_child(family)
+		var system_name := _label(GameSystem.label(id),14)
+		column.add_child(system_name)
 		var board := GameSystem.default_board_feet(id)
 		var tag := "Skirmish" if GameSystem.scale(id) == GameSystem.SCALE_SKIRMISH else "Battle"
-		column.add_child(_label("%s  ·  %d × %d ft" % [tag,board.x,board.y],11,HouseStyle.MUTED))
+		var tag_line := _label("%s  ·  %d × %d ft" % [tag,board.x,board.y],11,HouseStyle.MUTED)
+		column.add_child(tag_line)
+		var chips := HBoxContainer.new()   # from 900 px: a BATTLE / SKIRMISH chip and the board in mono (sheet 03)
+		chips.add_theme_constant_override("separation",8)
+		chips.size_flags_vertical = Control.SIZE_EXPAND | Control.SIZE_SHRINK_END   # at the card's foot
+		var chip := PanelContainer.new()
+		var chip_box := _box(Color.TRANSPARENT,HouseStyle.LINE)
+		chip_box.content_margin_left = 7
+		chip_box.content_margin_right = 7
+		chip.add_theme_stylebox_override("panel",chip_box)
+		chip.add_child(_label(tag.to_upper(),12,HouseStyle.MUTED))
+		chips.add_child(chip)
+		chips.add_child(_label("%d × %d FT" % [board.x,board.y],13,HouseStyle.MUTED))
+		for text: Label in [chip.get_child(0),chips.get_child(1)]:
+			text.add_theme_font_override("font",HouseStyle.mono())
+		column.add_child(chips)
+		var tick := TextureRect.new()   # the chosen card's gold tick, top right
+		tick.texture = HouseStyle.svg_icon(MenuView.ICON_SVG % SetupLayoutStep.TICK)
+		tick.modulate = HouseStyle.GOLD
+		tick.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tick.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+		tick.offset_left = -34
+		tick.offset_top = 12
+		tick.offset_right = -12
+		tick.offset_bottom = 34
+		tick.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		button.add_child(tick)
+		_system_parts[id] = [column,family,system_name,tag_line,chips,tick]
 		button.pressed.connect(func() -> void: set_system(id))
 		row.add_child(button)
 		_system_buttons[id] = button
@@ -661,6 +730,7 @@ func _refresh() -> void:
 	_system_option.select(GameSystem.IDS.find(selected_system))
 	for id in _system_buttons:
 		_style(_system_buttons[id],id == selected_system)
+		_system_parts[id][5].visible = _rail_body.visible and id == selected_system
 	for key in _biome_buttons:
 		_biome_buttons[key].visible = key in shown
 		_style(_biome_buttons[key],key == selected_biome)
@@ -770,7 +840,7 @@ func _layout(refill := true) -> void:
 	_columns.custom_minimum_size.y = 0
 	for air in _left_air:
 		air.visible = false
-	if not narrow:
+	if not narrow and _columns.visible:   # an inner page (who, layout) lays itself out: the title block stays on top
 		_fill_height(area.y-2*(20 if compact else 36),8 if compact else 24)
 	# Wrapped labels measure their height at their CURRENT width, which the containers set only after this
 	# pass (a 1 px wide label reports ~1500 px): fill once more on the next frame, with every width final.
@@ -796,6 +866,49 @@ func _set_rail(on: bool) -> void:
 	for side in ["left","right"]:
 		_foot_margin.add_theme_constant_override("margin_"+side,24 if on else 0)
 	_rail_body.visible = on
+	# Step 84: the header and the title of sheet 03; the title block and step 01 stand in the left column, so the
+	# rail card starts level with the title.
+	for node in _wide_only:
+		node.visible = on
+	_back.visible = not on
+	_back_wide.visible = on
+	_title.add_theme_font_size_override("font_size",44 if on else 34)
+	_title.add_theme_font_override("font",HouseStyle.font(500) if on else FONT)
+	_intro_line.add_theme_font_size_override("font_size",17 if on else 13)
+	for parts: Array in _headings:
+		parts[0].add_theme_font_override("font",HouseStyle.mono() if on else FONT)
+		parts[0].add_theme_font_size_override("font_size",15 if on else 17)
+		parts[0].add_theme_color_override("font_color",HouseStyle.GOLD if on else HouseStyle.INK)
+		parts[1].add_theme_font_size_override("font_size",22 if on else 17)
+		parts[1].add_theme_font_override("font",HouseStyle.font(500) if on else FONT)
+		parts[2].visible = on
+	_size_note.visible = not on
+	for texts: Array in _size_texts:
+		texts[0].text = texts[0].text.to_upper() if on else texts[0].text.capitalize()
+		texts[0].add_theme_font_override("font",HouseStyle.mono() if on else FONT)
+		for i in 3:
+			texts[i].add_theme_font_size_override("font_size",[14,20,15][i] if on else [11,13,10][i])
+	for button in _size_buttons.values():
+		button.custom_minimum_size.y = 108 if on else 76
+	for id: String in _system_parts:
+		var parts: Array = _system_parts[id]
+		parts[0].alignment = BoxContainer.ALIGNMENT_BEGIN if on else BoxContainer.ALIGNMENT_CENTER
+		parts[0].offset_top = 14 if on else 0
+		parts[0].offset_bottom = -14 if on else 0
+		for i: int in [1,4]:
+			parts[i].visible = on
+		parts[3].visible = not on
+		parts[5].visible = on and id == selected_system
+		parts[2].add_theme_font_size_override("font_size",20 if on else 14)
+		parts[2].add_theme_font_override("font",HouseStyle.font(500) if on else FONT)
+		parts[2].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if on else TextServer.AUTOWRAP_OFF
+		if on:
+			_system_buttons[id].custom_minimum_size.y = 136
+	for pair: Array in [[_intro,0],[_system_step,1]]:
+		var home: Node = _left if on and _columns.visible else _page   # the inner pages keep the title over them
+		if pair[0].get_parent() != home:
+			pair[0].reparent(home,false)
+		home.move_child(pair[0],pair[1] if home == _left else pair[1]+1)   # in the page: after the header
 	var slot := _rail_body.get_node("CreateSlot") as Control
 	for pair: Array in [[_summary_column,_rail_body if on else _footer],[_create,slot if on else _footer]]:
 		if pair[0].get_parent() != pair[1]:
@@ -821,6 +934,16 @@ func _set_rail(on: bool) -> void:
 		value.size_flags_horizontal = Control.SIZE_EXPAND_FILL if on else Control.SIZE_FILL
 		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if on else HORIZONTAL_ALIGNMENT_LEFT
 	_create.custom_minimum_size = Vector2(0,56) if on else Vector2(230,50)
+	# In the card the gold action reads as on sheets 03/03b: "Create table" at 18 px semibold, left, its Enter cap right.
+	_create.text = "Create table" if on else "Create table     →"
+	_create.alignment = HORIZONTAL_ALIGNMENT_LEFT if on else HORIZONTAL_ALIGNMENT_CENTER
+	_create.add_theme_font_size_override("font_size",18 if on else 14)
+	_create.add_theme_font_override("font",HouseStyle.font(600) if on else FONT)
+	_create.get_node("EnterCap").visible = on
+	for state in ["normal","hover","pressed","focus"]:
+		var box := _create.get_theme_stylebox(state) as StyleBoxFlat
+		if box != null:
+			box.content_margin_left = 22 if on else 10
 
 
 ## The page fills the window height at every aspect: spare height grows the biome cards and the preview
@@ -837,7 +960,7 @@ func _fill_height(usable: float, separation: int) -> void:
 		_grid.columns = 6
 		for button in buttons:
 			button.custom_minimum_size.y = SIX_PHOTO_H+SIX_BAND_H
-		_grow([_hero],_hero.size.x/HERO_MIN_ASPECT,usable)   # the card's picture first, then the row takes the rest
+		_grow([_hero],_hero.size.x/RAIL_HERO_ASPECT,usable)   # the card's picture first, then the row takes the rest
 		_grow(buttons,(_grid.size.x-50)/6/SIX_MIN_ASPECT,usable)
 	for columns: int in ([] if _six_biomes() else [2,3]):
 		_grid.columns = columns
@@ -859,6 +982,22 @@ func _fill_height(usable: float, separation: int) -> void:
 	var spare := usable-_page.get_combined_minimum_size().y
 	if spare > 0 and gaps > 0:
 		_page.add_theme_constant_override("separation",separation+int(spare/gaps))
+
+
+## A step's heading: its number, its name and (from 900 px, _set_rail) a hint at the right in 15 px muted.
+func _step_heading(number: String, step_name: String, hint: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation",14)
+	var parts := [_label(number,17),_label(step_name,17),_label(hint,15,HouseStyle.MUTED)]
+	parts[2].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parts[2].horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	parts[2].clip_text = true
+	parts[2].text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	for part in parts:
+		part.size_flags_vertical = Control.SIZE_SHRINK_END
+		row.add_child(part)
+	_headings.append(parts)
+	return row
 
 
 ## The six biomes stand in one row when the rail form leaves the left column at least SIX_MIN_W wide.

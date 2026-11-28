@@ -6,6 +6,7 @@ signal army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_controlled: 
 
 const LAYER := 108
 const SHEET_W := 620
+const ARMY_FORGE_URL := "https://army-forge.onepagerules.com"
 const SHEET_W_MAX := 1320   # sheet 04: up to 1320 px wide, inputs left and the preview right
 const TWO_COLUMNS_MIN_W := 1100.0   # a narrower window stacks the two columns as before
 
@@ -23,6 +24,8 @@ var link_status_label: Label
 var _sheet: Control
 var _columns: BoxContainer
 var _preview_panel: Control
+var _recent: VBoxContainer   # "RECENT LISTS" and up to five rows (sheet 04); hidden without a stored list
+var _opponent_line: HBoxContainer   # "Need an opponent? … AI Opponent ›" (offline tables only)
 
 ## Parsed army (preview)
 var _preview_army: OPRApiClient.OPRArmy = null
@@ -31,12 +34,16 @@ var _preview_army: OPRApiClient.OPRArmy = null
 var api_client: OPRApiClient
 ## The table's armies by seat (main sets it): an import into a held seat asks first. Null = no question.
 var army_manager: OPRArmyManager = null
+## Where the recent lists are kept (tests hand in a temporary file).
+var recent_path := RecentArmyLists.DEFAULT
 
 
 func _ready() -> void:
 	layer = LAYER
 	visibility_changed.connect(func() -> void:
 		if visible:
+			_fill_recent()
+			_opponent_line.visible = _table() != null and not _table().network_manager.is_multiplayer_active()
 			UiPolish.grab_first_focus.call_deferred(self))
 	_setup_ui()
 
@@ -44,6 +51,7 @@ func _ready() -> void:
 func _setup_ui() -> void:
 	var parts := HouseStyle.overlay_sheet("Army import", SHEET_W)
 	(parts["close"] as Button).pressed.connect(_on_cancel)
+	HouseStyle.sheet_close_box(parts["close"] as Button)   # the 44 px close box of a menu sheet (as 05, 09)
 	add_child(parts["root"] as Control)
 	(parts["root"] as Control).theme = HouseStyle.menu_theme()   # sheet 04 stands at the menu's scale, as the arrival card
 	_sheet = parts["sheet"]
@@ -68,12 +76,19 @@ func _setup_ui() -> void:
 	var link_section := VBoxContainer.new()
 	link_section.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 	vbox.add_child(link_section)
-	link_section.add_child(HouseStyle.label("Army Forge share link or list ID", HouseStyle.CAPTION))
-	link_section.add_child(HouseStyle.label("e.g. https://army-forge.onepagerules.com/share?id=XXX", HouseStyle.CAPTION))
+	link_section.add_child(_eyebrow("Army Forge share link or list ID"))
 	share_link_input = LineEdit.new()
 	share_link_input.placeholder_text = "Paste a share link or list ID here..."
 	share_link_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	link_section.add_child(share_link_input)
+	share_link_input.custom_minimum_size.y = HouseStyle.MENU_H_FIELD
+	link_section.add_child(share_link_input)   # first, so it takes the first focus (sheet 04: no ring on the link)
+	var example := HBoxContainer.new()
+	example.add_child(HouseStyle.label("e.g. https://army-forge.onepagerules.com/share?id=XXX", HouseStyle.CAPTION))
+	example.get_child(0).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var forge := _link_button("Open Army Forge", HouseStyle.ACCENT)
+	forge.pressed.connect(func() -> void: OS.shell_open(ARMY_FORGE_URL))
+	example.add_child(forge)
+	link_section.add_child(example)
 
 	var link_btn_row := HBoxContainer.new()
 	link_btn_row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
@@ -91,7 +106,7 @@ func _setup_ui() -> void:
 	var player_row := HBoxContainer.new()
 	player_row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 	vbox.add_child(player_row)
-	player_row.add_child(HouseStyle.label("Assign player", HouseStyle.CAPTION))
+	player_row.add_child(_eyebrow("Assign player"))
 	player_option = OptionButton.new()
 	player_option.theme_type_variation = HouseStyle.BUTTON
 	player_option.add_item("Player 1 (Blue)", 1)
@@ -120,8 +135,29 @@ func _setup_ui() -> void:
 	ai_check.tooltip_text = "The Solo AI plays this army (F11 runs its activations)."
 	ai_check.focus_mode = Control.FOCUS_NONE
 	player_row.add_child(ai_check)
+	_recent = VBoxContainer.new()
+	_recent.name = "RecentLists"
+	_recent.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
+	vbox.add_child(_recent)
 
-	right.add_child(HouseStyle.label("Preview", HouseStyle.CAPTION))
+	# Sheet 04's preview card: its eyebrow, the list and Cancel / Import army inside, 22 px from the rim.
+	var preview_panel := HouseStyle.card()
+	preview_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_preview_panel = preview_panel
+	right.add_child(preview_panel)
+	var inner := MarginContainer.new()
+	for side: String in ["left", "right"]:
+		inner.add_theme_constant_override("margin_" + side, HouseStyle.MENU_PAD_PANEL - HouseStyle.PAD_CARD_X)
+	for side: String in ["top", "bottom"]:
+		inner.add_theme_constant_override("margin_" + side, HouseStyle.MENU_PAD_PANEL - HouseStyle.PAD_CARD_Y)
+	preview_panel.add_child(inner)
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", HouseStyle.GAP_SECTION)
+	inner.add_child(stack)
+	stack.add_child(_eyebrow("Preview"))
+	var well := MarginContainer.new()   # the list and its empty / loading / error state share one place
+	well.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stack.add_child(well)
 	army_preview = ScrollContainer.new()
 	army_preview.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	# Small minimum so a long army list never pushes the buttons off: the rows fill the well and scroll.
@@ -131,36 +167,116 @@ func _setup_ui() -> void:
 	_preview_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_preview_rows.add_theme_constant_override("separation", 0)
 	army_preview.add_child(_preview_rows)
-	var preview_panel := HouseStyle.card(army_preview)
-	preview_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_preview_panel = preview_panel
-	right.add_child(preview_panel)
+	well.add_child(army_preview)
 	# Empty / loading / error state over the same well, so a wait never reads as blank.
 	state_panel = StatePanel.new()
 	state_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	state_panel.action_pressed.connect(_on_fetch_from_link)
 	state_panel.use_house_style()
-	preview_panel.add_child(state_panel)
+	well.add_child(state_panel)
 	_show_empty_state()
 
 	var btn_row := HBoxContainer.new()
 	btn_row.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 	btn_row.alignment = BoxContainer.ALIGNMENT_END
-	right.add_child(btn_row)
+	stack.add_child(btn_row)
 	cancel_btn = HouseStyle.button("Cancel", HouseStyle.BUTTON, HouseStyle.H_ACTION)
 	cancel_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
 	cancel_btn.pressed.connect(_on_cancel)
 	btn_row.add_child(cancel_btn)
-	import_btn = HouseStyle.button("Import army", HouseStyle.PRIMARY)
+	import_btn = HouseStyle.button("Import army", HouseStyle.PRIMARY, HouseStyle.MENU_H_ACTION)
 	import_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
+	import_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	import_btn.custom_minimum_size.x = 210   # room for its Enter cap at the right (sheet 04)
+	HouseStyle.place_key_cap(import_btn, HouseStyle.key_cap_on_gold("Enter"))
+	cancel_btn.custom_minimum_size.y = HouseStyle.MENU_H_ACTION
 	import_btn.disabled = true
 	import_btn.pressed.connect(_on_import)
 	btn_row.add_child(import_btn)
+
+	_opponent_line = HBoxContainer.new()
+	_opponent_line.add_child(HouseStyle.label("Need an opponent? NACHTMAHR builds its own list.", HouseStyle.CAPTION))
+	var ai := _link_button("AI Opponent ›", HouseStyle.GOLD)
+	ai.pressed.connect(func() -> void:
+		_on_cancel()
+		TableOpponentLayer.open(_table()))   # the table's one opponent page (lead 27.11., Q1)
+	_opponent_line.add_child(ai)
+	_opponent_line.visible = false
+	(parts["body"] as VBoxContainer).add_child(_opponent_line)
 
 	api_client = OPRApiClient.new()
 	add_child(api_client)
 	get_viewport().size_changed.connect(_fit)
 	_fit()
+
+
+## The table this window imports into (the main scene), or null in a test or a tool.
+func _table() -> Node:
+	var scene := get_tree().current_scene if is_inside_tree() else null
+	return scene if scene != null and scene.has_method("_table_system") and scene.get("network_manager") != null else null
+
+
+## A field's name as sheet 04 draws it: a muted eyebrow in capitals (the text keeps its case for the code).
+func _eyebrow(text: String) -> Label:
+	var l := HouseStyle.label(text, HouseStyle.EYEBROW)
+	l.uppercase = true
+	l.add_theme_color_override("font_color", HouseStyle.MUTED)
+	return l
+
+
+func _link_button(text: String, colour: Color) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.flat = true
+	b.add_theme_color_override("font_color", colour)
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.focus_mode = Control.FOCUS_NONE   # a quiet link, as the house buttons: no white focus box on open
+	return b
+
+
+## RECENT LISTS (sheet 04): the stored lists as rows - name, the system's short tag (gold on the table's system), the
+## points in mono and Load, which puts the stored link into the field and loads it fresh. No list, no section.
+func _fill_recent() -> void:
+	for child: Node in _recent.get_children():
+		_recent.remove_child(child)
+		child.queue_free()
+	var lists := RecentArmyLists.load_all(recent_path)
+	_recent.visible = not lists.is_empty()
+	if lists.is_empty():
+		return
+	_recent.add_child(HouseStyle.label("RECENT LISTS", HouseStyle.EYEBROW))
+	var table_system := str(_table().call("_table_system")) if _table() != null else ""
+	for entry: Dictionary in lists:
+		var row := HBoxContainer.new()
+		row.custom_minimum_size.y = 54
+		row.add_theme_constant_override("separation", 14)
+		var list_name := HouseStyle.label(str(entry.name), HouseStyle.BODY)
+		list_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(list_name)
+		var system := str(entry.system)
+		var tag := _tag(GameSystem.short(system) if GameSystem.is_known(system) else system,
+			HouseStyle.GOLD if system == table_system else HouseStyle.MUTED)
+		row.add_child(tag)
+		row.add_child(_mono("%d PTS" % int(entry.points), HouseStyle.MUTED))
+		var load_button := HouseStyle.button("Load", HouseStyle.BUTTON, 36)
+		load_button.size_flags_horizontal = Control.SIZE_SHRINK_END
+		load_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		load_button.pressed.connect(func() -> void:
+			share_link_input.text = str(entry.link)
+			_on_fetch_from_link())
+		row.add_child(load_button)
+		var framed := PanelContainer.new()   # a framed row (sheet 04 .r)
+		var box := StyleBoxFlat.new()
+		box.bg_color = HouseStyle.FILL
+		box.border_color = HouseStyle.LINE
+		box.set_border_width_all(1)
+		box.set_corner_radius_all(HouseStyle.RADIUS_CARD)
+		box.content_margin_left = 14
+		box.content_margin_right = 8
+		framed.add_theme_stylebox_override("panel", box)
+		row.custom_minimum_size.y = 52
+		framed.add_child(row)
+		_recent.add_child(framed)
 
 
 ## Sheet 04's measures: up to 1320 px wide with the two columns side by side and a tall preview; below 1100 px of window
@@ -251,7 +367,9 @@ func _update_preview() -> void:
 	army_name.add_theme_font_size_override("font_size", HouseStyle.FONT_VALUE)
 	head.add_child(army_name)
 	var system := _preview_army.game_system
-	head.add_child(HouseStyle.label(GameSystem.label(system) if GameSystem.is_known(system) else system, HouseStyle.NOTE))
+	head.add_child(_tag(GameSystem.label(system) if GameSystem.is_known(system) else system, HouseStyle.GOLD))
+	if not _preview_army.book_version.is_empty():
+		head.add_child(_tag("Rules " + ".".join(_preview_army.book_version.split(".").slice(0, 2)), HouseStyle.MUTED))
 	_preview_rows.add_child(head)
 	var facts := "%d PTS · %d UNITS" % [_preview_army.points, _preview_army.units.size()]
 	if _preview_army.model_count > 0:
@@ -261,12 +379,11 @@ func _update_preview() -> void:
 		var weapon_strs: Array[String] = []
 		for w in unit.weapons:
 			weapon_strs.append("%dx %s" % [w.count, w.name] if w.count > 1 else w.name)
-		var words := VBoxContainer.new()
+		var words := HouseStyle.label(unit.custom_name if not unit.custom_name.is_empty() else unit.name, HouseStyle.BODY)
 		words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		words.add_theme_constant_override("separation", 0)
-		words.add_child(HouseStyle.label(unit.custom_name if not unit.custom_name.is_empty() else unit.name, HouseStyle.BODY))
-		words.add_child(HouseStyle.label("  ".join(["Q%d+ D%d+" % [unit.quality, unit.defense]] + ([", ".join(weapon_strs)] if not weapon_strs.is_empty() else [])), HouseStyle.CAPTION))
-		var row := HBoxContainer.new()
+		var row := HBoxContainer.new()   # one line per unit (sheet 04); the profile is the row's tooltip
+		row.tooltip_text = "  ".join(["Q%d+ D%d+" % [unit.quality, unit.defense]] + ([", ".join(weapon_strs)] if not weapon_strs.is_empty() else []))
+		row.mouse_filter = Control.MOUSE_FILTER_PASS
 		row.custom_minimum_size.y = 42
 		row.add_child(words)
 		var count := HouseStyle.label("× %d" % unit.size, HouseStyle.CAPTION)
@@ -282,6 +399,23 @@ func _update_preview() -> void:
 		rule.color = Color(HouseStyle.LINE, 0.6)
 		rule.custom_minimum_size.y = 1
 		_preview_rows.add_child(rule)
+
+
+## A bordered mono chip (sheet 04 .tag): capitals in the colour, a rim of it, a key cap's radius.
+func _tag(text: String, colour: Color) -> Label:
+	var l := _mono(text, colour)
+	l.uppercase = true   # drawn in capitals; the text keeps its case
+	l.add_theme_font_size_override("font_size", HouseStyle.FONT_SMALL)
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color(0, 0, 0, 0)
+	box.border_color = Color(colour, HouseStyle.TAG_RIM_ALPHA)
+	box.set_border_width_all(HouseStyle.BORDER)
+	box.set_corner_radius_all(HouseStyle.RADIUS_KEYCAP)
+	box.content_margin_left = HouseStyle.PAD_PILL_X
+	box.content_margin_right = HouseStyle.PAD_PILL_X
+	l.add_theme_stylebox_override("normal", box)
+	return l
 
 
 func _mono(text: String, colour: Color) -> Label:
@@ -308,6 +442,8 @@ func _on_import() -> void:
 	# the main thread), so anything after the emit would only run once loading is done —
 	# the dialog would otherwise stay on screen over the loading overlay the whole time.
 	var ai_controlled: bool = ai_check != null and ai_check.button_pressed
+	RecentArmyLists.remember({"link": share_link_input.text, "name": army.name, "system": army.game_system_abbrev,
+		"points": army.points if army.points > 0 else army.get_total_points()}, recent_path)
 	hide()
 	_reset_dialog()
 	army_imported.emit(army, player_id, ai_controlled)

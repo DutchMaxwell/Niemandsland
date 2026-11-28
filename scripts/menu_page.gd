@@ -10,6 +10,8 @@ const MenuView = preload("res://scripts/startup_menu_view.gd")
 const TOP := 150          # the way back and the right panel start here
 const RIGHT_X := 640      # the right panel's left edge
 const EDGE := 64          # the right panel ends this far from the right edge
+const AIR_AFTER_BACK := 26   # sheet 07 .back margin-bottom
+const AIR_AFTER_TITLE := 22  # sheet 07 h1 margin-bottom
 
 var back: Button
 var eyebrow: Label
@@ -52,11 +54,13 @@ func _init() -> void:
 	way.add_child(back)
 	way.add_child(HouseStyle.key_cap("Esc"))
 	_head.add_child(way)
+	_head.add_child(_air(AIR_AFTER_BACK))   # the header's rhythm of sheets 02 and 07: 26 px after the way back,
 	eyebrow = _text("", HouseStyle.MENU_FONT_EYEBROW, HouseStyle.eyebrow_font())
 	eyebrow.add_theme_color_override(&"font_color", HouseStyle.ACCENT)
 	_head.add_child(eyebrow)
 	title = _text("", 44, HouseStyle.font(500))
 	_head.add_child(title)
+	_head.add_child(_air(AIR_AFTER_TITLE))   # ... 22 px after the title
 	left = VBoxContainer.new()
 	left.add_theme_constant_override(&"separation", 18)
 	_head.add_child(left)
@@ -80,6 +84,13 @@ func _layout() -> void:
 	_head.size = Vector2(column_width, 0)
 	right.position = Vector2(RIGHT_X, TOP)
 	right.size = Vector2(maxf(0, size.x - EDGE - RIGHT_X), 0)
+
+
+## Extra height between two header parts, on top of the header's own separation.
+func _air(height: int) -> Control:
+	var air := Control.new()
+	air.custom_minimum_size.y = height - HouseStyle.GAP_SECTION * 2   # the spacer stands between two separations
+	return air
 
 
 func _text(text: String, font_size: int, font: Font) -> Label:

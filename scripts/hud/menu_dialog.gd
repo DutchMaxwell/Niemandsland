@@ -30,6 +30,9 @@ static func style(d: AcceptDialog, framed: bool = false, at_table: bool = false)
 			continue
 		b.theme_type_variation = HouseStyle.BUTTON
 		b.custom_minimum_size.y = HouseStyle.H_SEGMENT
+	var close := d.find_child("CloseButton", true, false) as Control
+	if close != null and menu_scale:   # the menu windows' close box is 32 px (sheet 08), as the menu's prompt cards
+		close.custom_minimum_size = Vector2.ONE * HouseStyle.MENU_ICON_BUTTON
 	for n: Node in d.find_children("*", "Label", true, false):
 		if (n as Label).theme_type_variation == &"":
 			(n as Label).theme_type_variation = HouseStyle.BODY

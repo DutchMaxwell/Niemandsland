@@ -48,6 +48,7 @@ const SELECTED_ALPHA := 0.20
 const GOLD_HOVER_LIGHTEN := 0.08
 const GOLD_PRESS_DARKEN := 0.12
 const DISABLED_ALPHA := 0.40
+const TAG_RIM_ALPHA := 0.55     # the rim of a mono chip (sheet 04 .tag: system, rules, a recent list's system)
 const DANGER_INK_LIFT := 0.15   # danger text lifted to ~5:1 on a panel (DANGER itself reads ~4.1:1 at 14 px)
 
 # ===== Geometry (px at the 1920x1080 base; the canvas_items stretch scales the rest) =====
@@ -120,8 +121,12 @@ const MENU_FONT_SEGMENT := 16    # one of a segmented group (.seg span)
 const MENU_PAD_BUTTON_X := 18    # a button's side padding (.btn)
 const MENU_PAD_SEGMENT_X := 16
 const MENU_H_ACTION := 44
+const MENU_H_FIELD := 46         # a text field at the menu's scale (house.css .field)
 const MENU_PAD_PANEL := 22
 const MENU_ICON_BUTTON := 32     # the close box of a menu window
+const MENU_CHECK := 22           # the menu's check box (house.css .check)
+const MENU_CAP_INSET := 14       # a key cap's distance from its button's right edge, centred on the label
+const MENU_SHEET_CLOSE := 44     # the close box of a full menu sheet (settings, saves): sheets 05 and 09
 const SWITCH_W := 46             # the menu's switch (CheckButton): a pill 46 x 26 with a 18 px knob
 const SWITCH_H := 26
 const MENU_KNOB := 20            # the menu's slider knob; its groove is 8 px high
@@ -284,6 +289,12 @@ static func menu_theme() -> Theme:
 		for state: StringName in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled"]:
 			t.set_stylebox(state, v, _pad_x(t.get_stylebox(state, v), size_pad_weight[1]))
 	t.set_constant(&"buttons_min_height", &"AcceptDialog", MENU_H_ACTION)
+	# A dropdown's arrow is the mockups' thin 12 px chevron (.dd), not the engine's bold arrow; 14 px from the edge.
+	var chevron := svg_icon("<svg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' "
+		+ "stroke='#a7b0b6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>")
+	for v: StringName in [&"OptionButton", BUTTON]:
+		t.set_icon(&"arrow", v, chevron)
+		t.set_constant(&"arrow_margin", v, 14)
 	t.set_stylebox(&"panel", PANEL_VARIANT, _box(PANEL, LINE_SOFT, RADIUS_PANEL, MENU_PAD_PANEL, MENU_PAD_PANEL))
 	# Switches (settings): the pill of the mockups - off a well with a rim and a muted knob, on a gold 25 % fill, gold rim
 	# and gold knob; sliders: an 8 px groove and a 20 px gold knob.
@@ -291,6 +302,13 @@ static func menu_theme() -> Theme:
 			[&"checked_disabled", true, 0.4]]:
 		t.set_icon(pair[0], &"CheckButton", _switch(pair[1], pair[2]))
 		t.set_icon(StringName(String(pair[0]) + "_mirrored"), &"CheckButton", _switch(pair[1], pair[2]))
+	# The menu's check box (sheet 02 .check): 22 px, radius 4, a well; checked = gold with the dark tick. Its rim stays
+	# 2 px of muted ink (maintainer decision B, 03.10.: an empty box at 3:1), not the sheet's 1 px line.
+	for pair: Array in [[&"unchecked", false], [&"checked", true]]:
+		var box := _menu_check(pair[1])
+		t.set_icon(pair[0], &"CheckBox", box)
+		t.set_icon(StringName(String(pair[0]) + "_disabled"), &"CheckBox", _dimmed(box, DISABLED_ALPHA))
+	t.set_constant(&"h_separation", &"CheckBox", GAP_SECTION)   # the sheet's 10 px between the box and its words
 	var menu_groove := _box(WELL, LINE, 4, 0, 0)
 	menu_groove.content_margin_top = 3
 	menu_groove.content_margin_bottom = 3
@@ -517,6 +535,31 @@ static func _knob(color: Color, d: int = 16) -> ImageTexture:
 	return ImageTexture.create_from_image(img)
 
 
+## The menu's check box, MENU_CHECK square: off a well with a 2 px muted rim, on gold with the dark tick.
+static func _menu_check(on: bool) -> ImageTexture:
+	var tick := ("<path d='M6 11.5l3.3 3.3L16 8' fill='none' stroke='#%s' stroke-width='2.2' stroke-linecap='round' "
+		+ "stroke-linejoin='round'/>") % ON_GOLD.to_html(false) if on else ""
+	var fill := GOLD if on else WELL
+	var svg := ("<svg xmlns='http://www.w3.org/2000/svg' width='%d' height='%d' viewBox='0 0 22 22'><rect x='1' y='1' "
+		+ "width='20' height='20' rx='4' fill='#%s' fill-opacity='%.2f' stroke='#%s' stroke-width='2'/>%s</svg>") % [
+		MENU_CHECK, MENU_CHECK, fill.to_html(false), fill.a, (GOLD if on else MUTED).to_html(false), tick]
+	var img := Image.new()
+	img.load_svg_from_string(svg)
+	return ImageTexture.create_from_image(img)
+
+
+## A key cap at the right of `button`, centred on its label's line (sheets 02-04 .key): one placement for every cap.
+static func place_key_cap(button: Button, cap: Label) -> Label:
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cap.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	cap.grow_vertical = Control.GROW_DIRECTION_BOTH
+	cap.offset_left = -MENU_CAP_INSET
+	cap.offset_right = -MENU_CAP_INSET
+	button.add_child(cap)
+	return cap
+
+
 ## `icon` at `alpha` of its own opacity (a disabled check box).
 static func _dimmed(icon: Texture2D, alpha: float) -> ImageTexture:
 	var img := Image.new()
@@ -649,6 +692,17 @@ static func panel_header(title: String, closes: bool = false) -> HBoxContainer:
 	b.size_flags_horizontal = Control.SIZE_SHRINK_END
 	row.add_child(b)
 	return row
+
+
+## A full menu sheet's close box (sheets 05, 09): 44 px with a framed rim and a thin drawn cross in place of the glyph.
+static func sheet_close_box(b: Button) -> void:
+	b.text = ""
+	b.icon = svg_icon("<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' "
+		+ "stroke='#fff' stroke-width='1.5' stroke-linecap='round'><path d='M6 6l12 12M18 6L6 18'/></svg>")
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.expand_icon = false
+	b.add_theme_constant_override(&"icon_max_width", 18)
+	b.custom_minimum_size = Vector2(MENU_SHEET_CLOSE, MENU_SHEET_CLOSE)
 
 
 ## A key of a shortcut hint ("Shift", "G") — a label, not a button.
