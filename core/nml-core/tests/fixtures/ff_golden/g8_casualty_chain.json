@@ -1,0 +1,324 @@
+{
+  "answers": {},
+  "book": "Firefight 3.6 coherency and casualties (our words): a unit stays one chain of 1 in links with every model within 9 in; a casualty is taken so the survivors stay coherent. The table hands each model's kit; the special weapon is kept longest. One wound on a 6-model line: the plain west end goes (6.6 in left, coherent at 9 in).",
+  "dice": {
+    "attack": [
+      [
+        6
+      ]
+    ],
+    "defense": [
+      [
+        1
+      ]
+    ]
+  },
+  "epoch": 104,
+  "golden": "g8_casualty_order_keeps_the_9_in_chain",
+  "header": {
+    "kind": "header",
+    "knobs": {},
+    "profiles": {
+      "p1_0_a": {
+        "attached_hero_rules": [],
+        "base_radius": 0.0127,
+        "caster_value": 0,
+        "defense": 5,
+        "faction_folder": "robot_legions",
+        "game_system": "gff",
+        "item_grants": [],
+        "model_count": 1,
+        "move_bands": {
+          "advance": 6.0,
+          "rush": 12.0
+        },
+        "name": "Shooter",
+        "quality": 2,
+        "special_rules": [],
+        "tough": 1,
+        "unit_id": "p1_0_a",
+        "weapons": [
+          {
+            "ap": 0,
+            "attacks": 1,
+            "count": 1,
+            "name": "Rifle",
+            "range": 24,
+            "rules": []
+          }
+        ],
+        "wounds_max": [
+          1
+        ]
+      },
+      "p2_0_s": {
+        "attached_hero_rules": [],
+        "base_radius": 0.0127,
+        "caster_value": 0,
+        "defense": 6,
+        "faction_folder": "robot_legions",
+        "game_system": "gff",
+        "item_grants": [],
+        "model_count": 6,
+        "move_bands": {
+          "advance": 6.0,
+          "rush": 12.0
+        },
+        "name": "Squad",
+        "quality": 4,
+        "special_rules": [],
+        "tough": 1,
+        "unit_id": "p2_0_s",
+        "weapons": [],
+        "wounds_max": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      }
+    }
+  },
+  "intent": {
+    "kind": 0,
+    "shoot": "p2_0_s"
+  },
+  "pinned": {
+    "final": [
+      {
+        "alive": 1,
+        "at_in": [
+          [
+            -6.0,
+            0.0
+          ]
+        ],
+        "shaken": false,
+        "unit": "p1_0_a",
+        "wounds": [
+          1
+        ]
+      },
+      {
+        "alive": 5,
+        "at_in": [
+          [
+            14.8,
+            1.0
+          ],
+          [
+            11.0,
+            1.0
+          ],
+          [
+            12.9,
+            1.0
+          ],
+          [
+            16.7,
+            1.0
+          ],
+          [
+            18.6,
+            1.0
+          ]
+        ],
+        "shaken": false,
+        "unit": "p2_0_s",
+        "wounds": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      }
+    ],
+    "lines": [
+      "Shooter fires at Squad",
+      "Shooter fires Rifle at Squad — 1 hit",
+      "Squad saves on 6+",
+      "Squad takes 1 wound (5/6)",
+      "Squad loses a model (5/6)"
+    ],
+    "rolls": [
+      [
+        "attack",
+        [
+          6
+        ]
+      ],
+      [
+        "defense",
+        [
+          1
+        ]
+      ]
+    ]
+  },
+  "plant": "the chain cap read as 6 in for gff (casualty.rs) - the west end no longer keeps the group coherent, the Plasma end goes instead",
+  "state": {
+    "round": 1,
+    "rounds_total": 4,
+    "scoring": "end",
+    "units": {
+      "p1_0_a": {
+        "activated": false,
+        "aircraft": false,
+        "alive": 1,
+        "ambush_arrived_round": -1,
+        "bands": {
+          "advance": 6.0,
+          "rush": 12.0
+        },
+        "casts": 0,
+        "dormant": false,
+        "earliest_arrival_round": -1,
+        "fatigued": false,
+        "in_cover": false,
+        "mods": {},
+        "mods_base": {},
+        "morale_bonus": 0,
+        "player": 1,
+        "positions": [
+          [
+            -0.15239999999999998,
+            0.0,
+            0.0
+          ]
+        ],
+        "radii": [
+          0.0127
+        ],
+        "shaken": false,
+        "wound_frac": 1.0,
+        "wounds": [
+          1
+        ]
+      },
+      "p2_0_s": {
+        "activated": false,
+        "aircraft": false,
+        "alive": 6,
+        "ambush_arrived_round": -1,
+        "bands": {
+          "advance": 6.0,
+          "rush": 12.0
+        },
+        "casts": 0,
+        "dormant": false,
+        "earliest_arrival_round": -1,
+        "fatigued": false,
+        "in_cover": false,
+        "kits": [
+          {
+            "equipment": 0,
+            "weapons": [
+              "Rifle"
+            ],
+            "wounds_max": 1
+          },
+          {
+            "equipment": 0,
+            "weapons": [
+              "Rifle"
+            ],
+            "wounds_max": 1
+          },
+          {
+            "equipment": 0,
+            "weapons": [
+              "Rifle"
+            ],
+            "wounds_max": 1
+          },
+          {
+            "equipment": 0,
+            "weapons": [
+              "Rifle"
+            ],
+            "wounds_max": 1
+          },
+          {
+            "equipment": 0,
+            "weapons": [
+              "Rifle"
+            ],
+            "wounds_max": 1
+          },
+          {
+            "equipment": 0,
+            "weapons": [
+              "Plasma"
+            ],
+            "wounds_max": 1
+          }
+        ],
+        "mods": {},
+        "mods_base": {},
+        "morale_bonus": 0,
+        "player": 2,
+        "positions": [
+          [
+            0.37592,
+            0.0,
+            0.0254
+          ],
+          [
+            0.254,
+            0.0,
+            0.0
+          ],
+          [
+            0.2794,
+            0.0,
+            0.0254
+          ],
+          [
+            0.32766,
+            0.0,
+            0.0254
+          ],
+          [
+            0.42417999999999995,
+            0.0,
+            0.0254
+          ],
+          [
+            0.47244,
+            0.0,
+            0.0254
+          ]
+        ],
+        "radii": [
+          0.0127,
+          0.0127,
+          0.0127,
+          0.0127,
+          0.0127,
+          0.0127
+        ],
+        "shaken": false,
+        "wound_frac": 1.0,
+        "wounds": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      }
+    }
+  },
+  "terrain": {
+    "cells": [],
+    "table_feet": [
+      4,
+      4
+    ]
+  },
+  "unit": "p1_0_a"
+}
