@@ -13473,7 +13473,13 @@ fn resolve_with(
                                 let w = faces.iter().filter(|&&f| f <= 3).count() as i64;
                                 shot.rolls.push(crate::dice::Roll { kind: "fall", count: faces.len() as i64, target: 4, faces: faces.clone(), owner: tname.clone() });
                                 let take = w.min(next.wounds[ti].get(p.model).copied().unwrap_or(0));
+                                // #3961: the fall's wounds are a landing of their own (as the volley's and the active fall's) - the
+                                // table lands only landings, so without it the pushed model stayed alive there.
+                                let (at, wounds) = (next.positions[ti].clone(), next.wounds[ti].clone());
                                 land_wounds_in_order(&mut next, ti, take, vec![p.model]);
+                                if let Some(l) = landing_of(&next, ti, &at, &wounds, &tray.dead_slots(ti)) {
+                                    tray.land(|| l);   // the push line names the wounds, the table says the loss (as the fall's)
+                                }
                                 format!(" off a {h:.0} in drop - it falls, {faces:?}, {w} wound{} on 1-3", if w == 1 { "" } else { "s" })
                             }).unwrap_or_default();
                             let alive = next.positions[ti].get(p.model).is_some_and(|q| *q == p.to);
