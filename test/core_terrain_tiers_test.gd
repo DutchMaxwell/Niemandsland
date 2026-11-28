@@ -65,3 +65,36 @@ func test_below_the_epoch_or_without_a_board_the_line_keeps_its_bytes() -> void:
 	assert_dict(AiActRecorder.tiers_at_epoch(board, AiActRecorder.PENDING_EPOCH_CORE_TIERS - 1)) \
 		.override_failure_message("one epoch below: the line a record played").is_empty()
 	assert_bool(AiActRecorder.tiers_at_epoch(board, AiActRecorder.PENDING_EPOCH_CORE_TIERS).has("tiers")).is_true()
+
+
+## GEN-8: the board's cover classes reach the core - `tiers_of_board` hands `to_plain`'s cells as `board_cells`, and the
+## line takes them into its `cells` (the overlay's own cell wins on the same grid cell). Ruin town seed 41: FOREST and
+## CONTAINER cells inside the board's frame (4 cells in from the 24-cell grid of a 4 x 4 ft table, plain.rs grid_margin).
+func test_the_boards_cover_cells_join_the_line() -> void:
+	if _core() == null:
+		return
+	var t := AiActRecorder.tiers_of_board({"seed": 41, "theme": "ruintown"})
+	var board: Array = t.get("board_cells", [])
+	var classes := {}
+	for c: Array in board:
+		classes[int(c[2])] = true
+		assert_bool(int(c[0]) >= 4 and int(c[0]) < 20 and int(c[1]) >= 4 and int(c[1]) < 20) \
+			.override_failure_message("cell %s outside the board's frame" % [c]).is_true()
+	assert_bool(classes.has(2) and classes.has(3)).override_failure_message("FOREST and CONTAINER: %s" % [classes.keys()]).is_true()
+	var first: Array = board[0] if not board.is_empty() else [0, 0, 0]
+	var line := {"cells": [[int(first[0]), int(first[1]), 2]]}
+	line.merge(t)
+	AiActRecorder._add_board_cells(line)
+	assert_bool(line.has("board_cells")).is_false()
+	assert_int((line["cells"] as Array).size()).is_equal(board.size())
+	assert_array(line["cells"][0]).is_equal([int(first[0]), int(first[1]), 2])   # the overlay's own cell wins
+	assert_array(line["cells"]).contains([[int(board[1][0]), int(board[1][1]), int(board[1][2])]])
+
+
+## GEN-8 counter-check: with no board the line is byte-identical (its JSON hash before and after).
+func test_without_a_board_the_line_keeps_its_bytes() -> void:
+	var line := {"cells": [[5, 6, 1]], "walls": [], "sandbox": []}
+	var before := JSON.stringify(line).sha256_text()
+	line.merge(AiActRecorder.tiers_of_board({}))
+	AiActRecorder._add_board_cells(line)
+	assert_str(JSON.stringify(line).sha256_text()).is_equal(before)
