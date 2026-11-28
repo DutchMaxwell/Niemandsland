@@ -20,7 +20,7 @@ const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 
 
 ## Stands in for NetworkManager at main's seam: a live session that records every outbound frame.
-class FakeNet extends Node:
+class FakeNet extends "res://test/support/presence_stub_net.gd":
 	var active: bool = true
 	var sent: Array = []
 	func is_multiplayer_active() -> bool:

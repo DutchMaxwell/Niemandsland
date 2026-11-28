@@ -939,7 +939,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         if let Some(why) = &c.bad {
             events.push((*at, c.order, Pending::Refuse(index, why.clone())));
         } else if c.answer.is_none() {
-            events.push((*at, c.order, Pending::Ask { id: c.id.clone(), options: Vec::new(), owner: owner.clone(), lines: c.lines.clone(), landings: c.landings.clone() }));
+            events.push((*at, c.order, Pending::Ask { id: c.id.clone(), options: c.hints.clone(), owner: owner.clone(), lines: c.lines.clone(), landings: c.landings.clone() }));
         }
     }
     for c in &blast_choices {

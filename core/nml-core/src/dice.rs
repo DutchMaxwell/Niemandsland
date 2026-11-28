@@ -310,7 +310,7 @@ impl Tray {
     /// Step 29d: the transcript names a free-answer choice `id` (`None` = only asked). A seeded tray ignores the call.
     pub fn offer_free(&mut self, id: String, answer: Option<String>) {
         if let Some(feed) = self.feed.as_mut() {
-            feed.free_choices.push(FreeChoice { id, answer, reached: None, bad: None, lines: Vec::new(), landings: Vec::new(), order: 0 });
+            feed.free_choices.push(FreeChoice { id, hints: Vec::new(), answer, reached: None, bad: None, lines: Vec::new(), landings: Vec::new(), order: 0 });
         }
     }
 
@@ -329,6 +329,14 @@ impl Tray {
             }
         }
         c.answer.clone()
+    }
+
+    /// [`Tray::reach_free`] with `hints` the owner's side reads (step 29e-2a: `pushed:<slot>`, the model the rest gather at).
+    pub fn reach_free_hinted(&mut self, id: &str, owner: &str, hints: Vec<String>) -> Option<String> {
+        if let Some(c) = self.feed.as_mut().and_then(|f| f.free_choices.iter_mut().find(|c| c.id == id)) {
+            c.hints = hints;
+        }
+        self.reach_free(id, owner)
     }
 
     /// Step 29d: the core refuses the free answer of `id` with `why` (the step answers Refused at that input).
@@ -612,6 +620,7 @@ pub struct InterferenceChoice {
 #[derive(Debug, Clone)]
 pub struct FreeChoice {
     pub id: String,
+    pub hints: Vec<String>,
     pub answer: Option<String>,
     pub reached: Option<(usize, String)>,
     pub bad: Option<String>,

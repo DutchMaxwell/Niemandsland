@@ -6,6 +6,7 @@ signal army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_controlled: 
 
 const LAYER := 108
 const SHEET_W := 620
+const ARMY_FORGE_URL := "https://army-forge.onepagerules.com"
 const SHEET_W_MAX := 1320   # sheet 04: up to 1320 px wide, inputs left and the preview right
 const TWO_COLUMNS_MIN_W := 1100.0   # a narrower window stacks the two columns as before
 
@@ -23,6 +24,8 @@ var link_status_label: Label
 var _sheet: Control
 var _columns: BoxContainer
 var _preview_panel: Control
+var _recent: VBoxContainer   # "RECENT LISTS" and up to five rows (sheet 04); hidden without a stored list
+var _opponent_line: HBoxContainer   # "Need an opponent? … AI Opponent ›" (offline tables only)
 
 ## Parsed army (preview)
 var _preview_army: OPRApiClient.OPRArmy = null
@@ -39,6 +42,8 @@ func _ready() -> void:
 	layer = LAYER
 	visibility_changed.connect(func() -> void:
 		if visible:
+			_fill_recent()
+			_opponent_line.visible = _table() != null and not _table().network_manager.is_multiplayer_active()
 			UiPolish.grab_first_focus.call_deferred(self))
 	_setup_ui()
 
@@ -71,7 +76,13 @@ func _setup_ui() -> void:
 	link_section.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
 	vbox.add_child(link_section)
 	link_section.add_child(HouseStyle.label("Army Forge share link or list ID", HouseStyle.CAPTION))
-	link_section.add_child(HouseStyle.label("e.g. https://army-forge.onepagerules.com/share?id=XXX", HouseStyle.CAPTION))
+	var example := HBoxContainer.new()
+	example.add_child(HouseStyle.label("e.g. https://army-forge.onepagerules.com/share?id=XXX", HouseStyle.CAPTION))
+	example.get_child(0).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var forge := _link_button("Open Army Forge", HouseStyle.ACCENT)
+	forge.pressed.connect(func() -> void: OS.shell_open(ARMY_FORGE_URL))
+	example.add_child(forge)
+	link_section.add_child(example)
 	share_link_input = LineEdit.new()
 	share_link_input.placeholder_text = "Paste a share link or list ID here..."
 	share_link_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -122,6 +133,10 @@ func _setup_ui() -> void:
 	ai_check.tooltip_text = "The Solo AI plays this army (F11 runs its activations)."
 	ai_check.focus_mode = Control.FOCUS_NONE
 	player_row.add_child(ai_check)
+	_recent = VBoxContainer.new()
+	_recent.name = "RecentLists"
+	_recent.add_theme_constant_override("separation", HouseStyle.GAP_ROW)
+	vbox.add_child(_recent)
 
 	right.add_child(HouseStyle.label("Preview", HouseStyle.CAPTION))
 	army_preview = ScrollContainer.new()
@@ -159,10 +174,68 @@ func _setup_ui() -> void:
 	import_btn.pressed.connect(_on_import)
 	btn_row.add_child(import_btn)
 
+	_opponent_line = HBoxContainer.new()
+	_opponent_line.add_child(HouseStyle.label("Need an opponent? NACHTMAHR builds its own list.", HouseStyle.CAPTION))
+	var ai := _link_button("AI Opponent ›", HouseStyle.GOLD)
+	ai.pressed.connect(func() -> void:
+		_on_cancel()
+		TableOpponentLayer.open(_table()))   # the table's one opponent page (lead 27.11., Q1)
+	_opponent_line.add_child(ai)
+	_opponent_line.visible = false
+	(parts["body"] as VBoxContainer).add_child(_opponent_line)
+
 	api_client = OPRApiClient.new()
 	add_child(api_client)
 	get_viewport().size_changed.connect(_fit)
 	_fit()
+
+
+## The table this window imports into (the main scene), or null in a test or a tool.
+func _table() -> Node:
+	var scene := get_tree().current_scene if is_inside_tree() else null
+	return scene if scene != null and scene.has_method("_table_system") and scene.get("network_manager") != null else null
+
+
+func _link_button(text: String, colour: Color) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.flat = true
+	b.add_theme_color_override("font_color", colour)
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	return b
+
+
+## RECENT LISTS (sheet 04): the stored lists as rows - name, the system's short tag (gold on the table's system), the
+## points in mono and Load, which puts the stored link into the field and loads it fresh. No list, no section.
+func _fill_recent() -> void:
+	for child: Node in _recent.get_children():
+		_recent.remove_child(child)
+		child.queue_free()
+	var lists := RecentArmyLists.load_all(recent_path)
+	_recent.visible = not lists.is_empty()
+	if lists.is_empty():
+		return
+	_recent.add_child(HouseStyle.label("RECENT LISTS", HouseStyle.EYEBROW))
+	var table_system := str(_table().call("_table_system")) if _table() != null else ""
+	for entry: Dictionary in lists:
+		var row := HBoxContainer.new()
+		row.custom_minimum_size.y = 54
+		row.add_theme_constant_override("separation", 14)
+		var list_name := HouseStyle.label(str(entry.name), HouseStyle.BODY)
+		list_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(list_name)
+		var system := str(entry.system)
+		var tag := _mono(GameSystem.short(system).to_upper() if GameSystem.is_known(system) else system.to_upper(),
+			HouseStyle.GOLD if system == table_system else HouseStyle.MUTED)
+		row.add_child(tag)
+		row.add_child(_mono("%d PTS" % int(entry.points), HouseStyle.MUTED))
+		var load_button := HouseStyle.button("Load", HouseStyle.BUTTON, 36)
+		load_button.size_flags_horizontal = Control.SIZE_SHRINK_END
+		load_button.pressed.connect(func() -> void:
+			share_link_input.text = str(entry.link)
+			_on_fetch_from_link())
+		row.add_child(load_button)
+		_recent.add_child(row)
 
 
 ## Sheet 04's measures: up to 1320 px wide with the two columns side by side and a tall preview; below 1100 px of window

@@ -167,6 +167,12 @@ func import_list(path: String, player: int) -> OPRApiClient.OPRArmy:
 	return army
 
 
+## A whole AI-vs-AI game on this table through the table's own both-AI loop, `opener` taking round 1's first turn.
+func run_ai_game(opener := 1) -> void:
+	await main._solo_run_both_ai_game(opener)
+	await E2EBoot.settle(_tree)
+
+
 ## The game-over summary's text as the player reads it, or "" while none stands.
 func summary_text() -> String:
 	for c in main.get_children():
@@ -174,6 +180,18 @@ func summary_text() -> String:
 			var label := c.find_child("Summary", true, false) as Label
 			return label.text if label != null else ""
 	return ""
+
+
+## A table of `feet` (the size the setup screen hands the table: 4 x 4 ft for the skirmish systems).
+func table_feet(feet: Vector2) -> void:
+	main._set_table_size(feet)
+	await runner.simulate_frames(2)
+
+
+## The table's Start Game / Ready button (its deployment gate included).
+func press_start() -> void:
+	main._on_start_game_pressed()
+	await E2EBoot.settle(_tree)
 
 
 ## The card's Activate (the committed start). True when the activation is open afterwards.
