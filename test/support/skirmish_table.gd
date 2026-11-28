@@ -88,6 +88,7 @@ static func boot(suite: Node, seat: String) -> SkirmishTable:
 ## A clean table in the same seat for the next case (a seed scan, a twin): no units, no turn state, round 1, no lines.
 func reset() -> void:
 	CoreActivation.reset_all(main)
+	main.object_manager._deselect_all()   # no selection may outlive the models freed below
 	for u in main.opr_army_manager.game_units.values():
 		for m in (u as GameUnit).models:
 			(m as ModelInstance).node.queue_free()
@@ -164,6 +165,15 @@ func import_list(path: String, player: int) -> OPRApiClient.OPRArmy:
 	await main._on_opr_army_imported(army, player, false)
 	await E2EBoot.settle(_tree)
 	return army
+
+
+## The game-over summary's text as the player reads it, or "" while none stands.
+func summary_text() -> String:
+	for c in main.get_children():
+		if c is CanvasLayer and c.name == "GameOverLayer" and not c.is_queued_for_deletion():
+			var label := c.find_child("Summary", true, false) as Label
+			return label.text if label != null else ""
+	return ""
 
 
 ## The card's Activate (the committed start). True when the activation is open afterwards.

@@ -116,3 +116,34 @@ func test_front_line_survives_the_commit_and_a_new_size_generates_again() -> voi
 	layout.call("set_table", Vector2(4, 4), "gf")
 	assert_str(str(layout.get("way"))).is_equal("generated")
 	assert_int((layout.call("facts") as Dictionary).pieces).is_greater(0)
+
+
+## GEN-5: the way "board" - a generated board for a 4 x 4 ft table of a system that is offered one (gff: Tiefwerk).
+## Commit hands the record and Front Line to the table; off 4 x 4 or off-system the way is refused or dropped.
+@warning_ignore('unused_parameter')
+func test_a_generated_board_is_a_way_on_4_by_4_for_its_system(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
+	var layout := _layout()
+	if layout == null:
+		return
+	assert_bool(layout.call("choose", "board")).override_failure_message("6 x 4 gf took a board").is_false()
+	layout.call("set_table", Vector2(4, 4), "gf")
+	assert_bool(layout.call("choose", "board")).override_failure_message("gf has no generated board").is_false()
+	layout.call("set_table", Vector2(4, 4), "gff")
+	assert_bool(layout.call("choose", "board")).is_true()
+	assert_str(layout.call("label")).is_equal("Generated board")
+	var first: Dictionary = layout.get("board")
+	assert_dict(first).override_failure_message("no board record (does the core name its boards?)").is_not_empty()
+	if first.is_empty():
+		return
+	assert_str(str(first.get("id", ""))).is_equal("tiefwerk")
+	assert_int(int(layout.get("editor").deployment_type)).is_equal(1)
+	layout.call("generate")
+	assert_int(int((layout.get("board") as Dictionary).get("seed", -1))).is_not_equal(int(first["seed"]))
+	layout.call("commit")
+	var stored: Dictionary = ProjectSettings.get_setting(KEY, {})
+	assert_dict(stored.get("board", {})).is_equal(layout.get("board"))
+	assert_str(str(stored.get("path", ""))).is_not_empty()
+	layout.call("set_table", Vector2(6, 4), "gff")
+	assert_str(str(layout.get("way"))).is_equal("empty")
+	assert_dict(layout.get("board")).is_empty()

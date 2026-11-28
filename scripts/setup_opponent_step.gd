@@ -92,7 +92,7 @@ func _place() -> void:
 	var pad := 28.0 if compact else maxf(28.0, size.x * 0.04)
 	var rail_w := 504.0 if compact else minf(684.0, size.x * 0.36)
 	_rail.custom_minimum_size.x = rail_w
-	_rail.position = Vector2(size.x - pad - rail_w, 100.0 if compact else 108.0)
+	_rail.position = Vector2(size.x - pad - rail_w, 100.0 if compact else 232.0)   # level with row 01 (sheet 03b)
 	left.position = Vector2(pad, 120.0 if compact else 232.0)
 	left.custom_minimum_size.x = size.x - 2 * pad - rail_w - (24.0 if compact else 44.0)
 	for row: Control in left.get_children().slice(0, 3) + [_layout_row]:
@@ -109,6 +109,7 @@ func _place() -> void:
 		card.custom_minimum_size.y = 96 if compact else 132
 		(card.get_child(0).get_child(1) as Label).add_theme_font_size_override(&"font_size", 16 if compact else 20)
 		(card.get_child(0).get_child(2) as Control).visible = not compact   # the caption
+	SetupLayoutStep.fit_rail_lines(_rail, compact)
 	_keys.position = Vector2(pad, size.y - (44.0 if compact else 60.0))
 	for box: Control in [left, _rail]:
 		box.reset_size.call_deferred()
@@ -149,13 +150,8 @@ func _build_rail(values: Array) -> void:
 	_rail.add_child(box)
 	box.add_child(SetupLayoutStep._text("YOUR TABLE", 14, HouseStyle.eyebrow_font(), HouseStyle.MUTED))
 	for row: Array in [["SYSTEM", values[0]], ["BIOME", values[1]], ["SIZE", values[2]], ["OPPONENT", ""]]:
-		var line := HBoxContainer.new()
-		var key := SetupLayoutStep._text(row[0], 14, HouseStyle.eyebrow_font(), HouseStyle.MUTED)
-		key.size_flags_horizontal = SIZE_EXPAND_FILL
-		line.add_child(key)
 		_opponent_row = SetupLayoutStep._text(str(row[1]), 18, HouseStyle.font(400), HouseStyle.INK)
-		line.add_child(_opponent_row)
-		box.add_child(line)
+		box.add_child(SetupLayoutStep.rail_line(row[0], _opponent_row))
 	var create := HouseStyle.button("Create table", HouseStyle.PRIMARY, 56)
 	_create = create
 	create.name = "CreateTable"
