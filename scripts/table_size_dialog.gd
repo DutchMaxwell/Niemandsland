@@ -468,14 +468,9 @@ func _build_ui() -> void:
 		keys.add_child(HouseStyle.label(pair[0],HouseStyle.KEYCAP))
 		keys.add_child(_label(pair[1]+"   ",12,HouseStyle.MUTED))
 	_create = _button("Create table     →")
-	var cap := HouseStyle.key_cap_on_gold("Enter")   # shown in the rail card only
+	var cap := HouseStyle.place_key_cap(_create, HouseStyle.key_cap_on_gold("Enter"))   # shown in the rail card only
 	cap.name = "EnterCap"
-	cap.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	cap.offset_left = -16
-	cap.offset_right = -16
 	cap.visible = false
-	_create.add_child(cap)
 	_create.custom_minimum_size = Vector2(230,50)
 	_create.pressed.connect(_confirm)
 	_footer.add_child(_create)

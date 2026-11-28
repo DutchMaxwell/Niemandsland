@@ -163,12 +163,7 @@ func _build_rail(values: Array) -> void:
 	create.focus_mode = FOCUS_ALL
 	create.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	create.pressed.connect(func() -> void: create_requested.emit())
-	var cap := HouseStyle.key_cap_on_gold("Enter")
-	cap.set_anchors_preset(PRESET_CENTER_RIGHT)
-	cap.grow_horizontal = GROW_DIRECTION_BEGIN
-	cap.offset_left = -16
-	cap.offset_right = -16
-	create.add_child(cap)
+	HouseStyle.place_key_cap(create, HouseStyle.key_cap_on_gold("Enter"))
 	box.add_child(create)
 	var next := SetupLayoutStep._text("Next at the table: bring your own army, then deploy.", 15, HouseStyle.font(400),
 		HouseStyle.MUTED)

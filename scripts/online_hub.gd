@@ -294,13 +294,7 @@ func _build_join() -> void:
 	join_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	join_button.custom_minimum_size.x = JOIN_W   # "Join" and its Enter cap side by side at the menu's button scale
 	join_button.pressed.connect(_on_join)
-	var cap := HouseStyle.key_cap("Enter")
-	cap.mouse_filter = MOUSE_FILTER_IGNORE
-	cap.set_anchors_preset(PRESET_CENTER_RIGHT)
-	cap.grow_horizontal = GROW_DIRECTION_BEGIN
-	cap.offset_left = -10
-	cap.offset_right = -10
-	join_button.add_child(cap)
+	HouseStyle.place_key_cap(join_button, HouseStyle.key_cap("Enter"))
 	row.add_child(join_button)
 	block.get_child(0).add_child(row)
 	join_error = _text("", HouseStyle.MENU_FONT_CAPTION, HouseStyle.font(400))
