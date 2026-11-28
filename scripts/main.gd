@@ -3563,8 +3563,8 @@ func hotseat_off_turn_drag(unit: GameUnit) -> bool:
 ## caller filters plain clicks) and name the refusal once.
 func attacked_unit_drag_refused(unit: GameUnit, distance_in := 0.0) -> bool:
 	if unit == null or opr_army_manager == null \
-			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING:
-		return false
+			or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING or CoreActivation.replacing(unit):
+		return false   # #3872 / 29e-2a: placing the rest after a fall or a push is no move - End measures the 1 in
 	# One-core P3 step 34 (N2 b): a move-path unit's drop inside its open activation is re-checked by the core at the
 	# declared mode. A unit that already shot this round keeps the shot lock below.
 	if int(unit.unit_properties.get("shot_round", -1)) != opr_army_manager.current_round \

@@ -94,7 +94,7 @@ func setup(opponent: SetupOpponent, values: Array) -> void:
 ## captions, so a 1280 x 720 window shows the page without scrolling.
 func _place() -> void:
 	var compact := size.y < 800
-	var pad := 28.0 if compact else maxf(28.0, size.x * 0.04)
+	var pad := maxf(28.0, size.x * 0.04)   # the setup's own margin, so the rows stand under its title (720p too)
 	var rail_w := 504.0 if compact else minf(684.0, size.x * 0.36)
 	_rail.custom_minimum_size.x = rail_w
 	_rail.position = Vector2(size.x - pad - rail_w, 100.0 if compact else 232.0)   # level with row 01 (sheet 03b)

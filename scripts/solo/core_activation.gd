@@ -442,9 +442,10 @@ static func pick_push_replace(main, gu: GameUnit, hints: Array) -> String:
 	return ";".join(spots) if not spots.is_empty() else "auto"
 
 
-## True while `gu`'s owner places the rest after a push: its drags pass the locks and are no move of its own.
+## True while `gu`'s owner places the rest after a push - or after a fall, while the fall lock stands (#3872, 3.6 p.15: the
+## others are PLACED within 1 in): its drags pass the locks and are no move of its own; End measures the 1 in.
 static func replacing(gu: GameUnit) -> bool:
-	return not replace_pick.is_empty() and gu != null and gu == replace_pick.get("unit")
+	return gu != null and ((not replace_pick.is_empty() and gu == replace_pick.get("unit")) or fall_pending(gu.unit_id))
 
 
 ## Enter (true) or Esc (false) while the rest is placed; true = the key is taken.

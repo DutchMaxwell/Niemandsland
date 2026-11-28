@@ -291,3 +291,10 @@ func test_the_update_prompt_reads_both_versions_in_capitals() -> void:
 	var texts := "".join(p.find_children("*", "Label", true, false).map(func(l: Node) -> String: return (l as Label).text))
 	assert_str(texts).contains("INSTALLED 0.3.15.0-ALPHA  →  LATEST 0.3.16.0-ALPHA")
 	p.queue_free()
+
+
+## Sheet 08: a menu window's close box is 32 px, as the menu's prompt cards (red before: the table's 28 px box).
+func test_menu_windows_have_the_32_px_close_box() -> void:
+	var p := _update_prompt("notes")
+	var close := p.find_child("CloseButton", true, false) as Control
+	assert_float(close.custom_minimum_size.x).is_equal(float(HouseStyle.MENU_ICON_BUTTON))
