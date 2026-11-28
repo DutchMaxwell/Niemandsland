@@ -56,16 +56,17 @@ fn push_line() -> (State, Vec<UnitStatic>) {
     p.game_system = "gff".into();
     st.profiles = Rc::new(Profiles { list: vec![p; 4], index: Default::default() });
     let at = |x: f64, z: f64| [x * IN2M, 0.0, z * IN2M];
-    st.positions = vec![vec![at(0.0, 0.0)], vec![at(-30.0, 0.0)], vec![at(12.0, 0.0), at(12.0, 1.5)], vec![at(30.0, 20.0)]];
-    st.radii = Rc::new(vec![vec![0.5 * IN2M], vec![0.5 * IN2M], vec![0.5 * IN2M; 2], vec![0.5 * IN2M]]);
-    st.wounds = vec![vec![1], vec![1], vec![1, 1], vec![1]];
-    st.alive = vec![1, 1, 2, 1];
+    let n = if PLAY3.with(|f| f.get()) { 4 } else { 2 };
+    st.positions = vec![vec![at(0.0, 0.0)], vec![at(-30.0, 0.0)], (0..n).map(|k| at(12.0, 1.5 * k as f64)).collect(), vec![at(30.0, 20.0)]];
+    st.radii = Rc::new(vec![vec![0.5 * IN2M], vec![0.5 * IN2M], vec![0.5 * IN2M; n], vec![0.5 * IN2M]]);
+    st.wounds = vec![vec![1], vec![1], vec![1; n], vec![1]];
+    st.alive = vec![1, 1, n as i64, 1];
     let gun = ShootProfile { name: "Rifle".into(), attacks: 6, count: 1, range: 24, ..Default::default() };
     let unit = |name: &str, n: i64, q: i64, shoot: Vec<ShootProfile>| UnitStatic {
         name: name.into(), shoot, model_count: n, wounds_max: vec![1; n as usize],
         ctx: Ctx { quality: q, defense: 6, models: n, rules_epoch: crate::acts::CURRENT_RULES_EPOCH, ..Default::default() }, ..Default::default()
     };
-    (st, vec![unit("Gunners", 1, 2, vec![gun]), unit("Spare", 1, 4, vec![]), unit("Target", 2, 6, vec![]), unit("Far", 1, 4, vec![])])
+    (st, vec![unit("Gunners", 1, 2, vec![gun]), unit("Spare", 1, 4, vec![]), unit("Target", n as i64, 6, vec![]), unit("Far", 1, 4, vec![])])
 }
 
 /// The answers in `choices`; one hit (6 then five 1s), every save and morale die a 1, the push die `push_face`.
@@ -77,7 +78,10 @@ fn play(choices: &[(&str, &str)], push_face: u8) -> (ActStep, State) {
     loop {
         match step_activation(&statics, &st, "a", &Terrain::default(), seams, &t, true) {
             ActStep::NeedRoll { faces, kind, .. } => t.push(Faces(match kind {
-                "attack" => [vec![6], vec![1; faces.saturating_sub(1)]].concat(),
+                "attack" => {
+                    let hits = if PLAY3.with(|f| f.get()) { 2 } else { 1 };
+                    [vec![6; hits], vec![1; faces.saturating_sub(hits)]].concat()
+                }
                 "push" => vec![push_face],
                 _ => vec![1; faces],
             })),
@@ -142,5 +146,41 @@ fn no_or_no_answer_is_no_push() {
         let (done, after) = play(&choices, 5);
         assert!(matches!(done, ActStep::Done { .. }), "{done:?}");
         assert!((after.positions[2][0][0] - 12.0 * IN2M).abs() < 1e-9, "{choices:?}: nothing moves");
+    }
+}
+
+/// `push_line` with four models for b, 1.5 in apart, and two hits: two casualties (half strength, Shaken), two survivors.
+fn play3(choices: &[(&str, &str)]) -> (ActStep, State) {
+    PLAY3.with(|f| f.set(true));
+    let r = play(choices, 5);
+    PLAY3.with(|f| f.set(false));
+    r
+}
+
+thread_local! { static PLAY3: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
+/// Step 29d-2 (3.6 p.15: "then the opponent must place any other models from the unit within 1" of it"): the defender is
+/// asked; its own spot within 1 in stands; one further off is refused; "auto" is the D14 placer.
+#[test]
+fn the_defender_places_the_rest_within_1_in() {
+    let (_, kept) = play3(&[("push:a:b", "no")]);
+    let first = kept.positions[2][0];
+    let to = format!("0:{},0,{}", first[0] + 1.5 * IN2M, first[2]);   // survivor 1 pushed 1.5 in east, the other left behind
+    let base = [("push:a:b", "push"), ("push_to:a:b", to.as_str())];
+    match play3(&[base[0], base[1], ("push_replace:b", "")]).0 {
+        ActStep::NeedChoice { id, options, owner, .. } => assert_eq!((id.as_str(), options.len(), owner.as_str()), ("push_replace:b", 0, "b")),
+        other => panic!("expected NeedChoice, got {other:?}"),
+    }
+    let (_, auto) = play3(&[base[0], base[1], ("push_replace:b", "auto")]);
+    let pushed = auto.positions[2][0];
+    assert!((pushed[0] - first[0] - 1.5 * IN2M).abs() < 1e-9, "fixture: model 1 pushed: {:?}", auto.positions[2]);
+    let near = format!("1:{},0,{}", pushed[0], pushed[2] + 1.2 * IN2M);
+    let (done, own) = play3(&[base[0], base[1], ("push_replace:b", near.as_str())]);
+    assert!(matches!(done, ActStep::Done { .. }), "{done:?}");
+    assert!((own.positions[2][1][2] - (pushed[2] + 1.2 * IN2M)).abs() < 1e-9, "the owner's spot stands: {:?}", own.positions[2]);
+    let far = format!("1:{},0,{}", pushed[0], pushed[2] + 3.0 * IN2M);
+    match play3(&[base[0], base[1], ("push_replace:b", far.as_str())]).0 {
+        ActStep::Refused { reason, .. } => assert_eq!(reason, "Push: model 2 stands more than 1 in from the pushed model"),
+        other => panic!("expected Refused, got {other:?}"),
     }
 }

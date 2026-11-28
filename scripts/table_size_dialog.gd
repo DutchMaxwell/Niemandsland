@@ -19,6 +19,7 @@ const SIX_MIN_ASPECT := 0.6   # a card of the one-row form grows up to 0.6 : 1 t
 const CARD_MIN_ASPECT := 2.0
 const CARD_MAX_ASPECT := 2.8
 const FONT = preload("res://assets/ui_glassmorphism/fonts/Inter.ttf")
+const MenuView = preload("res://scripts/startup_menu_view.gd")
 const LOGO = preload("res://assets/ui_glassmorphism/fonts/Orbitron.ttf")
 # Keys are the TABLE's biome ids (table.gd BIOMES): the selection goes straight into table.set_biome.
 const BIOMES := {
@@ -56,6 +57,10 @@ var _error: Label
 var _summary: Dictionary = {}   # "System" / "Biome" / "Size" -> its value in the summary row above Create table
 var _create: Button
 var _back: Button
+var _back_wide: HBoxContainer   # from 900 px: a bordered "Back to main menu" with its Esc cap (step 84)
+var _wide_only: Array[Control] = []   # the breadcrumb and the eyebrow "NEW TABLE": shown from 900 px only
+var _intro: VBoxContainer
+var _title: Label
 var _preview: TextureRect
 var _preview_title: Label
 var _preview_description: Label
@@ -132,7 +137,7 @@ func _ready() -> void:
 	visibility_changed.connect(func() -> void:
 		if visible:
 			_fit_host()
-			_back.grab_focus.call_deferred())
+			(_back if _back.visible else _back_wide.get_child(0) as Button).grab_focus.call_deferred())
 	_fit_host()
 	_sync_inputs()
 	set_system(selected_system)   # the row's pick (default gf) filters the biomes and preselects the size
@@ -175,6 +180,10 @@ func _build_ui() -> void:
 	var land := _label("LAND",27,HouseStyle.ACCENT)
 	land.add_theme_font_override("font",LOGO)
 	wordmark.add_child(land)
+	var crumb := _label("    MAIN MENU  /  PREPARE YOUR TABLE",14,HouseStyle.MUTED)
+	crumb.add_theme_font_override("font",HouseStyle.mono())
+	crumb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_header.add_child(crumb)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_header.add_child(spacer)
@@ -182,12 +191,30 @@ func _build_ui() -> void:
 	_back.flat = true
 	_back.pressed.connect(_on_close)
 	_header.add_child(_back)
+	_back_wide = HBoxContainer.new()
+	_back_wide.theme = HouseStyle.menu_theme()
+	_back_wide.add_theme_constant_override("separation",HouseStyle.GAP_ROW)
+	var back := HouseStyle.button("Back to main menu",HouseStyle.BUTTON,HouseStyle.MENU_H_ACTION)
+	back.name = "BackWide"
+	back.focus_mode = Control.FOCUS_ALL
+	back.icon = HouseStyle.svg_icon(MenuView.ICON_SVG % "<path d='M15 5l-7 7 7 7'/>")
+	back.add_theme_constant_override("icon_max_width",16)
+	back.pressed.connect(_on_close)
+	_back_wide.add_child(back)
+	_back_wide.add_child(HouseStyle.key_cap("Esc"))
+	_header.add_child(_back_wide)
 	var intro := VBoxContainer.new()
+	_intro = intro
 	intro.add_theme_constant_override("separation",8)
 	_page.add_child(intro)
+	var eyebrow := _label("NEW TABLE",HouseStyle.MENU_FONT_EYEBROW,HouseStyle.ACCENT)
+	eyebrow.add_theme_font_override("font",HouseStyle.eyebrow_font())
+	intro.add_child(eyebrow)
+	_wide_only = [crumb,eyebrow]
 	_title_row = BoxContainer.new()   # the first row of the setup: the game system sits on the title line, so it costs no height
 	intro.add_child(_title_row)
 	var title := _label("Prepare your table.",34)
+	_title = title
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title_row.add_child(title)
 	var system_caption := _label("Game system",12,HouseStyle.MUTED)
@@ -498,6 +525,7 @@ func _show_state(state: String) -> void:
 		part.visible = state.is_empty()
 	if is_instance_valid(_step04):
 		_step04.queue_free()
+	_layout()   # the title block follows: in the left column in state one, over an inner page otherwise
 	if state.is_empty():
 		return
 	var values := [_summary.System.text, _summary.Biome.text, _summary.Size.text]
@@ -796,6 +824,20 @@ func _set_rail(on: bool) -> void:
 	for side in ["left","right"]:
 		_foot_margin.add_theme_constant_override("margin_"+side,24 if on else 0)
 	_rail_body.visible = on
+	# Step 84: the header and the title of sheet 03; the title block and step 01 stand in the left column, so the
+	# rail card starts level with the title.
+	for node in _wide_only:
+		node.visible = on
+	_back.visible = not on
+	_back_wide.visible = on
+	_title.add_theme_font_size_override("font_size",44 if on else 34)
+	_title.add_theme_font_override("font",HouseStyle.font(500) if on else FONT)
+	_intro_line.add_theme_font_size_override("font_size",17 if on else 13)
+	for pair: Array in [[_intro,0],[_system_step,1]]:
+		var home: Node = _left if on and _columns.visible else _page   # the inner pages keep the title over them
+		if pair[0].get_parent() != home:
+			pair[0].reparent(home,false)
+		home.move_child(pair[0],pair[1] if on else pair[1]+1)
 	var slot := _rail_body.get_node("CreateSlot") as Control
 	for pair: Array in [[_summary_column,_rail_body if on else _footer],[_create,slot if on else _footer]]:
 		if pair[0].get_parent() != pair[1]:

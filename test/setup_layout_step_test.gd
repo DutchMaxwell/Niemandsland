@@ -7,13 +7,13 @@ const SCRIPT := "res://scripts/setup_layout_step.gd"
 var _layout: SetupLayout
 
 
-func _step(size_feet: Vector2) -> Control:
+func _step(size_feet: Vector2, system := "gf") -> Control:
 	assert_bool(ResourceLoader.exists(SCRIPT)).override_failure_message("no step 04 page").is_true()
 	if not ResourceLoader.exists(SCRIPT):
 		return null
 	_layout = auto_free(SetupLayout.new())
 	add_child(_layout)
-	_layout.set_table(size_feet, "gf")
+	_layout.set_table(size_feet, system)
 	var step: Control = auto_free((load(SCRIPT) as GDScript).new())
 	step.size = Vector2(1920, 1080)
 	add_child(step)
@@ -244,3 +244,35 @@ func test_the_tools_and_zones_have_room_at_1080p() -> void:
 	assert_int((step.get("left") as Control).get_theme_constant(&"separation")).is_equal(14)
 	var tools := (step.find_child("GenerateAgain", true, false) as Node).get_parent().get_parent() as PanelContainer
 	assert_float(tools.get_theme_stylebox(&"panel").content_margin_left).is_equal(20.0)
+
+
+## GEN-6: the board card - offered for gff on 4 x 4 ft, "New board" (and G) changes the code in the rail; gf has no
+## card; off 4 x 4 ft the card is there but off.
+@warning_ignore('unused_parameter')
+func test_the_generated_board_card(do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded") -> void:
+	var step := _step(Vector2(4, 4), "gff")
+	if step == null:
+		return
+	var card := _way(step, "board")
+	assert_object(card).override_failure_message("no board card").is_not_null()
+	if card == null:
+		return
+	assert_bool(card.visible and not card.disabled).is_true()
+	card.pressed.emit()
+	assert_str(_layout.way).is_equal("board")
+	var again := step.find_child("GenerateAgain", true, false) as Button
+	assert_str(again.text).is_equal("New board")
+	var facts: Array = step.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	var code := GeneratedBoard.code(_layout.board)
+	assert_str(code).starts_with("TW-")
+	assert_array(facts).contains(["BOARD " + code])
+	assert_bool((step.find_child("CopyBoardCode", true, false) as Button).visible).is_true()
+	assert_bool((step.find_child("ZoneCustom", true, false) as Button).visible).is_false()
+	again.pressed.emit()
+	assert_str(GeneratedBoard.code(_layout.board)).is_not_equal(code)
+	_layout.set_table(Vector2(6, 4), "gff")
+	assert_bool(card.visible and card.disabled).is_true()
+	assert_str(_layout.way).is_equal("empty")
+	var plain := _step(Vector2(4, 4), "gf")
+	assert_bool(_way(plain, "board").visible).override_failure_message("gf was offered a board").is_false()

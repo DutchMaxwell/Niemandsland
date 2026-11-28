@@ -669,6 +669,8 @@ const BLAST_SPLIT: &str = "blast_split:";
 /// Step 29d: the attacker's push (`push:<attacker>:<target>`, push | no) and its spot (`push_to:<attacker>:<target>`).
 const PUSH: &str = "push:";
 const PUSH_TO: &str = "push_to:";
+/// Step 29d-2: the defender's own placement of the pushed unit's other models (`push_replace:<target>`).
+const PUSH_REPLACE: &str = "push_replace:";
 /// Step 22a (OD-2: a player's own pick is asked of the player): the ids of the Versatile mode choice
 /// (`versatile_mode:<activating unit>`, options `ap` / `hit`) start with this. It rides the strike-back list (a two-way choice).
 const VERSATILE_MODE: &str = "versatile_mode:";
@@ -770,7 +772,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
             };
             strike_back.retain(|w| w.1 != *id);
             strike_back.push((i, id.clone(), answer));
-        } else if id.starts_with(PUSH_TO) {
+        } else if id.starts_with(PUSH_TO) || id.starts_with(PUSH_REPLACE) {
             free.retain(|w| w.1 != *id);
             free.push((i, id.clone(), (!option.is_empty()).then(|| option.clone())));
         } else if id.starts_with(BLAST_SPLIT) {
@@ -791,7 +793,7 @@ pub fn step_activation(statics: &[UnitStatic], state: &State, unit: &str, terrai
         } else {
             return ActStep::Refused {
                 index: i,
-                reason: format!("unknown choice kind {id} (expected {TAKEDOWN_MODEL}, {WOUND_ALLOC}, {INTERFERENCE}, {SPOT_MARKERS}, {STRIKE_BACK}, {BLAST_SPLIT}, {PUSH}, {PUSH_TO} or {VERSATILE_MODE})"),
+                reason: format!("unknown choice kind {id} (expected {TAKEDOWN_MODEL}, {WOUND_ALLOC}, {INTERFERENCE}, {SPOT_MARKERS}, {STRIKE_BACK}, {BLAST_SPLIT}, {PUSH}, {PUSH_TO}, {PUSH_REPLACE} or {VERSATILE_MODE})"),
             };
         }
     }

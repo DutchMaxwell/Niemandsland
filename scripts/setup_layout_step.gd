@@ -10,7 +10,10 @@ const WAYS := [
 	["empty", "Empty table", "Place terrain yourself once you are at the table.", &"table"],
 	["generated", "Auto-Generate Layout", "A balanced layout for this table size. Generate again until you like it.", &"table"],
 	["theme", "Ruined Borderland", "", &"table"],
-	["file", "Load a layout", "Open a layout file you saved in the layout editor.", &"folder"]]
+	["file", "Load a layout", "Open a layout file you saved in the layout editor.", &"folder"],
+	["board", "Generated board", "", &"table"]]
+## GEN-6: the names of the generated boards (GameSystem.generated_boards ids) on the board card.
+const BOARD_NAMES := {"tiefwerk": "Tiefwerk", "ruined_town": "Ruined town"}
 const STEPS := ["Game system", "Biome", "Table size", "Opponent"]
 const REFRESH := "<path d='M20 12a8 8 0 1 1-2.3-5.6M20 4v4.5h-4.5'/>"
 const CROSS := "<path d='M7 7l10 10M17 7L7 17'/>"
@@ -26,6 +29,7 @@ var _note: Label
 var _file: FileDialog
 var _legend: HBoxContainer
 var _facts: Label
+var _copy: Button   # GEN-6: copies the generated board's code (way "board" only)
 var _lines: VBoxContainer
 var _layout_row: Label
 var _again: Button
@@ -118,6 +122,9 @@ func _place() -> void:
 		card.custom_minimum_size.y = 128 if compact else 196
 		(card.get_child(0).get_child(1) as Label).add_theme_font_size_override(&"font_size", 16 if compact else 20)
 		(card.get_child(0).get_child(2) as Control).visible = not compact   # the caption
+		var needs := card.get_child(0).get_node_or_null("Needs") as Label
+		if needs != null:
+			needs.text = needs.text.trim_prefix("NEEDS ") if compact else "NEEDS " + needs.text.trim_prefix("NEEDS ")
 	_legend.add_theme_constant_override(&"separation", 8 if compact else 18)
 	fit_rail_lines(_rail, compact)
 	left.add_theme_constant_override(&"separation", 8 if compact else 14)
@@ -237,7 +244,16 @@ func _build_rail(values: Array) -> void:
 	_legend.add_theme_constant_override(&"separation", 18)
 	box.add_child(_legend)
 	_facts = _text("", 14, HouseStyle.mono(), HouseStyle.MUTED)
-	box.add_child(_facts)
+	var facts_row := HBoxContainer.new()
+	_facts.size_flags_horizontal = SIZE_EXPAND_FILL
+	facts_row.add_child(_facts)
+	_copy = HouseStyle.button("Copy", HouseStyle.BUTTON, 32)
+	_copy.name = "CopyBoardCode"
+	_copy.focus_mode = FOCUS_ALL
+	_copy.size_flags_horizontal = SIZE_SHRINK_END
+	_copy.pressed.connect(func() -> void: DisplayServer.clipboard_set(GeneratedBoard.code(_layout.board)))
+	facts_row.add_child(_copy)
+	box.add_child(facts_row)
 	_lines = VBoxContainer.new()
 	box.add_child(_lines)
 	for row: Array in [["SYSTEM", values[0]], ["BIOME · SIZE", "%s · %s" % [values[1], values[2]]],
@@ -274,6 +290,10 @@ func _refresh_rail() -> void:
 		_legend.add_child(swatch)
 		_legend.add_child(name_label)
 	_facts.text = "%d PIECES · COVERAGE %.1f %%" % [facts.pieces, facts.coverage_pct]
+	_copy.visible = _layout.way == "board"
+	_legend.visible = _layout.way != "board"   # the board's own pieces are not editor pieces: no zero counts
+	if _layout.way == "board":
+		_facts.text = "BOARD " + GeneratedBoard.code(_layout.board)
 	if _layout.way in ["generated", "file"]:
 		for line: Dictionary in (facts.lines as Array).slice(0, 2):
 			var row := HBoxContainer.new()
@@ -316,8 +336,10 @@ func _way_card(way: String, title: String, caption: String, icon: StringName) ->
 	var line := _text(caption, 15, HouseStyle.font(400), HouseStyle.MUTED)
 	line.autowrap_mode = TextServer.AUTOWRAP_WORD
 	words.add_child(line)
-	if way == "theme":
-		words.add_child(_text("NEEDS 6 × 4 FT", 13, HouseStyle.mono(), HouseStyle.MUTED))
+	if way in ["theme", "board"]:   # the size line; below 800 px (five narrow cards) without "NEEDS" (_place)
+		var needs := _text("NEEDS 6 × 4 FT" if way == "theme" else "NEEDS 4 × 4 FT", 13, HouseStyle.mono(), HouseStyle.MUTED)
+		needs.name = "Needs"
+		words.add_child(needs)
 	card.add_child(words)
 	_cards[way] = card
 	return card
@@ -326,8 +348,15 @@ func _way_card(way: String, title: String, caption: String, icon: StringName) ->
 ## The chosen way has the lighter fill and the 2 px gold rim; the ready-made table is off off 6 x 4 ft.
 func _refresh() -> void:
 	_refresh_rail()
-	_again.disabled = _layout.way != "generated"
+	_again.disabled = _layout.way not in ["generated", "board"]
+	_again.text = "New board" if _layout.way == "board" else "Generate again"
 	_mirror.visible = _layout.way == "generated"
+	_zones[2].visible = _layout.way != "board"   # Custom Zones: a generated board brings its own deployment bands
+	var boards := GameSystem.generated_boards(_layout.system)
+	_cards["board"].visible = not boards.is_empty()
+	if not boards.is_empty():
+		(_cards["board"].get_child(0).get_child(2) as Label).text = "A whole battlefield built for this game: %s. New board until you like it." \
+			% str(BOARD_NAMES.get(boards[0], boards[0]))
 	for i in _zones.size():
 		HouseStyle.set_selected(_zones[i], i == _layout.editor.deployment_type)
 	var count: int = _layout.editor.mission_objectives.size()
@@ -337,7 +366,8 @@ func _refresh() -> void:
 		var card: Button = _cards[way]
 		var on := way == _layout.way
 		card.set_meta("chosen", on)
-		card.disabled = way == "theme" and not TableTheme.load_theme(SetupLayout.THEME_ID).fits(_layout.editor.table_size_feet)
+		card.disabled = (way == "theme" and not TableTheme.load_theme(SetupLayout.THEME_ID).fits(_layout.editor.table_size_feet)) \
+			or (way == "board" and not _layout.board_offered())
 		if on:
 			var rim := HouseStyle.menu_theme().get_stylebox(&"normal", &"Button").duplicate() as StyleBoxFlat
 			rim.bg_color = HouseStyle.CARD_CHOSEN

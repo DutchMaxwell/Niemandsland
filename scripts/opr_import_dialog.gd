@@ -31,6 +31,8 @@ var _preview_army: OPRApiClient.OPRArmy = null
 var api_client: OPRApiClient
 ## The table's armies by seat (main sets it): an import into a held seat asks first. Null = no question.
 var army_manager: OPRArmyManager = null
+## Where the recent lists are kept (tests hand in a temporary file).
+var recent_path := RecentArmyLists.DEFAULT
 
 
 func _ready() -> void:
@@ -308,6 +310,8 @@ func _on_import() -> void:
 	# the main thread), so anything after the emit would only run once loading is done —
 	# the dialog would otherwise stay on screen over the loading overlay the whole time.
 	var ai_controlled: bool = ai_check != null and ai_check.button_pressed
+	RecentArmyLists.remember({"link": share_link_input.text, "name": army.name, "system": army.game_system_abbrev,
+		"points": army.points if army.points > 0 else army.get_total_points()}, recent_path)
 	hide()
 	_reset_dialog()
 	army_imported.emit(army, player_id, ai_controlled)
