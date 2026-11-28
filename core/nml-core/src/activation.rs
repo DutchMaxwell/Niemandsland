@@ -264,7 +264,7 @@ pub fn placed_chain_len(state: &State, si: usize) -> usize {
 /// (the skirmish Jumping rule) a drop over 3 in and up to 6 in is a jump: it is listed in the second field and its height
 /// is not counted in the first.
 ///
-/// Plan step 27-pre-R R2: `floor_y` (the walker's start height, world metres; `Some` from `PENDING_EPOCH_RUIN_LEDGES`) adds
+/// Plan step 27-pre-R R2: `floor_y` (the walker's start height, world metres; `Some` from `EPOCH_107_RUIN_LEDGES`) adds
 /// the drops off a free ruin's floors (`Terrain::slab_drops`) to the same walk-ordered edges, so every band above applies.
 fn cliff_drop_in(terrain: &Terrain, path: &[[f64; 2]], drops: bool, jumps: bool, floor_y: Option<f64>) -> Option<(f64, Vec<Jump>)> {
     let at = |p: [f64; 2]| [p[0] / terrain.in2m(), p[1] / terrain.in2m()];
@@ -356,9 +356,9 @@ fn jump_dice_for(state: &State, si: usize, jumps: &[Jump]) -> u32 {
 
 /// Whether the skirmish Jumping rule holds for unit `si` at this epoch (the books that print drops).
 /// Plan step 27-pre-R R2: the walker's height for the ruin-floor ledges (`cliff_drop_in`'s `floor_y`), from
-/// `PENDING_EPOCH_RUIN_LEDGES` on; `None` below it, so a record before it replays without them.
+/// `EPOCH_107_RUIN_LEDGES` on; `None` below it, so a record before it replays without them.
 fn ruin_floor_y(seams: Seams, at: &[f64; 3]) -> Option<f64> {
-    rule_on(seams.rules_epoch, crate::acts::PENDING_EPOCH_RUIN_LEDGES).then_some(at[1])
+    rule_on(seams.rules_epoch, crate::acts::EPOCH_107_RUIN_LEDGES).then_some(at[1])
 }
 
 fn jumps_on(state: &State, si: usize, seams: Seams) -> bool {
@@ -470,7 +470,8 @@ pub fn check_move(statics: &[UnitStatic], state: &State, si: usize, seams: Seams
         // Heightfield plan steps 13 / 13b (`EPOCH_94_PARITY_BATCH`): the AI planner never walks a cliff, a placed move is stopped
         // the same way unless it is a drop the book allows, which pays its height. A Flying unit ignores the edges.
         let drop_in = match (rule_on(seams.rules_epoch, EPOCH_94_PARITY_BATCH) && !flying).then(|| cliff_drop_in(terrain, &path, state.book(si).vertical_moves, jumps_on(state, si, seams),
-            ruin_floor_y(seams, &state.positions[si][i]))) {
+            // 107 scope: the ruin ledges are a skirmish rule (books with drops); gf / aof keep their plain move off a floor.
+            ruin_floor_y(seams, &state.positions[si][i]).filter(|_| state.book(si).vertical_moves))) {
             Some(None) => return Check::Refused { reason: format!("{}: cliff: no ladder here", statics[state.roster.profile[si]].name) },
             Some(Some((d, jumps))) => {
                 // Jumping (3.6 skirmish p.15): one line per jumping model; the jump's height is not counted toward the move.
@@ -4553,18 +4554,20 @@ mod ruin_ledge_tests {
         assert_eq!(walk(&board(4.0, true), 4.0, false).map(|w| w.1.len()), Some(1), "4 in: a jump on both");
     }
 
-    /// The old leg: below `PENDING_EPOCH_RUIN_LEDGES` the walker's height is not read, so a ruin floor is no ledge (as every
+    /// The old leg: below `EPOCH_107_RUIN_LEDGES` the walker's height is not read, so a ruin floor is no ledge (as every
     /// record before it played); from it, it is.
     #[test]
     fn ruin_ledges_ride_their_epoch() {
-        let e = crate::acts::PENDING_EPOCH_RUIN_LEDGES;
-        assert!(!rule_on(crate::acts::CURRENT_RULES_EPOCH, e), "a placeholder no record has played");
+        let e = crate::acts::EPOCH_107_RUIN_LEDGES;
+        let old = crate::acts::EPOCH_106_CORE_TIERS;   // the old leg: a record at 106 replays as recorded
+        assert_eq!(e, 107);
+        assert!(rule_on(crate::acts::CURRENT_RULES_EPOCH, e), "a fresh play_game() stamps it on");
         let seams = |epoch: u32| Seams { rules_epoch: epoch, ..Seams::default() };
-        assert_eq!(ruin_floor_y(seams(e - 1), &[0.0, 0.1, 0.0]), None);
+        assert_eq!(ruin_floor_y(seams(old), &[0.0, 0.1, 0.0]), None);
         assert_eq!(ruin_floor_y(seams(e), &[0.0, 0.1, 0.0]), Some(0.1));
         let t = board(4.0, false);
         let path = [[-1.5 * I, 0.0], [1.5 * I, 0.0]];
-        assert_eq!(cliff_drop_in(&t, &path, true, true, ruin_floor_y(seams(e - 1), &[0.0, 4.0 * I, 0.0])).map(|r| r.1.len()), Some(0));
+        assert_eq!(cliff_drop_in(&t, &path, true, true, ruin_floor_y(seams(old), &[0.0, 4.0 * I, 0.0])).map(|r| r.1.len()), Some(0));
         assert_eq!(cliff_drop_in(&t, &path, true, true, ruin_floor_y(seams(e), &[0.0, 4.0 * I, 0.0])).map(|r| r.1.len()), Some(1));
     }
 }

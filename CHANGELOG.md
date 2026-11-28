@@ -7,6 +7,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Changed — rules corrections
+- **Rules epoch 107 is live: a ruin's upper floors are ledges in the two skirmish games.** Stepping off a ruin's floor
+  now drops, jumps or is refused by the same rules as a step on a generated board. Line of sight is unchanged. Games
+  recorded before epoch 107 replay unchanged.
 - **Rules epoch 106 is live: jumps and falls in the two skirmish games play on the board you see.** On a generated
   board the core now knows its ledges, so a model that jumps or is pushed off a step rolls its jump and fall dice and
   the others re-place within 1 in, the same online. Games recorded before epoch 106 replay unchanged (they played a
