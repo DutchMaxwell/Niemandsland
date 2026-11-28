@@ -276,3 +276,28 @@ func test_the_generated_board_card(do_skip := not ClassDB.class_exists("NmlCore"
 	assert_str(_layout.way).is_equal("empty")
 	var plain := _step(Vector2(4, 4), "gf")
 	assert_bool(_way(plain, "board").visible).override_failure_message("gf was offered a board").is_false()
+
+
+## GEN-13: the board card waits for its kit - downloading (a stub door says "waiting") -> off with the share in its caption;
+## cached ("ready") -> on; not used in this run ("not_used": headless, low preset, Compatibility) -> on, nothing to wait for.
+func test_the_board_card_waits_for_its_kit() -> void:
+	var step := _step(Vector2(4, 4), "gff")
+	if step == null or _way(step, "board") == null:
+		return
+	var card := _way(step, "board")
+	var answer := {"state": "waiting", "pct": 37}
+	var asked: Array = []
+	step.set("kit_state", func(kit_theme: String) -> Dictionary:
+		asked.append(kit_theme)
+		return answer)
+	step.call("poll_kit")
+	assert_array(asked).contains(["tiefwerk"])
+	assert_bool(card.disabled).override_failure_message("a board without its kit can be chosen").is_true()
+	var texts: Array = card.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	assert_array(texts).contains(["Downloading the board kit ... 37 %"])
+	answer.merge({"state": "ready", "pct": 100}, true)   # in place: the stub holds this dictionary
+	step.call("poll_kit")
+	assert_bool(card.disabled).is_false()
+	answer.merge({"state": "not_used", "pct": 100}, true)
+	step.call("poll_kit")
+	assert_bool(card.disabled).is_false()

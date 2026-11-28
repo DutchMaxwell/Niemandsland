@@ -191,3 +191,22 @@ func test_tab_walks_the_hub_in_reading_order() -> void:
 		if at == null:
 			break
 	assert_array(order).is_equal(expected + [hub.get("back")])
+
+
+## Gap review 27.11. (sheet 02): the first room is the chosen one - filled, its Join gold -, the refresh button is 44 px
+## and an info line stands under the list (red before: bare rows, a 32 px icon, no line).
+func test_the_chosen_room_is_filled_and_refresh_is_44_px() -> void:
+	var hub := await _hub()
+	if hub == null:
+		return
+	hub.call("_on_rooms", [{"code": "ABC123", "players": 1}, {"code": "KLM456", "players": 2}], hub.get("_gen"))
+	var rows := _rows(hub)
+	assert_bool(rows[0] is PanelContainer).override_failure_message("a room row has no box").is_true()
+	if not rows[0] is PanelContainer:
+		return
+	var box := (rows[0] as PanelContainer).get_theme_stylebox(&"panel") as StyleBoxFlat
+	assert_bool(box != null and box.bg_color == HouseStyle.ROW_HOVER).is_true()
+	assert_str(String(((rows[0] as Node).find_child("Join", true, false) as Button).theme_type_variation)).is_equal(String(HouseStyle.PRIMARY))
+	assert_str(String(((rows[1] as Node).find_child("Join", true, false) as Button).theme_type_variation)).is_equal(String(HouseStyle.BUTTON))
+	assert_float((hub.find_child("Refresh", true, false) as Control).custom_minimum_size.x).is_equal(44.0)
+	assert_array(_texts_of(hub)).contains(["The list shows what the relay reports today: a code and its player count."])

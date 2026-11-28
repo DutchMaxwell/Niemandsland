@@ -867,7 +867,23 @@ static func _terrain_line(terrain_cb: Callable, school_world: Dictionary = {}) -
 	if rules_epoch >= EPOCH_73_V36:
 		line["containers"] = _container_boxes(ov)
 	line.merge(_tiers_for_line(ov, rules_epoch))
+	_add_board_cells(line)
 	return line
+
+
+## GEN-8: the generated board's cover cells (`board_cells` of `tiers_of_board`) join the line's `cells`; the overlay's
+## own cell wins on the same grid cell. No board = no key: the line keeps its bytes.
+static func _add_board_cells(line: Dictionary) -> void:
+	var board: Array = line.get("board_cells", [])
+	line.erase("board_cells")
+	if board.is_empty():
+		return
+	var own := {}
+	for c: Array in line["cells"]:
+		own[Vector2i(int(c[0]), int(c[1]))] = true
+	for c: Array in board:
+		if not own.has(Vector2i(int(c[0]), int(c[1]))):
+			(line["cells"] as Array).append([int(c[0]), int(c[1]), int(c[2])])
 
 
 ## Plan step 27-pre: a generated board's ledges for the terrain line - `{"tiers", "solid_cells"}` of the board on the table
@@ -888,12 +904,18 @@ static func tiers_at_epoch(board: Dictionary, epoch: int) -> Dictionary:
 	return tiers_of_board(board) if epoch >= PENDING_EPOCH_CORE_TIERS else {}
 
 
-## The ledges of `board` (`{"seed", "theme"}`, main's `generated_board()`): {} for none or without the core.
+## The ledges of `board` (`{"seed", "theme"}`, main's `generated_board()`) and its cover cells as `board_cells` (GEN-8):
+## {} for none or without the core.
 static func tiers_of_board(board: Dictionary) -> Dictionary:
 	if board.is_empty() or not ClassDB.class_exists("NmlCore"):
 		return {}
 	var t: Dictionary = (ClassDB.instantiate("NmlCore") as Object).call("boardgen_tiers", int(board["seed"]), str(board["theme"]))
-	return {"tiers": t["tiers"], "solid_cells": t["solid_cells"]} if t.has("tiers") else {}
+	if not t.has("tiers"):
+		return {}
+	var out := {"tiers": t["tiers"], "solid_cells": t["solid_cells"]}
+	if not (t.get("cells", []) as Array).is_empty():   # GEN-8: the board's cover classes, for _add_board_cells
+		out["board_cells"] = t["cells"]
+	return out
 
 
 ## F-CONT (rules 3.6, EPOCH_73_V36, lead ruling D5): the placed containers' exact 6x3 boxes `{c, he, yaw}` in world
