@@ -275,6 +275,7 @@ func _on_table_setup_chosen(size_feet: Vector2, host_settings: Dictionary) -> vo
 	_transition_to_game()   # the loading picture first, opaque at once (it also hides the menu) ...
 	if UiMotion.reduced():
 		setup.hide()
+	setup.transparent_bg = true   # the fading page shows the loading picture beneath, not its window's clear colour
 	_fade_setup(setup, 1.0, 0.0, true)   # ... then the setup fades out over it
 
 
