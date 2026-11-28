@@ -12,12 +12,10 @@ const LOCK := "Place the other models within 1 in of Leaper's model that fell"
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
-var _epoch_before: int
 var _lines: Array = []
 
 
 func before_test() -> void:
-	_epoch_before = AiActRecorder.rules_epoch
 	E2EBoot.arm_harness_mode()
 	_root_before = E2EBoot.root_children(get_tree())
 	_runner = scene_runner(E2EBoot.MAIN_SCENE)
@@ -37,7 +35,6 @@ func after_test() -> void:
 	_main.battle_log.entry_added.disconnect(_tap)
 	CoreActivation.reset_all(_main)
 	CoreActivation._env = -1
-	AiActRecorder.rules_epoch = _epoch_before
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
@@ -98,7 +95,6 @@ func _press(gu: GameUnit, text: String) -> void:
 @warning_ignore('unused_parameter')
 func test_a_fall_is_placed_for_me_and_ends_through_the_card(
 		do_skip := not ClassDB.class_exists("NmlCore"), skip_reason := "NmlCore extension not loaded") -> void:
-	AiActRecorder.rules_epoch = AiActRecorder.EPOCH_106_CORE_TIERS
 	var core: Object = ClassDB.instantiate("NmlCore")
 	SoloHarness.generated_board(_main, 7, "")
 	var ledge := _ledge(core.boardgen_layout_themed(7, ""))
