@@ -212,13 +212,18 @@ func test_the_chosen_room_is_filled_and_refresh_is_44_px() -> void:
 	assert_array(_texts_of(hub)).contains(["The list shows what the relay reports today: a code and its player count."])
 
 
+## Sheet 02: the name field is 46 px high as the mockups' field (red before: 38 px).
+func test_the_name_field_is_46_px() -> void:
+	var hub := await _hub()
+	if hub == null:
+		return
+	await get_tree().process_frame
+	assert_float((hub.get("name_field") as Control).size.y).is_greater_equal(46.0)
+
+
 ## The Join button's Enter cap never covers its word (seen on the 28.11. capture after the menu buttons took the
 ## mockups' 18 px padding and 17 px text: "Join" ran under the cap; red before).
 func test_join_keeps_its_word_clear_of_the_enter_cap() -> void:
-
-
-## Sheet 02: the name field is 46 px high as the mockups' field (red before: 38 px).
-func test_the_name_field_is_46_px() -> void:
 	var hub := await _hub()
 	if hub == null:
 		return
@@ -233,6 +238,3 @@ func test_the_name_field_is_46_px() -> void:
 		.is_greater_equal(text_end + 4.0)
 	var block := join.get_parent().get_parent() as Control
 	assert_float(join.get_global_rect().end.x).is_less_equal(block.get_global_rect().end.x + 1.0)
-
-
-	assert_float((hub.get("name_field") as Control).size.y).is_greater_equal(46.0)
