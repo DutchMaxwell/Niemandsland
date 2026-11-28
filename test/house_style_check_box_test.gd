@@ -88,3 +88,14 @@ func test_a_disabled_box_is_dimmer_than_an_enabled_one() -> void:
 		var off := _contrast(cb.get_theme_icon(StringName(state + "_disabled")), _card())
 		assert_float(off).override_failure_message("%s: disabled %.2f:1 is not dimmer than enabled %.2f:1" % [state, off, on]) \
 			.is_less(on)
+
+
+## Gap review 28.11. (sheets 02, 04, 08): the menu's check box is the sheet's 22 px square instead of the heavy 26 px
+## one; its empty rim keeps decision B's 3:1 (red before: 26 px).
+func test_the_menu_check_box_is_the_sheets_square_and_keeps_its_contrast() -> void:
+	var t := HouseStyle.menu_theme()
+	var off := t.get_icon(&"unchecked", &"CheckBox")
+	assert_int(off.get_width()).override_failure_message("the menu box is %d px" % off.get_width()).is_equal(22)
+	var c := _contrast(off, _card())
+	assert_float(c).override_failure_message("the empty menu box reaches %.2f:1" % c).is_greater_equal(MIN_CONTRAST)
+	assert_float(_contrast(t.get_icon(&"checked", &"CheckBox"), _card())).is_greater_equal(MIN_CONTRAST)

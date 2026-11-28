@@ -282,3 +282,16 @@ func test_the_who_page_keeps_the_title_on_top_at_720p() -> void:
 	for _i in 3:
 		await get_tree().process_frame
 	assert_float(dialog._intro.get_global_rect().position.y).is_less(160.0)
+
+
+## Gap review 28.11. (sheets 02-04): every Enter cap sits beside its word, centred on the button - one placement in
+## HouseStyle - not low in the corner (red before: the cap's top at the button's middle, about 12 px low).
+func test_the_enter_cap_is_centred_on_its_button() -> void:
+	var dialog := await _open(Vector2i(1920, 1080))
+	await get_tree().process_frame
+	var cap := dialog._create.get_node_or_null("EnterCap") as Control
+	assert_object(cap).is_not_null()
+	if cap == null:
+		return
+	var low := cap.get_global_rect().get_center().y - dialog._create.get_global_rect().get_center().y
+	assert_float(absf(low)).override_failure_message("the cap stands %d px off the button's middle" % int(low)).is_less_equal(1.0)

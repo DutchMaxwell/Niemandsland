@@ -124,6 +124,8 @@ const MENU_H_ACTION := 44
 const MENU_H_FIELD := 46         # a text field at the menu's scale (house.css .field)
 const MENU_PAD_PANEL := 22
 const MENU_ICON_BUTTON := 32     # the close box of a menu window
+const MENU_CHECK := 22           # the menu's check box (house.css .check)
+const MENU_CAP_INSET := 14       # a key cap's distance from its button's right edge, centred on the label
 const MENU_SHEET_CLOSE := 44     # the close box of a full menu sheet (settings, saves): sheets 05 and 09
 const SWITCH_W := 46             # the menu's switch (CheckButton): a pill 46 x 26 with a 18 px knob
 const SWITCH_H := 26
@@ -300,6 +302,13 @@ static func menu_theme() -> Theme:
 			[&"checked_disabled", true, 0.4]]:
 		t.set_icon(pair[0], &"CheckButton", _switch(pair[1], pair[2]))
 		t.set_icon(StringName(String(pair[0]) + "_mirrored"), &"CheckButton", _switch(pair[1], pair[2]))
+	# The menu's check box (sheet 02 .check): 22 px, radius 4, a well; checked = gold with the dark tick. Its rim stays
+	# 2 px of muted ink (maintainer decision B, 03.10.: an empty box at 3:1), not the sheet's 1 px line.
+	for pair: Array in [[&"unchecked", false], [&"checked", true]]:
+		var box := _menu_check(pair[1])
+		t.set_icon(pair[0], &"CheckBox", box)
+		t.set_icon(StringName(String(pair[0]) + "_disabled"), &"CheckBox", _dimmed(box, DISABLED_ALPHA))
+	t.set_constant(&"h_separation", &"CheckBox", GAP_SECTION)   # the sheet's 10 px between the box and its words
 	var menu_groove := _box(WELL, LINE, 4, 0, 0)
 	menu_groove.content_margin_top = 3
 	menu_groove.content_margin_bottom = 3
@@ -524,6 +533,31 @@ static func _knob(color: Color, d: int = 16) -> ImageTexture:
 			var dist := Vector2(x + 0.5, y + 0.5).distance_to(Vector2(d / 2.0, d / 2.0))
 			img.set_pixel(x, y, Color(color.r, color.g, color.b, clampf(d / 2.0 - dist, 0.0, 1.0)))
 	return ImageTexture.create_from_image(img)
+
+
+## The menu's check box, MENU_CHECK square: off a well with a 2 px muted rim, on gold with the dark tick.
+static func _menu_check(on: bool) -> ImageTexture:
+	var tick := ("<path d='M6 11.5l3.3 3.3L16 8' fill='none' stroke='#%s' stroke-width='2.2' stroke-linecap='round' "
+		+ "stroke-linejoin='round'/>") % ON_GOLD.to_html(false) if on else ""
+	var fill := GOLD if on else WELL
+	var svg := ("<svg xmlns='http://www.w3.org/2000/svg' width='%d' height='%d' viewBox='0 0 22 22'><rect x='1' y='1' "
+		+ "width='20' height='20' rx='4' fill='#%s' fill-opacity='%.2f' stroke='#%s' stroke-width='2'/>%s</svg>") % [
+		MENU_CHECK, MENU_CHECK, fill.to_html(false), fill.a, (GOLD if on else MUTED).to_html(false), tick]
+	var img := Image.new()
+	img.load_svg_from_string(svg)
+	return ImageTexture.create_from_image(img)
+
+
+## A key cap at the right of `button`, centred on its label's line (sheets 02-04 .key): one placement for every cap.
+static func place_key_cap(button: Button, cap: Label) -> Label:
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cap.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	cap.grow_vertical = Control.GROW_DIRECTION_BOTH
+	cap.offset_left = -MENU_CAP_INSET
+	cap.offset_right = -MENU_CAP_INSET
+	button.add_child(cap)
+	return cap
 
 
 ## `icon` at `alpha` of its own opacity (a disabled check box).

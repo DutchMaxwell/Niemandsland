@@ -188,12 +188,7 @@ func _setup_ui() -> void:
 	import_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
 	import_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	import_btn.custom_minimum_size.x = 210   # room for its Enter cap at the right (sheet 04)
-	var cap := HouseStyle.key_cap_on_gold("Enter")
-	cap.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	cap.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	cap.offset_left = -14
-	cap.offset_right = -14
-	import_btn.add_child(cap)
+	HouseStyle.place_key_cap(import_btn, HouseStyle.key_cap_on_gold("Enter"))
 	cancel_btn.custom_minimum_size.y = HouseStyle.MENU_H_ACTION
 	import_btn.disabled = true
 	import_btn.pressed.connect(_on_import)
