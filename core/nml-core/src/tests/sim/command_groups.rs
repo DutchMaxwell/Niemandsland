@@ -209,13 +209,15 @@ fn a_dead_musician_bearer_shortens_the_charge() {
         "{:?}", new_log.log);
 }
 
-const TWO: u32 = crate::acts::PENDING_EPOCH_TWO_BEARERS;
+const TWO: u32 = crate::acts::EPOCH_104_TWO_BEARERS;
 
 /// KIT-BEARER-NAME (lead ruling 26.11.): the Banner and the Musician sit on two models. Killing the Banner's model keeps the
 /// Musician's inch; killing the Musician's own model takes it back. One epoch below, the Musician rides with the one bearer.
 #[test]
 fn the_musician_lives_with_its_own_model() {
-    assert!(!crate::acts::rule_on(crate::acts::CURRENT_RULES_EPOCH, TWO), "a placeholder no record has played");
+    assert_eq!(TWO, 104);
+    assert!(crate::acts::rule_on(crate::acts::CURRENT_RULES_EPOCH, TWO), "a fresh play_game() stamps it on");
+    assert!(!crate::acts::rule_on(crate::acts::EPOCH_103_COMMAND_BANNER, TWO), "a record at 103 replays as recorded");
     let mut st = picks_line("aofs", &["Banner", "Musician"], None);
     st.cmd_bearer = vec![Some(0), None, None, None];
     st.cmd_musician = vec![Some(1), None, None, None];
@@ -223,7 +225,8 @@ fn the_musician_lives_with_its_own_model() {
     st.kit_remove(0, 0);
     assert_eq!((st.cmd_bearer[0], st.cmd_musician[0]), (None, Some(0)), "the Banner's model fell, the Musician moved up");
     assert_eq!(crate::sim::command_musician_in(&statics, &st, 0, RUSH, TWO), (0.0, None), "the Musician's model lives");
-    assert_eq!(crate::sim::command_musician_in(&statics, &st, 0, RUSH, TWO - 1).0, -1.0, "old leg: it rode with the Banner");
+    assert_eq!(crate::sim::command_musician_in(&statics, &st, 0, RUSH, crate::acts::EPOCH_103_COMMAND_BANNER).0, -1.0,
+        "old leg: a record at 103 - it rode with the Banner");
     st.kit_remove(0, 0);
     assert_eq!(crate::sim::command_musician_in(&statics, &st, 0, RUSH, TWO),
         (-1.0, Some("Musician: A's bearer (the last model carries it - no per-model data) is dead - no +1\" move".into())));

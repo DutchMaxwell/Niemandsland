@@ -7,6 +7,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Changed — rules corrections
+- **Rules epoch 104 is live: each command upgrade lives with its own model in Age of Fantasy: Skirmish.** A command
+  group's Musician is lost only when the model that carries it dies, not with the Banner's bearer; a list that names
+  neither keeps one bearer for both. Games recorded before epoch 104 replay unchanged.
 - **Rules epoch 103 is live: command groups in Age of Fantasy: Skirmish, and the Firefight casualty chain.** A
   command group's Banner (+1 to morale test rolls after shooting or melee) and Musician (+1" on move actions) also reach
   the units its list picked, and both are lost - for the own unit and the picks - once the model carrying them is

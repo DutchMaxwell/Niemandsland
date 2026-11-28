@@ -1091,16 +1091,19 @@ pub const EPOCH_102_CASUALTY_CHAIN: u32 = 102;
 ///   (`State::cmd_bearer`) lives, and its own unit and the picks lose it when the bearer is killed; the Musician's +1 in on move
 ///   actions the same way. Read only by `sim.rs` (`command_banner` in the rolled morale test, `command_musician_in` in the move band).
 pub const EPOCH_103_COMMAND_BANNER: u32 = 103;
-pub const CURRENT_RULES_EPOCH: u32 = 103;
-/// PENDING (KIT-BEARER-NAME, lead ruling 26.11.): each command upgrade lives with the model that carries it - the Musician
-/// is lost only when ITS model dies (`State::cmd_musician`, named by the table from the model's equipment), where it rode
-/// with the Banner's bearer. A list that names none keeps one bearer for both (the last model). A placeholder one past
-/// `CURRENT_RULES_EPOCH`. Records stamped 103 or below replay byte-exact. Read only by `sim.rs` (`musician_dead`).
-pub const PENDING_EPOCH_TWO_BEARERS: u32 = 104;
+/// The EPOCH 104 BATCH (plan O-FT-5, D5 satisfied 27.11.): the change that sat behind the `PENDING_EPOCH_TWO_BEARERS` (104)
+/// placeholder is now one frozen constant, and `CURRENT_RULES_EPOCH` is bumped to 104 in the same change. Records stamped 103
+/// or below replay byte-exact. The recorder mirror (`act_recorder.gd`) stamps 104 in the same change.
+/// - TWO_BEARERS (KIT-BEARER-NAME, lead ruling 26.11.): each command upgrade lives with the model that carries it - the Musician
+///   is lost only when ITS model dies (`State::cmd_musician`, named by the table from the model's equipment), where it rode
+///   with the Banner's bearer. A list that names none keeps one bearer for both (the last model). Read only by `sim.rs`
+///   (`musician_dead`).
+pub const EPOCH_104_TWO_BEARERS: u32 = 104;
+pub const CURRENT_RULES_EPOCH: u32 = 104;
 /// PENDING (step 8b, the 3.6 books p.6 "fully within 12 in", every system): a deployment zone admits a model only when its
 /// whole base is inside (centre + 8 rim points, `deployment::zone_admits_base`), where it tested the base centre and a base
-/// overhung the line by up to one radius. Moves AI deployment spots in every system. A placeholder two past
-/// `CURRENT_RULES_EPOCH` (104 is the two-bearers placeholder). Records stamped 104 or below replay byte-exact. Read only by
+/// overhung the line by up to one radius. Moves AI deployment spots in every system. A placeholder one past
+/// `CURRENT_RULES_EPOCH`. Records stamped 104 or below replay byte-exact. Read only by
 /// `deployment::zone_admits_base`.
 pub const PENDING_EPOCH_ZONE_BASE_EDGE: u32 = 105;
 /// PENDING (plan step 27-pre): the table hands the core a generated board's ledges - the `tiers` and `solid_cells` of
@@ -2573,7 +2576,7 @@ mod tests {
     /// new, bumped epoch.
     #[test]
     fn epoch_7_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 103, "the live epoch is EPOCH_103_COMMAND_BANNER");
+        assert_eq!(CURRENT_RULES_EPOCH, 104, "the live epoch is EPOCH_104_TWO_BEARERS");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
@@ -2583,11 +2586,11 @@ mod tests {
             !rule_on(3, EPOCH_7_TABLE_RULES),
             "a record at epoch 3 gets none of wave 4's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":103}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":104}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 103"
+            "a fresh play_game() now stamps the bumped epoch, 104"
         );
     }
 

@@ -3263,7 +3263,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // The CLASS FIX (external review 03.09. item 3 / F9): the epoch a fresh
     // `play_game()` stamps. See `acts::rule_on`.
     m.add("CURRENT_RULES_EPOCH", nmlcore::CURRENT_RULES_EPOCH)?;
-    m.add("PENDING_EPOCH_TWO_BEARERS", nmlcore::acts::PENDING_EPOCH_TWO_BEARERS)?;
+    m.add("EPOCH_104_TWO_BEARERS", nmlcore::acts::EPOCH_104_TWO_BEARERS)?;
     m.add("EPOCH_66_DISTANCE_TRUTH", nmlcore::acts::EPOCH_66_DISTANCE_TRUTH)?;
     // Rules 3.6 (MOR-19b): the py-side band fold's gate for Ethereal's optional placement.
     m.add("EPOCH_73_V36", nmlcore::acts::EPOCH_73_V36)?;

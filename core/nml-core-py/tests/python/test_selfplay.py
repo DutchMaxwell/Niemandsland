@@ -457,8 +457,8 @@ def test_the_tables_kits_ride_the_capture_and_the_arrival_from_their_sidecar(tmp
          "bearers": {"1_a": {"cmd_bearer": 0, "cmd_musician": 1}}}), encoding="utf-8")
     kits = {**sp.kits_sidecar(paths[1], 1), **sp.kits_sidecar(paths[2], 2)}
     # KIT-BEARER-NAME K3: the named bearers from the two-bearers epoch only
-    assert sp.named_bearers(paths[1], paths[2], nml_core.PENDING_EPOCH_TWO_BEARERS - 1) == {}
-    bearers = sp.named_bearers(paths[1], paths[2], nml_core.PENDING_EPOCH_TWO_BEARERS)
+    assert sp.named_bearers(paths[1], paths[2], nml_core.EPOCH_104_TWO_BEARERS - 1) == {}
+    bearers = sp.named_bearers(paths[1], paths[2], nml_core.EPOCH_104_TWO_BEARERS)
     assert bearers == {"p1_1_a": {"cmd_bearer": 0, "cmd_musician": 1}, "p2_1_a": {"cmd_bearer": 0, "cmd_musician": 1}}
     profiles = {s: profiles_from_army_forge_json(d, "robot_legions", s) for s, d in lists.items()}
     units = {s: list(profiles[s].values()) for s in lists}
