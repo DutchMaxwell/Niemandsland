@@ -318,3 +318,27 @@ func test_at_720p_the_left_column_stays_left_of_the_rail() -> void:
 			assert_float((control as Control).get_global_rect().end.x).override_failure_message(
 				"%s ends at %d, the rail starts at %d" % [control.name, int((control as Control).get_global_rect().end.x), int(rail.position.x)]) \
 				.is_less_equal(rail.position.x)
+
+
+## Gap review 28.11.: at 1280x720 the GENERATED way (Generate again + the mirror switch in the tools row) pushed the
+## left column under the rail, and "No objectives placed" was cut to "No ob" (red before: both).
+func test_at_720p_the_generated_way_stays_left_of_the_rail_and_says_its_objectives() -> void:
+	for way: String in ["generated", "empty"]:
+		var step := await _sized_step(Vector2(1280, 720))
+		if step == null:
+			return
+		_layout.choose(way)
+		for _i in 3:
+			await get_tree().process_frame
+		var rail := (step.find_child("Rail", true, false) as Control).get_global_rect()
+		var left: Control = step.get("left")
+		assert_float(left.get_global_rect().end.x).override_failure_message("%s: the left column ends at %d, the rail starts at %d" % [
+			way, int(left.get_global_rect().end.x), int(rail.position.x)]).is_less_equal(rail.position.x)
+		var said: Label = step.get("_objectives")
+		var needed := said.get_theme_font("font").get_string_size(said.text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			said.get_theme_font_size("font_size")).x
+		assert_float(said.size.x).override_failure_message("%s: '%s' needs %d px, has %d" % [way, said.text, int(needed),
+			int(said.size.x)]).is_greater_equal(needed)
+		var keys: Control = step.get("_keys")
+		assert_float(keys.get_global_rect().position.y).override_failure_message("%s: the key legend overlaps the left column" % way
+			).is_greater_equal(left.get_global_rect().end.y)
