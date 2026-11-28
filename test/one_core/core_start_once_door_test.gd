@@ -177,6 +177,17 @@ func _assert_once(rows: Array, door: String) -> void:
 		assert_int(int(row[3])).override_failure_message("%s door seed %d: the volley's dice (%d wanted)" % [door, s, want]).is_equal(want)
 
 
+## The control legs replay the double pool roll on purpose (the core re-raises models the table never raised), so the
+## LANDING-INVARIANT (CI's NML_LANDING_INVARIANT, read by the core in this process) is off for them and restored after.
+func _without_landing_invariant(runs: Callable) -> Array:
+	var was := OS.get_environment("NML_LANDING_INVARIANT")
+	OS.unset_environment("NML_LANDING_INVARIANT")
+	var rows: Array = await runs.call()
+	if not was.is_empty():
+		OS.set_environment("NML_LANDING_INVARIANT", was)
+	return rows
+
+
 func _assert_control_fails(rows: Array, door: String) -> void:
 	var twice := rows.filter(func(r: Array) -> bool: return int(r[0]) == 2).size()
 	assert_int(twice).override_failure_message("%s door control (no group): the core rolls the pool again (rows %s)" % [door, rows]).is_equal(rows.size())
@@ -194,7 +205,7 @@ func test_the_ai_door_takes_a_reanimation_shooter_and_rolls_the_pool_once(timeou
 		assert_int(int(row[3])).override_failure_message("AI door seed %d: the volley's dice are the table's living shooters" % s).is_equal(int(row[4]))
 		assert_int(int(row[5])).override_failure_message("AI door seed %d: start_twice reads 0 with paid (rows %s)" % [s, live]).is_equal(0)
 	CoreActivation.start_paid_input = false   # the control: the same activation without `paid{start}`
-	var control := await _ai_runs()
+	var control := await _without_landing_invariant(_ai_runs)
 	CoreActivation.start_paid_input = true
 	_assert_control_fails(control, "AI")
 	assert_int(control.filter(func(r: Array) -> bool: return int(r[1]) == 1).size()).override_failure_message(
@@ -208,4 +219,4 @@ func test_the_human_door_hands_a_reanimation_shooter_to_the_free_roll(timeout :=
 		skip_reason := "no NmlCore") -> void:
 	_assert_once(await _human_runs(), "human")
 	_without_group()
-	_assert_control_fails(await _human_runs(), "human")
+	_assert_control_fails(await _without_landing_invariant(_human_runs), "human")
