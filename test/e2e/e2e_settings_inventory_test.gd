@@ -647,3 +647,14 @@ func test_the_menus_display_and_gameplay_pages_are_one_row_per_setting() -> void
 	assert_str(value.text).is_equal("%.1fs" % beat.value)
 	assert_float(GraphicsSettings.combat_stage_hold_s).is_equal_approx(beat.value, 0.01)
 	beat.value = before
+
+
+## Sheet 05: Quality is one joined group of 40 px segments, a dropdown in a row is 44 px high (red before: five loose
+## 26 px buttons, 30 px dropdowns).
+func test_the_menus_quality_is_one_group_and_dropdowns_are_44_px() -> void:
+	_panel.set_modal(true)
+	var row := _panel.find_child("QualityRow", true, false) as HBoxContainer
+	assert_int(row.get_theme_constant(&"separation")).is_equal(0)
+	assert_float((row.get_child(0) as Control).custom_minimum_size.y).is_equal(40.0)
+	var frame := _panel.find_child("TableFrameOption", true, false) as Control
+	assert_float(frame.custom_minimum_size.y).is_equal(44.0)
